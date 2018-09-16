@@ -5,6 +5,11 @@ const P2pController = require('./controllers/p2pController'),
   Promise = require('bluebird');
 
 
+process.on('unhandledRejection', function (err) {
+  console.error(err);
+  process.exit(0)
+});
+
 const init = async () => {
 
   const blocks = [
@@ -25,9 +30,7 @@ const init = async () => {
 
   const peer = new P2pController(privKeys[0], pubKeys);
   await peer.start();
-  peer.setState(tasks); //set missed blocks chunks as micro tasks
-
-  peer.on('synced', ()=>console.log('super1!'))
+  peer.add(tasks[0]); //set missed blocks chunks as micro tasks
 
   await Promise.delay(5000);
   console.log('start service 2');
@@ -35,32 +38,32 @@ const init = async () => {
   const peer2 = new P2pController(privKeys[1], pubKeys);
   await peer2.start();
 
-  peer.on('synced', ()=>console.log('super2!'))
 
   await Promise.delay(5000);
   console.log('start service 3');
 
   const peer3 = new P2pController(privKeys[2], pubKeys);
   await peer3.start();
-  peer.on('synced', ()=>console.log('super3!'))
 
 
-/*  await Promise.delay(2000);
+  await Promise.delay(5000);
 
   console.log('validate states...');
   console.log(_.isEqual(peer.tasks, peer2.tasks));
-  console.log(_.isEqual(peer.tasks, peer3.tasks));*/
+  console.log(_.isEqual(peer.tasks, peer3.tasks));
 
 
-/*  console.log('propose task...');
+  console.log('propose task...');
   await peer.propose(tasks[0].id);
 
-  peer.on('task_pulled', ()=>console.log('super!'))
+  //peer.on('task_pulled', ()=>console.log('super!'))
 
   await Promise.delay(3000);
   console.log('validate states...');
   console.log(_.isEqual(peer.tasks, peer2.tasks));
-  console.log(_.isEqual(peer.tasks, peer3.tasks));*/
+  console.log(_.isEqual(peer.tasks, peer3.tasks));
+
+  
 
 
 };

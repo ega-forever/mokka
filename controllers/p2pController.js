@@ -9,6 +9,7 @@ const crypto = require('crypto'),
   EthUtil = require('ethereumjs-util'),
   _ = require('lodash'),
   Web3 = require('web3'),
+  jd = require('json-delta'),
   web3 = new Web3(),
   EventEmitter = require('events');
 
@@ -17,7 +18,9 @@ const states = {
   ACCEPTED: 'accepted',
   PROPOSE: 'propose',
   OBTAIN: 'obtain',
-  STATE: 'state'
+  STAGE: 'stage',
+  STATE: 'state',
+  TASK: 'task'
 };
 
 class P2pController extends EventEmitter {
@@ -31,10 +34,8 @@ class P2pController extends EventEmitter {
     this.config = defaults({id: Buffer.from(this.pubKey, 'hex')});
     this.swarm = Swarm(this.config);
     this.tasks = [];
-    this.synced = false;
-    this.checkpoint = {//make checkpoint null on vote
-      state: null,
-      peers: 0
+    this.checkpointMap = {
+      [crypto.createHash('md5').update(JSON.stringify([])).digest('hex')]: [] //delta
     };
     this.connectionsHandled = 0;
   }
@@ -70,7 +71,7 @@ class P2pController extends EventEmitter {
         data = JSON.parse(data.toString());
 
         if (data.task === states.OBTAIN)
-          return this._broadcastState(peerId);
+          return this._broadcastState(peerId, data.checkpoint);
 
         if (data.task === states.STATE)
           return this._push(data.payload, peerId, true);
@@ -96,16 +97,26 @@ class P2pController extends EventEmitter {
       this.peers[peerId] = {conn: conn, seq: this.connectionsHandled};
       this.connectionsHandled++;
 
-      this._execute(JSON.stringify({task: states.OBTAIN}), [peerId]);
-    });
+      const currentCheckpoint = _.last(Object.keys(this.checkpointMap));
 
+      this._execute(JSON.stringify({task: states.OBTAIN, checkpoint: currentCheckpoint}), [peerId]);
+    });
   }
 
-  setState (tasks) {
-    this.synced = true;
-    _.isArray(tasks) ?
-      this.tasks.push(...tasks) :
-      this.tasks.push(tasks);
+  add (task) {
+
+    let oldTasks = _.cloneDeep(this.tasks);
+    this.tasks.push(task);
+    let delta = jd.diff(oldTasks, this.tasks);
+    let checkpoint = crypto.createHash('md5').update(JSON.stringify(delta)).digest('hex');
+    this.checkpointMap[checkpoint] = delta;
+
+    const ids = Object.keys(this.peers);
+
+    for (let id of ids)
+      this._broadcastState(id, checkpoint)
+
+
   }
 
   async propose (id) {
@@ -138,16 +149,27 @@ class P2pController extends EventEmitter {
     task.minShares = minValidates;
   }
 
-  async _broadcastState (peerId) {
-    const tasks = this.tasks.map(task => _.pick(task, ['id', 'data', 'locked', 'proposer']));
-    this._execute(JSON.stringify({task: states.STATE, payload: tasks}), [peerId]);
+  async _broadcastState (peerId, checkpoint) {
+
+    let deltas = _.chain(this.checkpointMap).toPairs().map(pair => ({
+      delta: pair[1],
+      checkpoint: pair[0]
+    })).value();
+
+    let currentIndex = _.findIndex(deltas, {checkpoint: checkpoint});
+
+    deltas = _.drop(deltas, currentIndex + 1);
+
+    deltas = _.transform(deltas, (result, item) => result.push(item.delta), []);
+
+    this._execute(JSON.stringify({task: states.STATE, payload: deltas}), [peerId]);
   }
 
   async _vote (taskId, share, peerId) {
     const signedShare = web3.eth.accounts.sign(share, `0x${this.privKey}`);
     const task = _.find(this.tasks, {id: taskId});
 
-    if(!task)
+    if (!task)
       return;
 
     task.proposer = peerId;
@@ -181,31 +203,27 @@ class P2pController extends EventEmitter {
 
   }
 
-  _push (tasks, peerId, sync = true) {
+  _push (deltas, peerId, sync = true) {
 
-    let checkpoint = crypto.createHash('md5').update(JSON.stringify(tasks)).digest('hex');
+    for (let delta of deltas) {
+      let checkpoint = crypto.createHash('md5').update(JSON.stringify(delta)).digest('hex');
 
-    console.log(checkpoint)
+      if (this.checkpointMap[checkpoint])
+        return console.log(`already synced with ${peerId}`);
 
-    if(this.checkpoint.state && this.checkpoint.state !== checkpoint)
-      return console.log(`received wrong checkpoint from ${peerId}`);
+      if (delta.length > 0) {
+        this.checkpointMap[checkpoint] = delta;
 
-    if(!this.checkpoint.state)
-      this.checkpoint.state = checkpoint;
+        this.tasks = jd.applyDiff(this.tasks, delta);
 
-    if (!_.isArray(tasks)) //todo sync validation
-      tasks = [tasks];
-
-    for (let task of tasks)
-      if (!_.find(this.tasks, {id: task.id}))
-        this.tasks.push(task);
-
-    this.checkpoint.peers++;
-
-    if(this.checkpoint.peers === Object.keys(this.peers).length){
-      this.synced = true;
-      this.emit('synced');
+      }
     }
+
+    /*    this.checkpoint.peers++;
+
+        if(this.checkpoint.peers === Object.keys(this.peers).length){
+          this.emit('synced');
+        }*/
 
   }
 
@@ -213,7 +231,7 @@ class P2pController extends EventEmitter {
 
     let task = _.find(this.tasks, {id: id, proposer: peerId});
 
-    if(!task)
+    if (!task)
       return;
 
     const publicKey = EthUtil.ecrecover(Buffer.from(payload.messageHash.replace('0x', ''), 'hex'), parseInt(payload.v), Buffer.from(payload.r.replace('0x', ''), 'hex'), Buffer.from(payload.s.replace('0x', ''), 'hex'));
@@ -232,14 +250,8 @@ class P2pController extends EventEmitter {
     if (_.isString(data))
       data = JSON.parse(data);
 
-    if(Object.values(states).indexOf(data.task) === -1)
+    if (Object.values(states).indexOf(data.task) === -1)
       return;
-
-    if(states.OBTAIN !== data.task && !this.synced){
-      await Promise.delay(1000);
-      await this._execute(data, peerIds);
-    }
-
 
     sem.take(async () => {
 
