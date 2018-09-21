@@ -21,7 +21,7 @@ class Log {
   constructor (node, {adapter = require('memdown'), path = ''}) {
     this.node = node;
     this.committedIndex = 0;
-    this.db = levelup(encode(adapter(path), { valueEncoding: 'json', keyEncoding: 'binary'}));
+    this.db = levelup(encode(adapter(path), {valueEncoding: 'json', keyEncoding: 'binary'}));
   }
 
   /**
@@ -43,7 +43,7 @@ class Log {
 
     if (!index) {
       const {
-        index: lastIndex,
+        index: lastIndex
       } = await this.getLastInfo();
 
       index = lastIndex + 1;
@@ -59,7 +59,7 @@ class Log {
       }],
       shares: [],
       minShares: 0,
-      command,
+      command
     };
 
     await this.put(entry);
@@ -85,7 +85,7 @@ class Log {
    * @return {Promise<Entry[]>} returns all entries
    * @public
    */
-  getEntriesAfter(index) {
+  getEntriesAfter (index) {
     const entries = [];
     return new Promise((resolve, reject) => {
       this.db.createReadStream({gt: index})
@@ -153,7 +153,7 @@ class Log {
    * @return {Promise<Object>} Last entries index, term and committedIndex
    */
   async getLastInfo () {
-    const { index, term } = await this.getLastEntry();
+    const {index, term} = await this.getLastEntry();
 
     return {
       index,
@@ -236,21 +236,21 @@ class Log {
         limit: 1,
         lt: entry.index
       })
-      .on('data', (data) => {
-        hasResolved = true;
-        resolve(data.value);
-      })
-      .on('error', (err) => {
-        hasResolved = true;
-        reject(err);
-      })
-      .on('end', () => {
-        if (!hasResolved) {
-          // Returns empty index if there is no items
-          // before entry or log is empty
-          resolve(defaultInfo);
-        }
-      });
+        .on('data', (data) => {
+          hasResolved = true;
+          resolve(data.value);
+        })
+        .on('error', (err) => {
+          hasResolved = true;
+          reject(err);
+        })
+        .on('end', () => {
+          if (!hasResolved) {
+            // Returns empty index if there is no items
+            // before entry or log is empty
+            resolve(defaultInfo);
+          }
+        });
     });
   }
 
@@ -321,17 +321,17 @@ class Log {
         gt: this.committedIndex,
         lte: index
       })
-      .on('data', data => {
-        if (!data.value.committed) {
-          entries.push(data.value);
-        }
-      })
-      .on('error', err => {
-        reject(err)
-      })
-      .on('end', () => {
-        resolve(entries);
-      });
+        .on('data', data => {
+          if (!data.value.committed) {
+            entries.push(data.value);
+          }
+        })
+        .on('error', err => {
+          reject(err)
+        })
+        .on('end', () => {
+          resolve(entries);
+        });
     });
   }
 
@@ -379,6 +379,11 @@ class Log {
     await this.put(entry);
     return entry;
   }
+
+  async remove (index) {
+    return this.db.del(index);
+  }
+
 
 };
 

@@ -3,7 +3,6 @@ const debug = require('diagnostics')('raft'),
   Promise = require('bluebird'),
   Wallet = require('ethereumjs-wallet'),
   _= require('lodash'),
-  crypto = require('crypto'),
   MsgRaft = require('./controllers/MsgRaft');
 
 
@@ -66,6 +65,22 @@ for (let index = 0; index < ports.length; index++) {
       await raft.executeTask(entry.index);
     }, 5000);
 
+  if (index === 2)
+    setTimeout(async () => {
+      const taskData = [21, 32];
+      let entry = await raft.proposeTask(taskData);
+      await Promise.delay(5000);
+      await raft.executeTask(entry.index);
+    }, 9000);
+
+
+  if (index === 3)
+    setTimeout(async () => {
+      const taskData = [33, 199];
+      let entry = await raft.proposeTask(taskData);
+      await Promise.delay(5000);
+      await raft.executeTask(entry.index);
+    }, 12000);
   /*  raft.on('vote', ()=>{
       console.log('i am voting!')
     });*/

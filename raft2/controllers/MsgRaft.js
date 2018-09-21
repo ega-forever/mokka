@@ -25,10 +25,14 @@ class MsgRaft extends LifeRaft {
     socket.on('message', (data, fn) => {
 
       if (data.type === 'task_vote')
-        this.voteTask(data.data.taskId, data.data.share);
+        this.voteTask(data.data.taskId, data.data.share, data.address);
 
       if (data.type === 'task_voted')
         this.votedTask(data.data.taskId, data.data.payload, data.address);
+
+      if (data.type === 'task_executed')
+        this.executedTask(data.data.taskId, data.data.payload, data.address);
+
 
       this.emit('data', data, fn);
     });
@@ -89,11 +93,9 @@ class MsgRaft extends LifeRaft {
       let packet = await this.packet('task_vote', {taskId: taskId, share: shares[index]});
       await this.message(addresses[index], packet);
     }
-
-
   }
 
-  async voteTask (taskId, share) {
+  async voteTask (taskId, share, peer) {
 
     let task = await this.log.db.get(taskId);
     if (!task)
@@ -101,7 +103,7 @@ class MsgRaft extends LifeRaft {
 
     const signedShare = web3.eth.accounts.sign(share, `0x${this.privateKey}`);
     let packet = await this.packet('task_voted', {taskId: taskId, payload: signedShare});
-    await this.message(MsgRaft.LEADER, packet);
+    await this.message([peer], packet);
   }
 
   async votedTask (taskId, payload, peer) {
@@ -113,32 +115,33 @@ class MsgRaft extends LifeRaft {
 
     let entry = await this.log.appendShare(taskId, payload.message, peer);
 
-    if(entry.minShares > entry.shares.length)
+    if (entry.minShares > entry.shares.length)
       return;
 
-    let shares = entry.shares.map(item=>item.share);
+    let shares = entry.shares.map(item => item.share);
 
     let id = crypto.createHash('md5').update(JSON.stringify(entry.command.task)).digest('hex');
     let comb = secrets.combine(shares);
 
-    if(comb !== id)
+    if (comb !== id)
       return; //todo remove task
 
     const signedId = web3.eth.accounts.sign(id, `0x${this.privateKey}`);
-    let packet = await this.packet('task_executed', {taskId: taskId, signature: signedId});
-    await this.message();
+    let packet = await this.packet('task_executed', {taskId: taskId, payload: signedId});
+    await this.message(MsgRaft.FOLLOWER, packet);
+    await this.message(MsgRaft.CHILD, packet);
+    await this.log.remove(taskId);
 
   }
 
-  async executedTask(taskId, payload, peer){
+  async executedTask (taskId, payload, peer) {
 
     const publicKey = EthUtil.ecrecover(Buffer.from(payload.messageHash.replace('0x', ''), 'hex'), parseInt(payload.v), Buffer.from(payload.r.replace('0x', ''), 'hex'), Buffer.from(payload.s.replace('0x', ''), 'hex'));
 
     if (!this.peers.includes(publicKey.toString('hex')))
       return;
 
-
-
+    await this.log.remove(taskId);
   }
 
 }
