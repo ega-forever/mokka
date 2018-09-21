@@ -57,8 +57,10 @@ class Log {
         address: this.node.address, // start with vote from leader
         ack: true
       }],
+      shares: [],
+      minShares: 0,
       command,
-    }
+    };
 
     await this.put(entry);
     return entry;
@@ -344,23 +346,18 @@ class Log {
     return this.db.close();
   }
 
-  async voteForCommand (index, address) {
+  async appendShare (index, share, peer) {
     let entry;
     try {
       entry = await this.get(index);
     } catch (err) {
       return {
-        responses: []
+        shares: []
       }
     }
 
-    const entryIndex = await entry.responses.findIndex(resp => resp.address === address);
-    // node hasn't voted yet. Add response
-    if (entryIndex === -1) {
-      entry.responses.push({
-        address,
-        ack: true
-      });
+    if (!entry.shares.includes(share)) {
+      entry.shares.push({share: share, peer: peer});
     }
 
     await this.put(entry);
@@ -368,6 +365,20 @@ class Log {
     return entry;
   }
 
+
+  async setMinShare (index, minShares) {
+    let entry;
+    try {
+      entry = await this.get(index);
+    } catch (err) {
+      return {}
+    }
+
+    entry.minShares = minShares;
+
+    await this.put(entry);
+    return entry;
+  }
 
 };
 

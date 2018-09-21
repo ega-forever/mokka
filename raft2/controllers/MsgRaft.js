@@ -2,6 +2,9 @@ const debug = require('diagnostics')('raft'),
   LifeRaft = require('../raft'),
   secrets = require('secrets.js-grempe'),
   _ = require('lodash'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
+  EthUtil = require('ethereumjs-util'),
   crypto = require('crypto'),
   msg = require('axon');
 
@@ -21,11 +24,11 @@ class MsgRaft extends LifeRaft {
     socket.bind(this.address);
     socket.on('message', (data, fn) => {
 
-      if(data.type === 'task_vote')
-         this.voteTask(data.data.taskId, data.data.share);
+      if (data.type === 'task_vote')
+        this.voteTask(data.data.taskId, data.data.share);
 
-      if(data.type === 'task_voted')
-        this.votedTask(data.data.task, data.data.payload, data.address);
+      if (data.type === 'task_voted')
+        this.votedTask(data.data.taskId, data.data.payload, data.address);
 
       this.emit('data', data, fn);
     });
@@ -58,51 +61,83 @@ class MsgRaft extends LifeRaft {
     });
   }
 
-  async proposeTask (task){
+  async proposeTask (task) {
     await this.promote();
-    console.log('propose command');
-    await new Promise(res=> this.once('leader', res));
+    await new Promise(res => this.once('leader', res));
     return await this.command({task: task});
   }
 
-  async executeTask(taskId){
+  async executeTask (taskId) {
 
-    let addresses = _.chain(this.nodes).filter(node=>node.state === MsgRaft.FOLLOWER).map(node=>node.address).value();
+    let addresses = _.chain(this.nodes)
+      .filter(node => [MsgRaft.FOLLOWER, MsgRaft.CHILD].includes(node.state))
+      .map(node => node.address).value();
 
     let minValidates = Math.round(addresses.length / 2);
 
     if (minValidates === 1)
       minValidates = Object.keys(this.peers).length;
 
-
     let task = await this.log.db.get(taskId);
     task = task.command.task;
     let id = crypto.createHash('md5').update(JSON.stringify(task)).digest('hex');
     let shares = secrets.share(id, addresses.length, minValidates);
 
-    for(let index = 0;index < addresses.length;index++){
-       let packet = await this.packet('task_vote', {taskId: taskId, share: shares[index]});
+    await this.log.setMinShare(taskId, minValidates);
+
+    for (let index = 0; index < addresses.length; index++) {
+      let packet = await this.packet('task_vote', {taskId: taskId, share: shares[index]});
       await this.message(addresses[index], packet);
     }
 
+
   }
 
-  async voteTask(taskId, share){
-
-    console.log(taskId, share)
-    return;
+  async voteTask (taskId, share) {
 
     let task = await this.log.db.get(taskId);
-    task = task.command.task;
-    let id = crypto.createHash('md5').update(JSON.stringify(task)).digest('hex');
+    if (!task)
+      return;
 
-    let packet = await this.packet('task_voted', {task: taskId, payload: 'payload'});
+    const signedShare = web3.eth.accounts.sign(share, `0x${this.privateKey}`);
+    let packet = await this.packet('task_voted', {taskId: taskId, payload: signedShare});
     await this.message(MsgRaft.LEADER, packet);
   }
 
-  async votedTask(taskId, payload, peer){
+  async votedTask (taskId, payload, peer) {
 
-    console.log('peer voted: ', taskId, payload, peer)
+    const publicKey = EthUtil.ecrecover(Buffer.from(payload.messageHash.replace('0x', ''), 'hex'), parseInt(payload.v), Buffer.from(payload.r.replace('0x', ''), 'hex'), Buffer.from(payload.s.replace('0x', ''), 'hex'));
+
+    if (!this.peers.includes(publicKey.toString('hex')))
+      return;
+
+    let entry = await this.log.appendShare(taskId, payload.message, peer);
+
+    if(entry.minShares > entry.shares.length)
+      return;
+
+    let shares = entry.shares.map(item=>item.share);
+
+    let id = crypto.createHash('md5').update(JSON.stringify(entry.command.task)).digest('hex');
+    let comb = secrets.combine(shares);
+
+    if(comb !== id)
+      return; //todo remove task
+
+    const signedId = web3.eth.accounts.sign(id, `0x${this.privateKey}`);
+    let packet = await this.packet('task_executed', {taskId: taskId, signature: signedId});
+    await this.message();
+
+  }
+
+  async executedTask(taskId, payload, peer){
+
+    const publicKey = EthUtil.ecrecover(Buffer.from(payload.messageHash.replace('0x', ''), 'hex'), parseInt(payload.v), Buffer.from(payload.r.replace('0x', ''), 'hex'), Buffer.from(payload.s.replace('0x', ''), 'hex'));
+
+    if (!this.peers.includes(publicKey.toString('hex')))
+      return;
+
+
 
   }
 
