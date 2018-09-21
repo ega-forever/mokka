@@ -37,6 +37,7 @@ const init = async () => {
 
   const peer2 = new P2pController(privKeys[1], pubKeys);
   await peer2.start();
+  peer2.add(tasks[1]); //set missed blocks chunks as micro tasks
 
 
   await Promise.delay(5000);
@@ -46,24 +47,36 @@ const init = async () => {
   await peer3.start();
 
 
-  await Promise.delay(5000);
+  await Promise.delay(10000);
 
   console.log('validate states...');
   console.log(_.isEqual(peer.tasks, peer2.tasks));
   console.log(_.isEqual(peer.tasks, peer3.tasks));
 
+  console.log(peer.tasks);
+  console.log('----');
+  console.log(peer2.tasks)
 
+
+/*
   console.log('propose task...');
   await peer.propose(tasks[0].id);
+  //await peer2.add(tasks[1]);
 
-  //peer.on('task_pulled', ()=>console.log('super!'))
+  peer.on('task_pulled', ()=>console.log('super!'))
 
-  await Promise.delay(3000);
+  await Promise.delay(20000);
   console.log('validate states...');
   console.log(_.isEqual(peer.tasks, peer2.tasks));
   console.log(_.isEqual(peer.tasks, peer3.tasks));
 
-  
+  console.log(peer.tasks);
+
+  console.log(peer2.tasks)
+*/
+
+
+
 
 
 };

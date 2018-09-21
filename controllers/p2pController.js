@@ -5,7 +5,7 @@ const crypto = require('crypto'),
   secrets = require('secrets.js-grempe'),
   Promise = require('bluebird'),
   Wallet = require('ethereumjs-wallet'),
-  sem = require('semaphore')(1),
+  execSem = require('semaphore')(1),
   EthUtil = require('ethereumjs-util'),
   _ = require('lodash'),
   Web3 = require('web3'),
@@ -16,6 +16,9 @@ const crypto = require('crypto'),
 const states = {
   VOTE: 'vote',
   ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+  MASTER: 'master',
+  ELECTION: 'election',
   PROPOSE: 'propose',
   OBTAIN: 'obtain',
   STAGE: 'stage',
@@ -29,11 +32,13 @@ class P2pController extends EventEmitter {
     super();
     this.privKey = privKey;
     this.peerPubKeys = peerPubKeys;
+    this.master = false;
     this.pubKey = Wallet.fromPrivateKey(Buffer.from(this.privKey, 'hex')).getPublicKey().toString('hex');
     this.peers = {};
     this.config = defaults({id: Buffer.from(this.pubKey, 'hex')});
     this.swarm = Swarm(this.config);
     this.tasks = [];
+    this.masterVotes = [];
     this.checkpointMap = {
       [crypto.createHash('md5').update(JSON.stringify([])).digest('hex')]: [] //delta
     };
@@ -85,6 +90,12 @@ class P2pController extends EventEmitter {
         if (data.task === states.ACCEPTED)
           return this._pull(data.id, data.payload, peerId);
 
+        if (data.task === states.ELECTION)//todo implement
+          return this._electionForMaster(data.checkpoint, peerId);
+
+        if (data.task === states.MASTER)//todo implement
+          return this._masterVoted(peerId);
+
       });
 
       conn.on('close', () => {
@@ -100,23 +111,75 @@ class P2pController extends EventEmitter {
       const currentCheckpoint = _.last(Object.keys(this.checkpointMap));
 
       this._execute(JSON.stringify({task: states.OBTAIN, checkpoint: currentCheckpoint}), [peerId]);
+      this.emit('peer_arrived', peerId);
     });
   }
 
-  add (task) {
+  async add (task) {
+
+   // let checkpoint = _.chain(this.checkpointMap).keys().last().value();
+    const ids = Object.keys(this.peers);
+
+/*    for (let id of ids)
+      await this._broadcastState(id, checkpoint)
+
+    if (!this.master)
+      await this._masterPropose(checkpoint);
+
+    console.log('proposed master')
+
+    await new Promise(res=>this.once('master_set', res));
+
+    console.log('master found')*/
 
     let oldTasks = _.cloneDeep(this.tasks);
     this.tasks.push(task);
     let delta = jd.diff(oldTasks, this.tasks);
-    let checkpoint = crypto.createHash('md5').update(JSON.stringify(delta)).digest('hex');
+    checkpoint = crypto.createHash('md5').update(JSON.stringify(delta)).digest('hex');
     this.checkpointMap[checkpoint] = delta;
+
+
+    for (let id of ids)
+      await this._broadcastState(id, checkpoint)
+  }
+
+  async _masterPropose (checkpoint) {
+    const ids = Object.keys(this.peers);
+    if(!ids.length)
+      await new Promise(res=>this.once('peer_arrived', res));
+
+    console.log('electing...')
+
+    await this._execute(JSON.stringify({task: states.ELECTION, checkpoint: checkpoint}), ids);
+  }
+
+  async _electionForMaster (checkpoint, peerId) {
+    const currentCheckpoint = _.chain(this.checkpointMap).keys().last().value();
+
+    console.log(currentCheckpoint, checkpoint)
+
+    if(currentCheckpoint !== checkpoint)
+      return this._execute(JSON.stringify({task: states.REJECTED}), [peerId]);
+
+    const shareTask = !!_.find(this.tasks, {proposer: this.pubKey});
+
+    if(shareTask)
+      return this._execute(JSON.stringify({task: states.REJECTED}), [peerId]);
+
+    return this._execute(JSON.stringify({task: states.MASTER}), [peerId]);
+  }
+
+  async _masterVoted(peerId){
+
+    if(this.masterVotes.indexOf(peerId) !== -1)
+      return;
 
     const ids = Object.keys(this.peers);
 
-    for (let id of ids)
-      this._broadcastState(id, checkpoint)
+    if(ids.length === this.masterVotes.length)
+      this.master = true;
 
-
+    this.emit('master_set');
   }
 
   async propose (id) {
@@ -197,13 +260,13 @@ class P2pController extends EventEmitter {
     const singed = web3.eth.accounts.sign(task.data, `0x${this.privKey}`);
 
     for (let id in this.peers)
-      this._execute(JSON.stringify({task: states.ACCEPTED, payload: singed, id: taskId}), [id]);
+      await this._execute(JSON.stringify({task: states.ACCEPTED, payload: singed, id: taskId}), [id]);
 
     this.emit('task_pulled', taskId);
 
   }
 
-  _push (deltas, peerId, sync = true) {
+  _push (deltas, peerId) {
 
     for (let delta of deltas) {
       let checkpoint = crypto.createHash('md5').update(JSON.stringify(delta)).digest('hex');
@@ -213,17 +276,9 @@ class P2pController extends EventEmitter {
 
       if (delta.length > 0) {
         this.checkpointMap[checkpoint] = delta;
-
         this.tasks = jd.applyDiff(this.tasks, delta);
-
       }
     }
-
-    /*    this.checkpoint.peers++;
-
-        if(this.checkpoint.peers === Object.keys(this.peers).length){
-          this.emit('synced');
-        }*/
 
   }
 
@@ -242,7 +297,6 @@ class P2pController extends EventEmitter {
     _.pull(this.tasks, task);
 
     this.emit('task_pulled', id);
-
   }
 
   async _execute (data, peerIds = Object.keys(this.peers)) {
@@ -253,20 +307,17 @@ class P2pController extends EventEmitter {
     if (Object.values(states).indexOf(data.task) === -1)
       return;
 
-    sem.take(async () => {
+    execSem.take(async () => {
 
       for (let peerId of peerIds)
         if (this.peers[peerId])
           this.peers[peerId].conn.write(JSON.stringify(data));
 
       await Promise.delay(500);
-      sem.leave();
+      execSem.leave();
     });
 
-
   }
-
-
 }
 
 
