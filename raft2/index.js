@@ -44,6 +44,7 @@ for (let index = 0; index < ports.length; index++) {
     debug('we have a state to: %s -- was %s', to, from);
   });
 
+/*
   raft.on('leader', function () {
     console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@');
     console.log('I am elected as leader');
@@ -55,13 +56,16 @@ for (let index = 0; index < ports.length; index++) {
     console.log('I am starting as candidate');
     console.log('----------------------------------');
   });
+*/
 
 
   if (index === 1)
     setTimeout(async () => {
       const taskData = [12, 20];
       let entry = await raft.proposeTask(taskData);
+      await raft.reserveTask(entry.index);
       await Promise.delay(5000);
+      console.log(index, entry.index);
       await raft.executeTask(entry.index);
     }, 5000);
 
@@ -69,9 +73,11 @@ for (let index = 0; index < ports.length; index++) {
     setTimeout(async () => {
       const taskData = [21, 32];
       let entry = await raft.proposeTask(taskData);
+      await raft.reserveTask(entry.index);
       await Promise.delay(5000);
+      console.log(index, entry.index);
       await raft.executeTask(entry.index);
-    }, 9000);
+    }, 5000);
 
 
   if (index === 3)
@@ -79,8 +85,11 @@ for (let index = 0; index < ports.length; index++) {
       const taskData = [33, 199];
       let entry = await raft.proposeTask(taskData);
       await Promise.delay(5000);
+      await raft.reserveTask(entry.index);
+      await Promise.delay(5000);
+      console.log(index, entry.index);
       await raft.executeTask(entry.index);
-    }, 12000);
+    }, 5000);
   /*  raft.on('vote', ()=>{
       console.log('i am voting!')
     });*/

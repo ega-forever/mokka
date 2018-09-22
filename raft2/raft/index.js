@@ -1,9 +1,13 @@
-const EventEmitter = require('eventemitter3');
-const modification = require('modification');
-const Tick = require('tick-tock');
-const ms = require('millisecond');
-const one = require('one-time');
-const emits = require('emits');
+const EventEmitter = require('eventemitter3'),
+  Tick = require('tick-tock'),
+  crypto = require('crypto'),
+  secrets = require('secrets.js-grempe'),
+  one = require('one-time'),
+  _ = require('lodash'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
+  EthUtil = require('ethereumjs-util'),
+  emits = require('emits');
 
 /**
  * Generate a somewhat unique UUID.
@@ -12,12 +16,12 @@ const emits = require('emits');
  * @returns {String} UUID.
  * @private
  */
-function UUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function gen(c) {
+function UUID () {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function gen (c) {
     var random = Math.random() * 16 | 0
       , value = c !== 'x'
-        ? (random & 0x3 | 0x8)
-        : random;
+      ? (random & 0x3 | 0x8)
+      : random;
 
     return value.toString(16);
   });
@@ -37,7 +41,8 @@ const change = require('modification')(' change');
  *
  * @private
  */
-function nope() {}
+function nope () {
+}
 
 /**
  * Representation of a single raft node in the cluster.
@@ -65,20 +70,20 @@ function nope() {}
  * @public
  */
 class Raft extends EventEmitter {
-  constructor(address, options = {}) {
+  constructor (address, options = {}) {
     super();
 
-    var raft = this;
+    let raft = this;
 
     if ('object' === typeof address) options = address;
     else if (!options.address) options.address = address;
 
     raft.election = {
-      min: ms(options['election min'] || '150 ms'),
-      max: ms(options['election max'] || '300 ms')
+      min: options['election_min'] || 150,
+      max: options['election_max'] || 300
     };
 
-    raft.beat = ms(options.heartbeat || '50 ms');
+    raft.beat = options.heartbeat || 50;
 
     raft.votes = {
       for: null,                // Who did we vote for in this current term.
@@ -117,13 +122,13 @@ class Raft extends EventEmitter {
    * @param {Object} options The configuration you passed in the constructor.
    * @private
    */
-  _initialize(options) {
-    var raft = this;
+  _initialize (options) {
+    let raft = this;
 
     //
     // Reset our vote as we're starting a new term. Votes only last one term.
     //
-    raft.on('term change', function change() {
+    raft.on('term change', function change () {
       raft.votes.for = null;
       raft.votes.granted = 0;
     });
@@ -132,7 +137,7 @@ class Raft extends EventEmitter {
     // Reset our times and start the heartbeat again. If we're promoted to leader
     // the heartbeat will automatically be broadcasted to users as well.
     //
-    raft.on('state change', function change(state) {
+    raft.on('state change', function change (state) {
       raft.timers.clear('heartbeat, election');
       raft.heartbeat(Raft.LEADER === raft.state ? raft.beat : raft.timeout());
       raft.emit(Raft.states[state].toLowerCase());
@@ -143,7 +148,7 @@ class Raft extends EventEmitter {
     //
     raft.on('data', async (packet, write) => {
       write = write || nope;
-      var reason;
+      let reason;
 
       if ('object' !== raft.type(packet)) {
         reason = 'Invalid packet received';
@@ -152,16 +157,7 @@ class Raft extends EventEmitter {
         return write(await raft.packet('error', reason));
       }
 
-      //
-      // Raft §5.1:
-      //
-      // Applies to all states. If a response contains a higher term then our
-      // current term need to change our state to FOLLOWER and set the received
-      // term.
-      //
-      // If the raft receives a request with a stale term number it should be
-      // rejected.
-      //
+
       if (packet.term > raft.term) {
         raft.change({
           leader: Raft.LEADER === packet.state ? packet.address : packet.leader || raft.leader,
@@ -169,204 +165,155 @@ class Raft extends EventEmitter {
           term: packet.term
         });
       } else if (packet.term < raft.term) {
-        reason = 'Stale term detected, received `'+ packet.term +'` we are at '+ raft.term;
+        reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
         raft.emit('error', new Error(reason));
 
         return write(raft.packet('error', reason));
       }
 
-      //
-      // Raft §5.2:
-      //
-      // If we receive a message from someone who claims to be leader and shares
-      // our same term while we're in candidate mode we will recognize their
-      // leadership and return as follower.
-      //
-      // If we got this far we already know that our terms are the same as it
-      // would be changed or prevented above..
-      //
       if (Raft.LEADER === packet.state) {
-        if (Raft.FOLLOWER !== raft.state) raft.change({ state: Raft.FOLLOWER });
-        if (packet.address !== raft.leader) raft.change({ leader: packet.address });
+        if (Raft.FOLLOWER !== raft.state)
+          raft.change({state: Raft.FOLLOWER});
 
-        //
-        // Always when we receive an message from the Leader we need to reset our
-        // heartbeat.
-        //
+        if (packet.address !== raft.leader)
+          raft.change({leader: packet.address});
+
         raft.heartbeat(raft.timeout());
       }
 
-      switch (packet.type) {
-        //
-        // Raft §5.2:
-        // Raft §5.4:
-        //
-        // A raft asked us to vote on them. We can only vote to them if they
-        // represent a higher term (and last log term, last log index).
-        //
-        case 'vote':
-          //
-          // The term of the vote is bigger then ours so we need to update it. If
-          // it's the same and we already voted, we need to deny the vote.
-          //
-          if (raft.votes.for && raft.votes.for !== packet.address) {
-            raft.emit('vote', packet, false);
 
-            return write(await raft.packet('voted', { granted: false }));
-          }
-
-          //
-          // If we maintain a log, check if the candidates log is as up to date as
-          // ours.
-          //
-          if (raft.log) {
-            const { index, term } = await raft.log.getLastInfo();
-
-            if (index > packet.last.index && term > packet.last.term) {
-              raft.emit('vote', packet, false);
-
-              return write(await raft.packet('voted', { granted: false }));
-            }
-          }
-
-          //
-          // We've made our decision, we haven't voted for this term yet and this
-          // candidate came in first so it gets our vote as all requirements are
-          // met.
-          //
-          raft.votes.for = packet.address;
-          raft.emit('vote', packet, true);
-          raft.change({ leader: packet.address, term: packet.term });
-          write(await raft.packet('voted', { granted: true }));
-
-          //
-          // We've accepted someone as potential new leader, so we should reset
-          // our heartbeat to prevent this raft from timing out after voting.
-          // Which would again increment the term causing us to be next CANDIDATE
-          // and invalidates the request we just got, so that's silly willy.
-          //
-          raft.heartbeat(raft.timeout());
-        break;
-
-        //
-        // A new incoming vote.
-        //
-        case 'voted':
-          //
-          // Only accepts votes while we're still in a CANDIDATE state.
-          //
-          if (Raft.CANDIDATE !== raft.state) {
-            return write(await raft.packet('error', 'No longer a candidate, ignoring vote'));
-          }
-
-          //
-          // Increment our received votes when our voting request has been
-          // granted by the raft that received the data.
-          //
-          if (packet.data.granted) {
-            raft.votes.granted++;
-          }
-
-          //
-          // Check if we've received the minimal amount of votes required for this
-          // current voting round to be considered valid.
-          //
-          if (raft.quorum(raft.votes.granted)) {
-            raft.change({ leader: raft.address, state: Raft.LEADER });
-
-            //
-            // Send a heartbeat message to all connected clients.
-            //
-            raft.message(Raft.FOLLOWER, await raft.packet('append'));
-          }
-
-          //
-          // Empty write, nothing to do.
-          //
-          write();
-        break;
-
-        case 'error':
-          raft.emit('error', new Error(packet.data));
-        break;
-
-        case 'append':
-          const {term, index} = await raft.log.getLastInfo();
-
-          // We do not have the last index as our last entry
-          // Look back in log in case we have it previously
-          // if we do remove any bad uncommitted entries following it
-          if (packet.last.index !== index && packet.last.index !== 0) {
-            const hasIndex = await raft.log.has(packet.last.index);
-
-            if (hasIndex) raft.log.removeEntriesAfter(packet.last.index);
-            else return raft.message(Raft.LEADER, await raft.packet('append fail', {
-              term: packet.last.term,
-              index: packet.last.index
-            }));
-          }
-
-          if (packet.data) {
-            const entry = packet.data[0];
-            await raft.log.saveCommand(entry.command, entry.term, entry.index);
-
-            raft.message(Raft.LEADER, await raft.packet('append ack', {
-              term: entry.term,
-              index: entry.index
-            }));
-          }
-
-          //if packet commit index not the same. Commit commands
-          if (raft.log.committedIndex < packet.last.committedIndex) {
-            const entries = await raft.log.getUncommittedEntriesUpToIndex(packet.last.committedIndex, packet.last.term);
-            raft.commitEntries(entries);
-          }
-        break;
-
-        case 'append ack':
-          const entry = await raft.log.commandAck(packet.data.index, packet.address);
-          if (raft.quorum(entry.responses.length) && !entry.committed) {
-            const entries = await raft.log.getUncommittedEntriesUpToIndex(entry.index, entry.term);
-            raft.commitEntries(entries);
-          }
-        break;
-
-        case 'append fail':
-          const previousEntry = await raft.log.get(packet.data.index);
-          const append = await raft.appendPacket(previousEntry);
-          write(append);
-        break;
-
-        //
-        // RPC command
-        //
-        case 'exec':
-        break;
-
-        //
-        // Unknown event, we have no idea how to process this so we're going to
-        // return an error.
-        //
-        default:
-          if (raft.listeners('rpc').length) {
-            raft.emit('rpc', packet, write);
-          } else {
-            write(await raft.packet('error', 'Unknown message type: '+ packet.type));
+      if (packet.type === 'vote') {
+        if (raft.votes.for && raft.votes.for !== packet.address) {
+          raft.emit('vote', packet, false);
+          return write(await raft.packet('voted', {granted: false}));
         }
+
+        if (raft.log) {
+          const {index, term} = await raft.log.getLastInfo();
+
+          if (index > packet.last.index && term > packet.last.term) {
+            raft.emit('vote', packet, false);
+            return write(await raft.packet('voted', {granted: false}));
+          }
+        }
+
+        raft.votes.for = packet.address;
+        raft.emit('vote', packet, true);
+        raft.change({leader: packet.address, term: packet.term});
+        write(await raft.packet('voted', {granted: true}));
+        raft.heartbeat(raft.timeout());
+        return;
       }
+
+
+      if (packet.type === 'voted') {
+        if (Raft.CANDIDATE !== raft.state) {
+          return write(await raft.packet('error', 'No longer a candidate, ignoring vote'));
+        }
+
+        if (packet.data.granted) {
+          raft.votes.granted++;
+        }
+
+        if (raft.quorum(raft.votes.granted)) {
+          raft.change({leader: raft.address, state: Raft.LEADER});
+          raft.message(Raft.FOLLOWER, await raft.packet('append'));
+        }
+        write();
+        return;
+      }
+
+      if (packet.type === 'error') {
+        raft.emit('error', new Error(packet.data));
+        return;
+      }
+
+      if (packet.type === 'append') {
+        const {term, index} = await raft.log.getLastInfo();
+
+        if (packet.last.index !== index && packet.last.index !== 0) {
+          const hasIndex = await raft.log.has(packet.last.index);
+
+          if (hasIndex) raft.log.removeEntriesAfter(packet.last.index);
+          else return raft.message(Raft.LEADER, await raft.packet('append fail', {
+            term: packet.last.term,
+            index: packet.last.index
+          }));
+        }
+
+        if (packet.data) {
+          const entry = packet.data[0];
+          await raft.log.saveCommand(entry.command, entry.term, entry.index);
+
+          raft.message(Raft.LEADER, await raft.packet('append ack', {
+            term: entry.term,
+            index: entry.index
+          }));
+        }
+
+        if (raft.log.committedIndex < packet.last.committedIndex) {
+          const entries = await raft.log.getUncommittedEntriesUpToIndex(packet.last.committedIndex, packet.last.term);
+          raft.commitEntries(entries);
+        }
+
+        return;
+      }
+
+
+      if (packet.type === 'append') {
+        const entry = await raft.log.commandAck(packet.data.index, packet.address);
+        if (raft.quorum(entry.responses.length) && !entry.committed) {
+          const entries = await raft.log.getUncommittedEntriesUpToIndex(entry.index, entry.term);
+          raft.commitEntries(entries);
+        }
+
+        return;
+      }
+
+      if (packet.type === 'append fail') {
+        const previousEntry = await raft.log.get(packet.data.index);
+        const append = await raft.appendPacket(previousEntry);
+        write(append);
+        return;
+      }
+
+
+      if (packet.type === 'task_vote') {
+        this.voteTask(packet.data.taskId, packet.data.share, packet.address);
+        return;
+      }
+
+      if (packet.type === 'task_voted') {
+        this.votedTask(packet.data.taskId, packet.data.payload, packet.address);
+        return;
+      }
+
+
+      if (packet.type === 'task_executed') {
+        this.executedTask(packet.data.taskId, packet.data.payload, packet.address);
+        return;
+      }
+
+
+      if (packet.type === 'task_reserved') {
+        this.reservedTask(packet.data.taskId, packet.data.timeout, packet.address);
+        return;
+      }
+
+
+      if (raft.listeners('rpc').length) {
+        raft.emit('rpc', packet, write);
+      } else {
+        write(await raft.packet('error', 'Unknown message type: ' + packet.type));
+      }
+
+
     });
 
-    //
-    // We do not need to execute the rest of the functionality below as we're
-    // currently running as "child" raft of the cluster not as the "root" raft.
-    //
-    if (Raft.CHILD === raft.state) return raft.emit('initialize');
 
-    //
-    // Setup the log & appends. Assume that if we're given a function log that it
-    // needs to be initialized as it requires access to our raft instance so it
-    // can read our information like our leader, state, term etc.
-    //
+    if (Raft.CHILD === raft.state)
+      return raft.emit('initialize');
+
     if ('function' === raft.type(raft.Log)) {
       raft.log = new raft.Log(raft, options);
     }
@@ -381,7 +328,7 @@ class Raft extends EventEmitter {
      *
      * @api private
      */
-    function initialize(err) {
+    function initialize (err) {
       if (err) return raft.emit('error', err);
 
       raft.emit('initialize');
@@ -403,7 +350,7 @@ class Raft extends EventEmitter {
    * @returns {String} The type.
    * @private
    */
-  type(of) {
+  type (of) {
     return Object.prototype.toString.call(of).slice(8, -1).toLowerCase();
   }
 
@@ -415,7 +362,7 @@ class Raft extends EventEmitter {
    * @returns {Boolean}
    * @public
    */
-  quorum(responses) {
+  quorum (responses) {
     if (!this.nodes.length || !responses) return false;
 
     return responses >= this.majority();
@@ -427,7 +374,7 @@ class Raft extends EventEmitter {
    * @returns {Number}
    * @public
    */
-  majority() {
+  majority () {
     return Math.ceil(this.nodes.length / 2) + 1;
   }
 
@@ -440,21 +387,21 @@ class Raft extends EventEmitter {
    * @returns {Raft}
    * @public
    */
-  indefinitely(attempt, fn, timeout) {
-    var uuid = UUID()
-      , raft = this;
+  indefinitely (attempt, fn, timeout) {
+    let uuid = UUID(),
+      raft = this;
 
-    (function again() {
+    (function again () {
       //
       // We need to force async execution here because we do not want to saturate
       // the event loop with sync executions. We know that it's important these
       // functions are retried indefinitely but if it's called synchronously we will
       // not have time to receive data or updates.
       //
-      var next = one(function force(err, data) {
+      var next = one(function force (err, data) {
         if (!raft.timers) return; // We're been destroyed, ignore all.
 
-        raft.timers.setImmediate(uuid +'@async', function async() {
+        raft.timers.setImmediate(uuid + '@async', function async () {
           if (err) {
             raft.emit('error', err);
 
@@ -470,7 +417,7 @@ class Raft extends EventEmitter {
       //
       attempt.call(raft, next);
 
-      raft.timers.setTimeout(uuid, function timeoutfn() {
+      raft.timers.setTimeout(uuid, function timeoutfn () {
         next(new Error('Timed out, attempting to retry again'));
       }, +timeout || raft.timeout());
     }());
@@ -487,8 +434,8 @@ class Raft extends EventEmitter {
    * @returns {Raft}
    * @private
    */
-  heartbeat(duration) {
-    var raft = this;
+  heartbeat (duration) {
+    let raft = this;
 
     duration = duration || raft.beat;
 
@@ -512,7 +459,7 @@ class Raft extends EventEmitter {
       // idle state of a LEADER as it didn't get any messages to append/commit to
       // the FOLLOWER'S.
       //
-      var packet = await raft.packet('append');
+      let packet = await raft.packet('append');
 
       raft.emit('heartbeat', packet);
       raft.message(Raft.FOLLOWER, packet).heartbeat(raft.beat);
@@ -536,7 +483,7 @@ class Raft extends EventEmitter {
    * @returns {Raft}
    * @public
    */
-  message(who, what, when) {
+  message (who, what, when) {
     when = when || nope;
 
     //
@@ -546,35 +493,38 @@ class Raft extends EventEmitter {
       throw new Error('Cannot send message to `undefined`. Check your spelling!');
     }
 
-    var output = { errors: {}, results: {} }
-      , length = this.nodes.length
-      , errors = false
-      , latency = []
-      , raft = this
-      , nodes = []
-      , i = 0;
+    let output = {errors: {}, results: {}},
+      length = this.nodes.length,
+      errors = false,
+      latency = [],
+      raft = this,
+      nodes = [],
+      i = 0;
 
     switch (who) {
-      case Raft.LEADER: for (; i < length; i++)
-        if (raft.leader === raft.nodes[i].address) {
-          nodes.push(raft.nodes[i]);
-        }
-      break;
+      case Raft.LEADER:
+        for (; i < length; i++)
+          if (raft.leader === raft.nodes[i].address) {
+            nodes.push(raft.nodes[i]);
+          }
+        break;
 
-      case Raft.FOLLOWER: for (; i < length; i++)
-        if (raft.leader !== raft.nodes[i].address) {
-          nodes.push(raft.nodes[i]);
-        }
-      break;
+      case Raft.FOLLOWER:
+        for (; i < length; i++)
+          if (raft.leader !== raft.nodes[i].address) {
+            nodes.push(raft.nodes[i]);
+          }
+        break;
 
       case Raft.CHILD:
         Array.prototype.push.apply(nodes, raft.nodes);
-      break;
+        break;
 
-      default: for (; i < length; i++)
-        if (who === raft.nodes[i].address) {
-          nodes.push(raft.nodes[i]);
-        }
+      default:
+        for (; i < length; i++)
+          if (who === raft.nodes[i].address) {
+            nodes.push(raft.nodes[i]);
+          }
     }
 
     /**
@@ -584,10 +534,10 @@ class Raft extends EventEmitter {
      * @param {Object} data Message that needs to be send.
      * @api private
      */
-    function wrapper(client, data) {
-      var start = +new Date();
+    function wrapper (client, data) {
+      let start = +new Date();
 
-      client.write(data, function written(err, data) {
+      client.write(data, function written (err, data) {
         latency.push(+new Date() - start);
 
         //
@@ -638,9 +588,8 @@ class Raft extends EventEmitter {
    * @returns {Number}
    * @private
    */
-  timeout() {
-    var times = this.election;
-
+  timeout () {
+    let times = this.election;
     return Math.floor(Math.random() * (times.max - times.min + 1) + times.min);
   }
 
@@ -652,10 +601,10 @@ class Raft extends EventEmitter {
    * @param {Boolean} Success-fully calculated the threshold.
    * @private
    */
-  timing(latency) {
-    var raft = this
-      , sum = 0
-      , i = 0;
+  timing (latency) {
+    let raft = this,
+      sum = 0,
+      i = 0;
 
     if (Raft.STOPPED === raft.state) return false;
 
@@ -682,8 +631,8 @@ class Raft extends EventEmitter {
    * @returns {Raft}
    * @private
    */
-  async promote() {
-    var raft = this;
+  async promote () {
+    let raft = this;
 
     raft.change({
       state: Raft.CANDIDATE,  // We're now a candidate,
@@ -702,7 +651,7 @@ class Raft extends EventEmitter {
     // Broadcast the voting request to all connected rafts in your private
     // cluster.
     //
-    const packet = await raft.packet('vote')
+    const packet = await raft.packet('vote');
 
     raft.message(Raft.FOLLOWER, packet);
 
@@ -727,14 +676,14 @@ class Raft extends EventEmitter {
    * @returns {Promise<Object>} Packet.
    * @private
    */
-  async packet(type, data) {
-    var raft = this
-      , wrapped = {
-        state:   raft.state,    // Are we're a leader, candidate or follower.
-        term:    raft.term,     // Our current term so we can find mis matches.
+  async packet (type, data) {
+    let raft = this,
+      wrapped = {
+        state: raft.state,    // Are we're a leader, candidate or follower.
+        term: raft.term,     // Our current term so we can find mis matches.
         address: raft.address,  // Address of the sender.
-        type:    type,          // Message type.
-        leader:  raft.leader,   // Who is our leader.
+        type: type,          // Message type.
+        leader: raft.leader   // Who is our leader.
       };
 
     //
@@ -758,14 +707,14 @@ class Raft extends EventEmitter {
   async appendPacket (entry) {
     const raft = this;
     const last = await raft.log.getEntryInfoBefore(entry);
-    return{
-        state:   raft.state,    // Are we're a leader, candidate or follower.
-        term:    raft.term,     // Our current term so we can find mis matches.
-        address: raft.address,  // Address of the sender.
-        type:    'append',      // Append message type .
-        leader:  raft.leader,   // Who is our leader.
-        data: [entry], // The command to send to the other nodes
-        last,
+    return {
+      state: raft.state,    // Are we're a leader, candidate or follower.
+      term: raft.term,     // Our current term so we can find mis matches.
+      address: raft.address,  // Address of the sender.
+      type: 'append',      // Append message type .
+      leader: raft.leader,   // Who is our leader.
+      data: [entry], // The command to send to the other nodes
+      last
     };
   }
 
@@ -778,16 +727,16 @@ class Raft extends EventEmitter {
    * @returns {Raft} The newly created instance.
    * @public
    */
-  clone(options) {
+  clone (options) { //todo replace with lodash
     options = options || {};
 
-    var raft = this
-      , node = {
-        'Log':            raft.Log,
-        'election max':   raft.election.max,
-        'election min':   raft.election.min,
-        'heartbeat':      raft.beat,
-        'threshold':      raft.threshold,
+    let raft = this,
+      node = {
+        'Log': raft.Log,
+        'election max': raft.election.max,
+        'election min': raft.election.min,
+        'heartbeat': raft.beat,
+        'threshold': raft.threshold
       }, key;
 
     for (key in node) {
@@ -808,12 +757,13 @@ class Raft extends EventEmitter {
    * @returns {Raft} The raft we created and that joined our cluster.
    * @public
    */
-  join(address, write) {
-    var raft = this;
+  join (address, write) {
+    let raft = this;
 
     // can be function or asyncfunction
     if (/function/.test(raft.type(address))) {
-      write = address; address = null;
+      write = address;
+      address = null;
     }
 
     //
@@ -823,13 +773,13 @@ class Raft extends EventEmitter {
     //
     if (raft.address === address) return;
 
-    var node = raft.clone({
+    let node = raft.clone({
       write: write,       // Optional function that receives our writes.
       address: address,   // A custom address for the raft we added.
       state: Raft.CHILD   // We are a raft in the cluster.
     });
 
-    node.once('end', function end() {
+    node.once('end', function end () {
       raft.leave(node);
     }, raft);
 
@@ -846,12 +796,12 @@ class Raft extends EventEmitter {
    * @returns {Raft} The raft that we removed.
    * @public
    */
-  leave(address) {
-    var raft = this
-      , index = -1
-      , node;
+  leave (address) {
+    let raft = this,
+      index = -1,
+      node;
 
-    for (var i = 0; i < raft.nodes.length; i++) {
+    for (let i = 0; i < raft.nodes.length; i++) {
       if (raft.nodes[i] === address || raft.nodes[i].address === address) {
         node = raft.nodes[i];
         index = i;
@@ -875,51 +825,128 @@ class Raft extends EventEmitter {
    * @returns {Boolean} Successful destruction.
    * @public
    */
-  end() {
-    var raft = this;
+  end () {
+    let raft = this;
 
     if (Raft.STOPPED === raft.state) return false;
-    raft.change({ state: Raft.STOPPED });
+    raft.change({state: Raft.STOPPED});
 
-    if (raft.nodes.length) for (var i = 0; i < raft.nodes.length; i++) {
-      raft.leave(raft.nodes[i]);
-    }
+    if (raft.nodes.length)
+      for (let i = 0; i < raft.nodes.length; i++)
+        raft.leave(raft.nodes[i]);
+
 
     raft.emit('end');
     raft.timers.end();
     raft.removeAllListeners();
 
-    if (raft.log) raft.log.end();
-    raft.timers = raft.Log = raft.beat = raft.election = null;
+    if (raft.log)
+      raft.log.end();
 
+    raft.timers = raft.Log = raft.beat = raft.election = null;
     return true;
   }
 
-  /**
-   * Raft §5.3:
-   * command - Saves command to log and replicates to followers
-   *
-   * @param {type} command Json command to be stored in the log
-   *
-   * @return {Promise<void>} Description
-   */
-  async command(command) {
-    let raft = this;
 
-    if(raft.state !== Raft.LEADER) {
-      return Promise.reject({
-        message: 'NOTLEADER',
-        leaderAddress: raft.leader
-      });
-    }
+  async proposeTask (task) {
+
+    if (this.state !== Raft.LEADER)
+      await new Promise(res => this.once('leader', res));
 
     // about to send an append so don't send a heart beat
     // raft.heartbeat(raft.beat);
-    const entry = await raft.log.saveCommand(command, raft.term);
-    const appendPacket = await raft.appendPacket(entry);
-    raft.message(Raft.FOLLOWER, appendPacket);
+    const entry = await this.log.saveCommand({task: task}, this.term);
+    const appendPacket = await this.appendPacket(entry);
+    this.message(Raft.FOLLOWER, appendPacket);
     return entry;
   }
+
+  async reserveTask (taskId) {
+    await this.promote();
+    await new Promise(res => this.once('leader', res));
+    let timeout = 1000 * 60 * 5; //5 min //todo calculate (predict the difficulty of task)
+    let packet = await this.packet('task_reserve', {taskId: taskId, timeout: timeout});
+    await this.message(Raft.FOLLOWER, packet);
+    await this.message(Raft.CHILD, packet);
+  }
+
+  async reservedTask (taskId, timeout, peer) {
+    await this.log.reserveTask(taskId, timeout, peer);
+  }
+
+  async executeTask (taskId) {
+
+    let addresses = _.chain(this.nodes)
+      .filter(node => [Raft.FOLLOWER, Raft.CHILD].includes(node.state))
+      .map(node => node.address).value();
+
+    let minValidates = Math.round(addresses.length / 2);
+
+    if (minValidates === 1)
+      minValidates = Object.keys(this.peers).length;
+
+    let task = await this.log.db.get(taskId);
+    task = task.command.task;
+    let id = crypto.createHash('md5').update(JSON.stringify(task)).digest('hex');
+    let shares = secrets.share(id, addresses.length, minValidates);
+
+    await this.log.setMinShare(taskId, minValidates);
+
+    for (let index = 0; index < addresses.length; index++) {
+      let packet = await this.packet('task_vote', {taskId: taskId, share: shares[index]});
+      await this.message(addresses[index], packet);
+    }
+  }
+
+
+  async voteTask (taskId, share, peer) {
+
+    let task = await this.log.db.get(taskId);
+    if (!task)
+      return;
+
+    const signedShare = web3.eth.accounts.sign(share, `0x${this.privateKey}`);
+    let packet = await this.packet('task_voted', {taskId: taskId, payload: signedShare});
+    await this.message([peer], packet);
+  }
+
+  async votedTask (taskId, payload, peer) {
+
+    const publicKey = EthUtil.ecrecover(Buffer.from(payload.messageHash.replace('0x', ''), 'hex'), parseInt(payload.v), Buffer.from(payload.r.replace('0x', ''), 'hex'), Buffer.from(payload.s.replace('0x', ''), 'hex'));
+
+    if (!this.peers.includes(publicKey.toString('hex')))
+      return;
+
+    let entry = await this.log.appendShare(taskId, payload.message, peer);
+
+    if (entry.minShares > entry.shares.length)
+      return;
+
+    let shares = entry.shares.map(item => item.share);
+
+    let id = crypto.createHash('md5').update(JSON.stringify(entry.command.task)).digest('hex');
+    let comb = secrets.combine(shares);
+
+    if (comb !== id)
+      return; //todo remove task
+
+    const signedId = web3.eth.accounts.sign(id, `0x${this.privateKey}`);
+    let packet = await this.packet('task_executed', {taskId: taskId, payload: signedId});
+    await this.message(Raft.FOLLOWER, packet);
+    await this.message(Raft.CHILD, packet);
+    await this.log.remove(taskId);
+  }
+
+  async executedTask (taskId, payload) {
+
+    const publicKey = EthUtil.ecrecover(Buffer.from(payload.messageHash.replace('0x', ''), 'hex'), parseInt(payload.v), Buffer.from(payload.r.replace('0x', ''), 'hex'), Buffer.from(payload.s.replace('0x', ''), 'hex'));
+
+    if (!this.peers.includes(publicKey.toString('hex')))
+      return;
+
+    await this.log.remove(taskId);
+  }
+
 
   /**
    * commitEntries - Commites entries in log and emits commited entries
@@ -929,7 +956,7 @@ class Raft extends EventEmitter {
    */
   async commitEntries (entries) {
     entries.forEach(async (entry) => {
-      await this.log.commit(entry.index)
+      await this.log.commit(entry.index);
       this.emit('commit', entry.command);
     });
   }
@@ -953,7 +980,7 @@ class Raft extends EventEmitter {
  * @private
  */
 Raft.states = 'STOPPED,LEADER,CANDIDATE,FOLLOWER,CHILD'.split(',');
-for (var s = 0; s < Raft.states.length; s++) {
+for (let s = 0; s < Raft.states.length; s++) {
   Raft[Raft.states[s]] = s;
 }
 
