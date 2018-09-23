@@ -2,7 +2,7 @@ const debug = require('diagnostics')('raft'),
   Log = require('./raft/log'),
   Promise = require('bluebird'),
   Wallet = require('ethereumjs-wallet'),
-  _= require('lodash'),
+  _ = require('lodash'),
   MsgRaft = require('./controllers/MsgRaft');
 
 
@@ -20,89 +20,115 @@ const ports = [
 let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
 let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
-for (let index = 0; index < ports.length; index++) {
+let tasks = _.chain(new Array(100)).fill(0).map((item, index) => [100 - index]).value();
 
-  const raft = new MsgRaft('tcp://127.0.0.1:' + ports[index], {
-    'election min': 2000,
-    'election max': 5000,
-    'heartbeat': 1000,
-    Log: Log
-  });
+const init = async () => {
 
-  raft.privateKey = privKeys[index];
-  raft.peers = pubKeys;
+  const nodes = [];
 
-  raft.on('heartbeat timeout', function () {
-    debug('heart beat timeout, starting election');
-  });
+  for (let index = 0; index < ports.length; index++) {
 
-  raft.on('term change', function (to, from) {
-    debug('were now running on term %s -- was %s', to, from);
-  }).on('leader change', function (to, from) {
-    debug('we have a new leader to: %s -- was %s', to, from);
-  }).on('state change', function (to, from) {
-    debug('we have a state to: %s -- was %s', to, from);
-  });
+    const raft = new MsgRaft('tcp://127.0.0.1:' + ports[index], {
+      election_min: 2000,
+      election_max: 5000,
+      heartbeat: 1000,
+      Log: Log,
+      privateKey: privKeys[index],
+      peers: pubKeys
+    });
 
-/*
-  raft.on('leader', function () {
-    console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@');
-    console.log('I am elected as leader');
-    console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@');
-  });
+    raft.on('heartbeat timeout', function () {
+      debug('heart beat timeout, starting election');
+    });
 
-  raft.on('candidate', function () {
-    console.log('----------------------------------');
-    console.log('I am starting as candidate');
-    console.log('----------------------------------');
-  });
-*/
+    raft.on('term change', function (to, from) {
+      debug('were now running on term %s -- was %s', to, from);
+    }).on('leader change', function (to, from) {
+      debug('we have a new leader to: %s -- was %s', to, from);
+    }).on('state change', function (to, from) {
+      debug('we have a state to: %s -- was %s', to, from);
+    });
 
 
-  if (index === 1)
-    setTimeout(async () => {
-      const taskData = [12, 20];
-      let entry = await raft.proposeTask(taskData);
-      await raft.reserveTask(entry.index);
-      await Promise.delay(5000);
-      console.log(index, entry.index);
-      await raft.executeTask(entry.index);
-    }, 5000);
+    raft.on('leader', function () {
+      console.log(`node ${index} selected as leader`)
+    });
 
-  if (index === 2)
-    setTimeout(async () => {
-      const taskData = [21, 32];
-      let entry = await raft.proposeTask(taskData);
-      await raft.reserveTask(entry.index);
-      await Promise.delay(5000);
-      console.log(index, entry.index);
-      await raft.executeTask(entry.index);
-    }, 5000);
+    /*  raft.on('candidate', function () {
+        console.log('----------------------------------');
+        console.log('I am starting as candidate');
+        console.log('----------------------------------');
+      });
+    */
+
+    raft.on('error', function (err) {
+      console.log(err);
+    });
 
 
-  if (index === 3)
-    setTimeout(async () => {
-      const taskData = [33, 199];
-      let entry = await raft.proposeTask(taskData);
-      await Promise.delay(5000);
-      await raft.reserveTask(entry.index);
-      await Promise.delay(5000);
-      console.log(index, entry.index);
-      await raft.executeTask(entry.index);
-    }, 5000);
-  /*  raft.on('vote', ()=>{
-      console.log('i am voting!')
-    });*/
+    nodes.push(raft);
+
+    /*  raft.on('vote', () => {
+        console.log('i am voting!')
+      });*/
 
 //
 // Join in other nodes so they start searching for each other.
 //
-  ports.forEach((nr) => {
-    if (!nr || ports[index] === nr) return;
+    ports.forEach((nr) => {
+      if (!nr || ports[index] === nr) return;
 
-    raft.join('tcp://127.0.0.1:' + nr);
-  });
+      raft.join('tcp://127.0.0.1:' + nr);
+    });
+  }
+
+  await Promise.delay(1000);
+
+  await Promise.all([
+    (async () => {
+      let node = nodes[1];
+      for (let i = 0; i < 33; i++) {
+        let entry = await node.proposeTask(tasks[i]);
+        await node.reserveTask(entry.index);
+        await Promise.delay(100);
+        console.log(1, entry.index, i);
+        await node.executeTask(entry.index);
+      }
+
+    })(),
+    (async () => {
+      let node = nodes[2];
+      for (let i = 34; i < 66; i++) {
+        let entry = await node.proposeTask(tasks[i]);
+        await node.reserveTask(entry.index);
+        await Promise.delay(100);
+        console.log(2, entry.index, i);
+        await node.executeTask(entry.index);
+      }
+
+    })(),
+
+    (async () => {
+      let node = nodes[3];
+      for (let i = 67; i < 100; i++) {
+        let entry = await node.proposeTask(tasks[i]);
+        await node.reserveTask(entry.index);
+        await Promise.delay(100);
+        console.log(3, entry.index, i);
+        await node.executeTask(entry.index);
+      }
+    })()
+  ]);
+
+  await Promise.delay(2000);
+  console.log('check status');
+  const index1 = await nodes[1].log.getLastInfo();
+  const index2 = await nodes[2].log.getLastInfo();
+  const index3 = await nodes[3].log.getLastInfo();
+
+  console.log(index1, index2, index3);
 
 
-}
+};
 
+module.exports = init();

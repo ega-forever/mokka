@@ -3,6 +3,7 @@ const EventEmitter = require('eventemitter3'),
   crypto = require('crypto'),
   secrets = require('secrets.js-grempe'),
   one = require('one-time'),
+  Promise = require('bluebird'),
   _ = require('lodash'),
   Web3 = require('web3'),
   web3 = new Web3(),
@@ -79,8 +80,8 @@ class Raft extends EventEmitter {
     else if (!options.address) options.address = address;
 
     raft.election = {
-      min: options['election_min'] || 150,
-      max: options['election_max'] || 300
+      min: options.election_min || 150,
+      max: options.election_max || 300
     };
 
     raft.beat = options.heartbeat || 50;
@@ -100,6 +101,8 @@ class Raft extends EventEmitter {
     raft.latency = 0;
     raft.log = null;
     raft.nodes = [];
+    raft.privateKey = options.privateKey;
+    raft.peers = options.peers;
 
     //
     // Raft §5.2:
@@ -181,7 +184,6 @@ class Raft extends EventEmitter {
         raft.heartbeat(raft.timeout());
       }
 
-
       if (packet.type === 'vote') {
         if (raft.votes.for && raft.votes.for !== packet.address) {
           raft.emit('vote', packet, false);
@@ -204,7 +206,6 @@ class Raft extends EventEmitter {
         raft.heartbeat(raft.timeout());
         return;
       }
-
 
       if (packet.type === 'voted') {
         if (Raft.CANDIDATE !== raft.state) {
@@ -259,8 +260,7 @@ class Raft extends EventEmitter {
         return;
       }
 
-
-      if (packet.type === 'append') {
+      if (packet.type === 'append ack') {
         const entry = await raft.log.commandAck(packet.data.index, packet.address);
         if (raft.quorum(entry.responses.length) && !entry.committed) {
           const entries = await raft.log.getUncommittedEntriesUpToIndex(entry.index, entry.term);
@@ -732,11 +732,11 @@ class Raft extends EventEmitter {
 
     let raft = this,
       node = {
-        'Log': raft.Log,
-        'election max': raft.election.max,
-        'election min': raft.election.min,
-        'heartbeat': raft.beat,
-        'threshold': raft.threshold
+        Log: raft.Log,
+        election_max: raft.election.max,
+        election_min: raft.election.min,
+        heartbeat: raft.beat,
+        threshold: raft.threshold
       }, key;
 
     for (key in node) {
@@ -850,9 +850,16 @@ class Raft extends EventEmitter {
 
   async proposeTask (task) {
 
-    if (this.state !== Raft.LEADER)
-      await new Promise(res => this.once('leader', res));
+    if (this.state !== Raft.LEADER) {
+      await Promise.delay(this.election.max);
+      await this.promote(); //todo decide about promote
 
+      await new Promise(res => this.once('leader', res)).timeout(this.election.max).catch(() => {
+      });
+
+      if (this.state !== Raft.LEADER)
+        return await this.proposeTask(task);
+    }
     // about to send an append so don't send a heart beat
     // raft.heartbeat(raft.beat);
     const entry = await this.log.saveCommand({task: task}, this.term);
@@ -862,17 +869,33 @@ class Raft extends EventEmitter {
   }
 
   async reserveTask (taskId) {
-    await this.promote();
-    await new Promise(res => this.once('leader', res));
+    /*    await this.promote();
+        await new Promise(res => this.once('leader', res));
+
+        let packet = await this.packet('task_reserved', {taskId: taskId, timeout: timeout});
+        await this.message(Raft.FOLLOWER, packet);
+        await this.message(Raft.CHILD, packet);*/
+    if (this.state !== Raft.LEADER) {
+      await Promise.delay(this.election.max);
+      await this.promote(); //todo decide about promote
+
+      await new Promise(res => this.once('leader', res)).timeout(this.election.max).catch(() => {
+      });
+
+      if (this.state !== Raft.LEADER)
+        return await this.proposeTask(task);
+    }
+
     let timeout = 1000 * 60 * 5; //5 min //todo calculate (predict the difficulty of task)
-    let packet = await this.packet('task_reserve', {taskId: taskId, timeout: timeout});
-    await this.message(Raft.FOLLOWER, packet);
-    await this.message(Raft.CHILD, packet);
+    const entry = await this.log.saveCommand({reserve: taskId, timeout: timeout}, this.term);
+    const appendPacket = await this.appendPacket(entry);
+    this.message(Raft.FOLLOWER, appendPacket);
+    return entry;
   }
 
-  async reservedTask (taskId, timeout, peer) {
-    await this.log.reserveTask(taskId, timeout, peer);
-  }
+  /*  async reservedTask (taskId, timeout, peer) {
+      await this.log.reserveTask(taskId, timeout, peer);
+    }*/
 
   async executeTask (taskId) {
 
@@ -907,7 +930,7 @@ class Raft extends EventEmitter {
 
     const signedShare = web3.eth.accounts.sign(share, `0x${this.privateKey}`);
     let packet = await this.packet('task_voted', {taskId: taskId, payload: signedShare});
-    await this.message([peer], packet);
+    await this.message(peer, packet);
   }
 
   async votedTask (taskId, payload, peer) {
@@ -917,7 +940,9 @@ class Raft extends EventEmitter {
     if (!this.peers.includes(publicKey.toString('hex')))
       return;
 
+
     let entry = await this.log.appendShare(taskId, payload.message, peer);
+
 
     if (entry.minShares > entry.shares.length)
       return;
@@ -934,7 +959,7 @@ class Raft extends EventEmitter {
     let packet = await this.packet('task_executed', {taskId: taskId, payload: signedId});
     await this.message(Raft.FOLLOWER, packet);
     await this.message(Raft.CHILD, packet);
-    await this.log.remove(taskId);
+    //await this.log.remove(taskId); //todo stage task
   }
 
   async executedTask (taskId, payload) {
@@ -944,7 +969,8 @@ class Raft extends EventEmitter {
     if (!this.peers.includes(publicKey.toString('hex')))
       return;
 
-    await this.log.remove(taskId);
+   // console.log(`task with id ${taskId} executed`);
+   // await this.log.remove(taskId); //todo stage task
   }
 
 

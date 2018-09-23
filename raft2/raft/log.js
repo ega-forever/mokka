@@ -384,23 +384,6 @@ class Log {
     return entry;
   }
 
-  async reserveTask (index, timeout, peer) {
-    let entry;
-    try {
-      entry = await this.get(index);
-    } catch (err) {
-      return {}
-    }
-
-    entry.reserved = {
-      peer: peer,
-      timeout: timeout
-    };
-
-    await this.put(entry);
-    return entry;
-  }
-
   async remove (index) {
     return this.db.del(index);
   }
