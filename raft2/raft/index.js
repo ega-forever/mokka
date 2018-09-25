@@ -279,7 +279,7 @@ class Raft extends EventEmitter {
 
 
       if (packet.type === 'task_vote') {
-        this.voteTask(packet.data.taskId, packet.data.share, packet.address);
+        this.voteTask(packet.data.taskId, packet.data.share, packet.address, packet.term);
         return;
       }
 
@@ -291,12 +291,6 @@ class Raft extends EventEmitter {
 
       if (packet.type === 'task_executed') {
         this.executedTask(packet.data.taskId, packet.data.payload, packet.address);
-        return;
-      }
-
-
-      if (packet.type === 'task_reserved') {
-        this.reservedTask(packet.data.taskId, packet.data.timeout, packet.address);
         return;
       }
 
@@ -889,8 +883,11 @@ class Raft extends EventEmitter {
 
   async executeTask (taskId) {
 
+    if (!(await this.log.isReserved(taskId)))
+      return Promise.reject({code: 0, message: 'task is not reserved!'});
+
     let addresses = _.chain(this.nodes)
-      .filter(node => Raft.FOLLOWER === node.state)
+      .filter(node => [Raft.FOLLOWER, Raft.CHILD].includes(node.state))
       .map(node => node.address).value();
 
     let minValidates = Math.round(addresses.length / 2);
@@ -901,9 +898,8 @@ class Raft extends EventEmitter {
     let taskSuper = await this.log.db.get(taskId);
     let task = taskSuper.command.task;
 
-    if(addresses.length < 2)
+    if (addresses.length < 2)
       return await this.executedTask(taskId); //skip vote as no node for vote available
-
 
     let id = crypto.createHash('md5').update(JSON.stringify(task)).digest('hex');
     let shares = secrets.share(id, addresses.length, minValidates);
@@ -917,10 +913,15 @@ class Raft extends EventEmitter {
   }
 
 
-  async voteTask (taskId, share, peer) {
+  async voteTask (taskId, share, peer, term) {
 
-    let task = await this.log.db.get(taskId);
-    if (!task)
+    if (term > this.term) {
+      await Promise.delay(this.election.max);
+      return await this.voteTask(taskId, share, peer, term);
+    }
+
+    let isTaskExist = await this.log.has(taskId);
+    if (!isTaskExist)
       return;
 
     const signedShare = web3.eth.accounts.sign(share, `0x${this.privateKey}`);
@@ -951,11 +952,9 @@ class Raft extends EventEmitter {
       return; //todo remove task
 
 
-    if (entry.minShares === entry.shares.length) {
-
-      console.log('executed: ', taskId)
+    if (entry.minShares === entry.shares.length)
       await this.executedTask(taskId);
-    }
+
 
   }
 

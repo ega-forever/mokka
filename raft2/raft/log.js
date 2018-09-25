@@ -20,37 +20,32 @@ class Log {
    * @param {string}   Options.[path='./']    Path to save the log db to
    * @return {Log}
    */
-  constructor (node, {adapter = require('memdown')}, schedulerTimeout = 500) {
+  constructor (node, {adapter = require('memdown')}, schedulerTimeout = 10000) {
     this.node = node;
     this.committedIndex = 0;
     this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
     this.metaDb = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
     this.executedTasksPool = [];
-    this.lastStagePoint = 0;
-    /*    this.scheduler = setInterval(async () => {
+    this.scheduler = setInterval(async () => {
 
-          let {index} = await this.getLastInfo();
+      let lastIndex = await this.getLastInfo();
 
-          if(this.lastStagePoint === index)
-            return;
+      if (this.executedTasksPool.length)
+        for (let index of this.executedTasksPool) {
+          let meta = await this.metaDb.get(index);
 
-          const entries = [];
-          await new Promise((resolve, reject) => {
-            this.db.createReadStream({gt: this.lastStagePoint})
-              .on('data', data => {
-                if (data.value.command.executed)
-                  entries.push(data.value.command);
-              })
-              .on('error', reject)
-              .on('end', resolve)
-          });
+          if (meta.executed + 10 >= lastIndex || !meta.executed || !meta.reserved)
+            continue;
 
-          //console.log(entries)
-
-          this.lastStagePoint = index;
+          await this.db.del(meta.executed);
+          await this.db.del(meta.reserved);
+          await this.db.del(index);
+          await this.metaDb.del(index);
+          _.pull(this.executedTasksPool, index);
+        }
 
 
-        }, schedulerTimeout)*/
+    }, schedulerTimeout)
   }
 
   /**
@@ -100,14 +95,14 @@ class Log {
 
         await this.put(entry);
 
-        if (!command.reserved && !command.executed) {
+        if (!command.reserve && !command.executed) {
           await this.metaDb.put(entry.index, {});
         }
 
-        if (command.reserved) {
-          let data = await this.metaDb.get(command.reserved);
+        if (command.reserve) {
+          let data = await this.metaDb.get(command.reserve);
           data.reserved = entry.index;
-          await this.putMeta(command.reserved, data);
+          await this.putMeta(command.reserve, data);
         }
 
 
@@ -115,6 +110,7 @@ class Log {
           let data = await this.metaDb.get(command.executed);
           data.executed = entry.index;
           await this.putMeta(command.executed, data);
+          this.executedTasksPool.push(command.executed);
         }
 
         res(entry);
@@ -139,6 +135,18 @@ class Log {
   async putMeta (index, entry) {
     return await this.metaDb.put(index, entry);
   }
+
+  async isReserved (index) {
+
+    let entry = await this.metaDb.get(index).catch(() => null);
+
+    if (!entry)
+      return false;
+
+    return entry.reserved;
+
+  }
+
 
   /**
    * getEntriesAfter - Get all the entries after a specific index
@@ -359,6 +367,7 @@ class Log {
    * @return {Promise<entry>}
    */
   async commit (index) {
+
     const entry = await this.db.get(index);
 
     entry.committed = true;

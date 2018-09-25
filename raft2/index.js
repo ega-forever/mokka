@@ -123,7 +123,7 @@ const init = async () => {
     })()
   ]);
 
-  await Promise.delay(2000);
+  await Promise.delay(10000);
   console.log('check status');
   const index1 = await nodes[1].log.getLastInfo();
   const index2 = await nodes[2].log.getLastInfo();
