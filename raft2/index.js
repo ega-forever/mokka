@@ -61,9 +61,9 @@ const init = async () => {
       });
     */
 
-    raft.on('error', function (err) {
+/*    raft.on('error', function (err) {
       console.log(err);
-    });
+    });*/
 
 
     nodes.push(raft);
@@ -90,10 +90,11 @@ const init = async () => {
       for (let i = 0; i < 33; i++) {
         let entry = await node.proposeTask(tasks[i]);
         await node.reserveTask(entry.index);
-        await Promise.delay(100);
+        await Promise.delay(_.random(50, 100));
         console.log(1, entry.index, i);
         await node.executeTask(entry.index);
       }
+      console.log('accomplished! 1')
 
     })(),
     (async () => {
@@ -101,11 +102,11 @@ const init = async () => {
       for (let i = 34; i < 66; i++) {
         let entry = await node.proposeTask(tasks[i]);
         await node.reserveTask(entry.index);
-        await Promise.delay(100);
+        await Promise.delay(_.random(50, 100));
         console.log(2, entry.index, i);
         await node.executeTask(entry.index);
       }
-
+      console.log('accomplished! 2')
     })(),
 
     (async () => {
@@ -113,10 +114,12 @@ const init = async () => {
       for (let i = 67; i < 100; i++) {
         let entry = await node.proposeTask(tasks[i]);
         await node.reserveTask(entry.index);
-        await Promise.delay(100);
+        await Promise.delay(_.random(50, 100));
         console.log(3, entry.index, i);
         await node.executeTask(entry.index);
       }
+
+      console.log('accomplished! 3')
     })()
   ]);
 

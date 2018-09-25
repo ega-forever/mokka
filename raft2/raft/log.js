@@ -1,5 +1,7 @@
-const encode = require('encoding-down');
-const levelup = require('levelup');
+const encode = require('encoding-down'),
+  _ = require('lodash'),
+  semaphore = require('semaphore')(1),
+  levelup = require('levelup');
 
 /**
  * @typedef Entry
@@ -18,10 +20,37 @@ class Log {
    * @param {string}   Options.[path='./']    Path to save the log db to
    * @return {Log}
    */
-  constructor (node, {adapter = require('memdown'), path = ''}) {
+  constructor (node, {adapter = require('memdown')}, schedulerTimeout = 500) {
     this.node = node;
     this.committedIndex = 0;
-    this.db = levelup(encode(adapter(path), {valueEncoding: 'json', keyEncoding: 'binary'}));
+    this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
+    this.metaDb = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
+    this.executedTasksPool = [];
+    this.lastStagePoint = 0;
+    /*    this.scheduler = setInterval(async () => {
+
+          let {index} = await this.getLastInfo();
+
+          if(this.lastStagePoint === index)
+            return;
+
+          const entries = [];
+          await new Promise((resolve, reject) => {
+            this.db.createReadStream({gt: this.lastStagePoint})
+              .on('data', data => {
+                if (data.value.command.executed)
+                  entries.push(data.value.command);
+              })
+              .on('error', reject)
+              .on('end', resolve)
+          });
+
+          //console.log(entries)
+
+          this.lastStagePoint = index;
+
+
+        }, schedulerTimeout)*/
   }
 
   /**
@@ -41,33 +70,58 @@ class Log {
    */
   async saveCommand (command, term, index) {
 
-    if (!index) {
-      const {
-        index: lastIndex
-      } = await this.getLastInfo();
+    return new Promise(res => {
+      semaphore.take(async () => {
 
-      index = lastIndex + 1;
-    }
+        if (!index) {
+          const {
+            index: lastIndex
+          } = await this.getLastInfo();
 
-    const entry = {
-      term: term,
-      index,
-      committed: false,
-      responses: [{
-        address: this.node.address, // start with vote from leader
-        ack: true
-      }],
-      shares: [],
-      minShares: 0,
-      reserved: {
-        peer: null,
-        timeout: 0
-      },
-      command
-    };
+          index = lastIndex + 1;
+        }
 
-    await this.put(entry);
-    return entry;
+        const entry = {
+          term: term,
+          index,
+          committed: false,
+          responses: [{
+            address: this.node.address, // start with vote from leader
+            ack: true
+          }],
+          shares: [],
+          minShares: 0,
+          reserved: {
+            peer: null,
+            timeout: 0
+          },
+          command
+        };
+
+        await this.put(entry);
+
+        if (!command.reserved && !command.executed) {
+          await this.metaDb.put(entry.index, {});
+        }
+
+        if (command.reserved) {
+          let data = await this.metaDb.get(command.reserved);
+          data.reserved = entry.index;
+          await this.putMeta(command.reserved, data);
+        }
+
+
+        if (command.executed) {
+          let data = await this.metaDb.get(command.executed);
+          data.executed = entry.index;
+          await this.putMeta(command.executed, data);
+        }
+
+        res(entry);
+        semaphore.leave();
+
+      })
+    });
   }
 
   /**
@@ -78,8 +132,12 @@ class Log {
    * @return {Promise<void>} Resolves once entry is saved
    * @public
    */
-  put (entry) {
-    return this.db.put(entry.index, entry);
+  async put (entry) {
+    return await this.db.put(entry.index, entry);
+  }
+
+  async putMeta (index, entry) {
+    return await this.metaDb.put(index, entry);
   }
 
   /**
@@ -89,9 +147,9 @@ class Log {
    * @return {Promise<Entry[]>} returns all entries
    * @public
    */
-  getEntriesAfter (index) {
+  async getEntriesAfter (index) {
     const entries = [];
-    return new Promise((resolve, reject) => {
+    return await new Promise((resolve, reject) => {
       this.db.createReadStream({gt: index})
         .on('data', data => {
           entries.push(data.value);
@@ -145,8 +203,8 @@ class Log {
    * @return {Promise<Entry>} Promise of found entry returns NotFoundError if does not exist
    * @public
    */
-  get (index) {
-    return this.db.get(index);
+  async get (index) {
+    return await this.db.get(index);
   }
 
   /**
@@ -171,8 +229,8 @@ class Log {
    *
    * @return {Promise<Entry>} returns {index: 0, term: node.term} if there are no entries in the log
    */
-  getLastEntry () {
-    return new Promise((resolve, reject) => {
+  async getLastEntry () {
+    return await new Promise((resolve, reject) => {
       let hasResolved = false;
       let entry = {
         index: 0,
@@ -306,7 +364,7 @@ class Log {
     entry.committed = true;
     this.committedIndex = entry.index;
 
-    return this.put(entry);
+    return await this.put(entry);
   }
 
   /**
@@ -387,7 +445,6 @@ class Log {
   async remove (index) {
     return this.db.del(index);
   }
-
 
 }
 

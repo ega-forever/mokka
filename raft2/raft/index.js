@@ -869,12 +869,6 @@ class Raft extends EventEmitter {
   }
 
   async reserveTask (taskId) {
-    /*    await this.promote();
-        await new Promise(res => this.once('leader', res));
-
-        let packet = await this.packet('task_reserved', {taskId: taskId, timeout: timeout});
-        await this.message(Raft.FOLLOWER, packet);
-        await this.message(Raft.CHILD, packet);*/
     if (this.state !== Raft.LEADER) {
       await Promise.delay(this.election.max);
       await this.promote(); //todo decide about promote
@@ -883,7 +877,7 @@ class Raft extends EventEmitter {
       });
 
       if (this.state !== Raft.LEADER)
-        return await this.proposeTask(task);
+        return await this.reserveTask(taskId);
     }
 
     let timeout = 1000 * 60 * 5; //5 min //todo calculate (predict the difficulty of task)
@@ -893,14 +887,10 @@ class Raft extends EventEmitter {
     return entry;
   }
 
-  /*  async reservedTask (taskId, timeout, peer) {
-      await this.log.reserveTask(taskId, timeout, peer);
-    }*/
-
   async executeTask (taskId) {
 
     let addresses = _.chain(this.nodes)
-      .filter(node => [Raft.FOLLOWER, Raft.CHILD].includes(node.state))
+      .filter(node => Raft.FOLLOWER === node.state)
       .map(node => node.address).value();
 
     let minValidates = Math.round(addresses.length / 2);
@@ -908,8 +898,13 @@ class Raft extends EventEmitter {
     if (minValidates === 1)
       minValidates = Object.keys(this.peers).length;
 
-    let task = await this.log.db.get(taskId);
-    task = task.command.task;
+    let taskSuper = await this.log.db.get(taskId);
+    let task = taskSuper.command.task;
+
+    if(addresses.length < 2)
+      return await this.executedTask(taskId); //skip vote as no node for vote available
+
+
     let id = crypto.createHash('md5').update(JSON.stringify(task)).digest('hex');
     let shares = secrets.share(id, addresses.length, minValidates);
 
@@ -955,22 +950,32 @@ class Raft extends EventEmitter {
     if (comb !== id)
       return; //todo remove task
 
-    const signedId = web3.eth.accounts.sign(id, `0x${this.privateKey}`);
-    let packet = await this.packet('task_executed', {taskId: taskId, payload: signedId});
-    await this.message(Raft.FOLLOWER, packet);
-    await this.message(Raft.CHILD, packet);
-    //await this.log.remove(taskId); //todo stage task
+
+    if (entry.minShares === entry.shares.length) {
+
+      console.log('executed: ', taskId)
+      await this.executedTask(taskId);
+    }
+
   }
 
-  async executedTask (taskId, payload) {
+  async executedTask (taskId) {
 
-    const publicKey = EthUtil.ecrecover(Buffer.from(payload.messageHash.replace('0x', ''), 'hex'), parseInt(payload.v), Buffer.from(payload.r.replace('0x', ''), 'hex'), Buffer.from(payload.s.replace('0x', ''), 'hex'));
+    if (this.state !== Raft.LEADER) {
+      await Promise.delay(this.election.max);
+      await this.promote(); //todo decide about promote
 
-    if (!this.peers.includes(publicKey.toString('hex')))
-      return;
+      await new Promise(res => this.once('leader', res)).timeout(this.election.max).catch(() => {
+      });
 
-   // console.log(`task with id ${taskId} executed`);
-   // await this.log.remove(taskId); //todo stage task
+      if (this.state !== Raft.LEADER)
+        return await this.executedTask(taskId);
+    }
+
+    const executedEntry = await this.log.saveCommand({executed: taskId}, this.term);
+    const appendPacket = await this.appendPacket(executedEntry);
+    this.message(Raft.FOLLOWER, appendPacket);
+    return executedEntry;
   }
 
 
