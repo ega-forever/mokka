@@ -25,24 +25,33 @@ class Log {
     this.committedIndex = 0;
     this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
     this.metaDb = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
-    this.executedTasksPool = [];
     this.scheduler = setInterval(async () => {
 
-      let lastIndex = await this.getLastInfo();
+      let {index} = await this.getLastInfo();
+      let metas = await this.getMetaEntriesAfter();
 
-      if (this.executedTasksPool.length)
-        for (let index of this.executedTasksPool) {
-          let meta = await this.metaDb.get(index);
 
-          if (meta.executed + 10 >= lastIndex || !meta.executed || !meta.reserved)
-            continue;
+      for (let meta of metas) {
 
+        if (meta.executed && meta.executed + 10 < index && meta.reserved) {
           await this.db.del(meta.executed);
           await this.db.del(meta.reserved);
-          await this.db.del(index);
-          await this.metaDb.del(index);
-          _.pull(this.executedTasksPool, index);
+          await this.db.del(meta.task);
+          await this.metaDb.del(meta.task);
+          console.log('pulling executed task: ', meta.task)
+          continue;
         }
+
+        if (meta.reserved && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created) {
+          console.log('pulling timeout task: ', meta.task);
+          await this.db.del(meta.reserved);
+          await this.db.del(meta.task);
+          await this.metaDb.del(meta.task);
+          continue;
+        }
+
+
+      }
 
 
     }, schedulerTimeout)
@@ -95,13 +104,14 @@ class Log {
 
         await this.put(entry);
 
-        if (!command.reserve && !command.executed) {
-          await this.metaDb.put(entry.index, {});
+        if (command.task) {
+          await this.metaDb.put(entry.index, {created: Date.now(), task: entry.index});
         }
 
         if (command.reserve) {
           let data = await this.metaDb.get(command.reserve);
           data.reserved = entry.index;
+          data.timeout = command.timeout;
           await this.putMeta(command.reserve, data);
         }
 
@@ -110,7 +120,6 @@ class Log {
           let data = await this.metaDb.get(command.executed);
           data.executed = entry.index;
           await this.putMeta(command.executed, data);
-          this.executedTasksPool.push(command.executed);
         }
 
         res(entry);
@@ -159,6 +168,24 @@ class Log {
     const entries = [];
     return await new Promise((resolve, reject) => {
       this.db.createReadStream({gt: index})
+        .on('data', data => {
+          entries.push(data.value);
+        })
+        .on('error', err => {
+          reject(err)
+        })
+        .on('end', () => {
+          resolve(entries);
+        })
+    });
+
+  }
+
+
+  async getMetaEntriesAfter (index) {
+    const entries = [];
+    return await new Promise((resolve, reject) => {
+      this.metaDb.createReadStream({gt: index})
         .on('data', data => {
           entries.push(data.value);
         })

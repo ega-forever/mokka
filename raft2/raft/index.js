@@ -964,8 +964,7 @@ class Raft extends EventEmitter {
       await Promise.delay(this.election.max);
       await this.promote(); //todo decide about promote
 
-      await new Promise(res => this.once('leader', res)).timeout(this.election.max).catch(() => {
-      });
+      await new Promise(res => this.once('leader', res)).timeout(this.election.max).catch(() => null);
 
       if (this.state !== Raft.LEADER)
         return await this.executedTask(taskId);

@@ -61,9 +61,9 @@ const init = async () => {
       });
     */
 
-/*    raft.on('error', function (err) {
-      console.log(err);
-    });*/
+    /*    raft.on('error', function (err) {
+          console.log(err);
+        });*/
 
 
     nodes.push(raft);
@@ -90,9 +90,9 @@ const init = async () => {
       for (let i = 0; i < 33; i++) {
         let entry = await node.proposeTask(tasks[i]);
         await node.reserveTask(entry.index);
-        await Promise.delay(_.random(50, 100));
+        await Promise.delay(_.random(500, 1000));
         console.log(1, entry.index, i);
-        await node.executeTask(entry.index);
+        await node.executeTask(entry.index).catch(() => null);
       }
       console.log('accomplished! 1')
 
@@ -107,29 +107,48 @@ const init = async () => {
         await node.executeTask(entry.index);
       }
       console.log('accomplished! 2')
-    })(),
-
-    (async () => {
-      let node = nodes[3];
-      for (let i = 67; i < 100; i++) {
-        let entry = await node.proposeTask(tasks[i]);
-        await node.reserveTask(entry.index);
-        await Promise.delay(_.random(50, 100));
-        console.log(3, entry.index, i);
-        await node.executeTask(entry.index);
-      }
-
-      console.log('accomplished! 3')
     })()
+    /*
+        (async () => {
+          let node = nodes[3];
+          for (let i = 67; i < 100; i++) {
+            let entry = await node.proposeTask(tasks[i]);
+            await node.reserveTask(entry.index);
+            await Promise.delay(_.random(50, 100));
+            console.log(3, entry.index, i);
+            await node.executeTask(entry.index);
+          }
+
+          console.log('accomplished! 3')
+        })()*/
   ]);
 
-  await Promise.delay(10000);
-  console.log('check status');
-  const index1 = await nodes[1].log.getLastInfo();
-  const index2 = await nodes[2].log.getLastInfo();
-  const index3 = await nodes[3].log.getLastInfo();
 
-  console.log(index1, index2, index3);
+  setInterval(async () => {
+    console.log('---checking entities------', new Date());
+
+    const index1 = await nodes[1].log.getLastInfo();
+    const index2 = await nodes[2].log.getLastInfo();
+    const index3 = await nodes[3].log.getLastInfo();
+
+    console.log(index1, index2, index3);
+
+
+    let entities1 = await nodes[1].log.getEntriesAfter();
+    let entities2 = await nodes[2].log.getEntriesAfter();
+    let entities3 = await nodes[3].log.getEntriesAfter();
+
+    let metaEntities1 = await nodes[1].log.getMetaEntriesAfter();
+
+    console.log(entities1.length, entities2.length, entities3.length);
+
+    console.log('---test---');
+    console.log(_.find(entities1, entity => entity.command.executed));
+    console.log(metaEntities1)
+
+  }, 10000);
+
+  // console.log(await nodes[1].log.getMetaEntriesAfter(0))
 
 
 };
