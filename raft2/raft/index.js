@@ -267,6 +267,7 @@ class Raft extends EventEmitter {
           raft.commitEntries(entries);
         }
 
+        this.emit('append_ack', entry.index);
         return;
       }
 
@@ -878,6 +879,28 @@ class Raft extends EventEmitter {
     const entry = await this.log.saveCommand({reserve: taskId, timeout: timeout}, this.term);
     const appendPacket = await this.appendPacket(entry);
     this.message(Raft.FOLLOWER, appendPacket);
+
+
+    await new Promise(res => {
+      const eventCallBack = async (index) => {
+        if (index !== entry.index)
+          return;
+
+        const item = await this.log.get(entry.index);
+
+        if (item.responses.length < this.majority())
+          return;
+
+        this.removeListener('append_ack', eventCallBack);
+        res();
+      };
+
+      this.on('append_ack', eventCallBack);
+    }).timeout(this.election.max * 2).catch(() => {
+      return Promise.reject({code: 0, message: `quorum hasn't been reached for task ${taskId}`});
+    });
+
+
     return entry;
   }
 
@@ -895,7 +918,7 @@ class Raft extends EventEmitter {
     if (minValidates === 1)
       minValidates = Object.keys(this.peers).length;
 
-    let taskSuper = await this.log.db.get(taskId);
+    let taskSuper = await this.log.get(taskId);
     let task = taskSuper.command.task;
 
     if (addresses.length < 2)
@@ -904,7 +927,7 @@ class Raft extends EventEmitter {
     let id = crypto.createHash('md5').update(JSON.stringify(task)).digest('hex');
     let shares = secrets.share(id, addresses.length, minValidates);
 
-    await this.log.setMinShare(taskId, minValidates);
+    await this.log.setMinShare(taskId, minValidates);//todo set lock on tasks
 
     for (let index = 0; index < addresses.length; index++) {
       let packet = await this.packet('task_vote', {taskId: taskId, share: shares[index]});

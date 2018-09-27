@@ -27,7 +27,7 @@ class Log {
     this.metaDb = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
     this.scheduler = setInterval(async () => {
 
-      let {index} = await this.getLastInfo();
+      let {index} = await this.getLastInfo();//todo check quorum (replicated factor)
       let metas = await this.getMetaEntriesAfter();
 
 
@@ -38,16 +38,12 @@ class Log {
           await this.db.del(meta.reserved);
           await this.db.del(meta.task);
           await this.metaDb.del(meta.task);
-          console.log('pulling executed task: ', meta.task)
           continue;
         }
 
-        if (meta.reserved && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created) {
-          console.log('pulling timeout task: ', meta.task);
+        if (!meta.executed && meta.reserved && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created) {
           await this.db.del(meta.reserved);
-          await this.db.del(meta.task);
-          await this.metaDb.del(meta.task);
-          continue;
+          await this.putMeta(meta.task, _.omit(meta, ['reserved', 'timeout']));
         }
 
 
@@ -208,7 +204,7 @@ class Log {
    * @public
    */
   async removeEntriesAfter (index) {
-    const entries = await this.getEntriesAfter(index)
+    const entries = await this.getEntriesAfter(index);
     return Promise.all(entries.map(entry => {
       return this.db.del(entry.index);
     }));
@@ -476,6 +472,14 @@ class Log {
 
     await this.put(entry);
     return entry;
+  }
+
+
+  async getFreeTasks () {
+    const entities = await this.getMetaEntriesAfter();
+    return _.chain(entities).reject(entity =>
+      entity.executed || (entity.reserved && Date.now() - entity.timeout < entity.created)
+    ).map(entity => entity.task).value();
   }
 
   async remove (index) {

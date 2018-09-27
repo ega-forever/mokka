@@ -88,11 +88,16 @@ const init = async () => {
     (async () => {
       let node = nodes[1];
       for (let i = 0; i < 33; i++) {
-        let entry = await node.proposeTask(tasks[i]);
-        await node.reserveTask(entry.index);
-        await Promise.delay(_.random(500, 1000));
-        console.log(1, entry.index, i);
-        await node.executeTask(entry.index).catch(() => null);
+        try {
+          let entry = await node.proposeTask(tasks[i]);
+          await node.reserveTask(entry.index);
+          await Promise.delay(_.random(500, 1000));
+          console.log(1, entry.index, i);
+          await node.executeTask(entry.index);
+        } catch (e) {
+
+        }
+
       }
       console.log('accomplished! 1')
 
@@ -100,29 +105,36 @@ const init = async () => {
     (async () => {
       let node = nodes[2];
       for (let i = 34; i < 66; i++) {
-        let entry = await node.proposeTask(tasks[i]);
-        await node.reserveTask(entry.index);
-        await Promise.delay(_.random(50, 100));
-        console.log(2, entry.index, i);
-        await node.executeTask(entry.index);
+        try {
+          let entry = await node.proposeTask(tasks[i]);
+          if ([43, 56].includes(i))
+            continue;
+          await node.reserveTask(entry.index);
+          await Promise.delay(_.random(500, 1000));
+          console.log(2, entry.index, i);
+          await node.executeTask(entry.index);
+        } catch (e) {
+
+        }
       }
       console.log('accomplished! 2')
     })()
-    /*
-        (async () => {
-          let node = nodes[3];
-          for (let i = 67; i < 100; i++) {
-            let entry = await node.proposeTask(tasks[i]);
-            await node.reserveTask(entry.index);
-            await Promise.delay(_.random(50, 100));
-            console.log(3, entry.index, i);
-            await node.executeTask(entry.index);
-          }
 
-          console.log('accomplished! 3')
-        })()*/
+    /*        (async () => {
+              let node = nodes[3];
+              for (let i = 67; i < 100; i++) {
+                let entry = await node.proposeTask(tasks[i]);
+                await node.reserveTask(entry.index).catch(e=>console.log(e));
+                await Promise.delay(_.random(500, 1000));
+                console.log(3, entry.index, i);
+                await node.executeTask(entry.index).catch(() => null);
+              }
+
+              console.log('accomplished! 3')
+            })()*/
   ]);
 
+  await Promise.delay(60000);
 
   setInterval(async () => {
     console.log('---checking entities------', new Date());
@@ -133,18 +145,14 @@ const init = async () => {
 
     console.log(index1, index2, index3);
 
-
     let entities1 = await nodes[1].log.getEntriesAfter();
     let entities2 = await nodes[2].log.getEntriesAfter();
     let entities3 = await nodes[3].log.getEntriesAfter();
 
-    let metaEntities1 = await nodes[1].log.getMetaEntriesAfter();
-
     console.log(entities1.length, entities2.length, entities3.length);
 
     console.log('---test---');
-    console.log(_.find(entities1, entity => entity.command.executed));
-    console.log(metaEntities1)
+    console.log(await nodes[1].log.getFreeTasks())
 
   }, 10000);
 
