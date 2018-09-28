@@ -20,7 +20,7 @@ const ports = [
 let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
 let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
-let tasks = _.chain(new Array(100)).fill(0).map((item, index) => [100 - index]).value();
+let tasks = _.chain(new Array(1000)).fill(0).map((item, index) => [100 - index]).value();
 
 const init = async () => {
 
@@ -68,17 +68,10 @@ const init = async () => {
 
     nodes.push(raft);
 
-    /*  raft.on('vote', () => {
-        console.log('i am voting!')
-      });*/
-
-//
-// Join in other nodes so they start searching for each other.
-//
     ports.forEach((nr) => {
       if (!nr || ports[index] === nr) return;
 
-      raft.join('tcp://127.0.0.1:' + nr);
+      raft.actions.node.join('tcp://127.0.0.1:' + nr);
     });
   }
 
@@ -87,54 +80,57 @@ const init = async () => {
   await Promise.all([
     (async () => {
       let node = nodes[1];
-      for (let i = 0; i < 33; i++) {
+      for (let i = 0; i < 40; i++) {
         try {
-          let entry = await node.proposeTask(tasks[i]);
-          await node.reserveTask(entry.index);
-          await Promise.delay(_.random(500, 1000));
+          let entry = await node.actions.tasks.propose(tasks[i]);
+          await node.actions.tasks.reserve(entry.index);
           console.log(1, entry.index, i);
-          await node.executeTask(entry.index);
+          await node.actions.tasks.execute(entry.index);
         } catch (e) {
+          console.log('error on: ', i)
 
+          console.log(e)
         }
 
       }
       console.log('accomplished! 1')
 
     })(),
-    (async () => {
+/*    (async () => {
       let node = nodes[2];
-      for (let i = 34; i < 66; i++) {
+      for (let i = 340; i < 660; i++) {
         try {
-          let entry = await node.proposeTask(tasks[i]);
-          if ([43, 56].includes(i))
-            continue;
-          await node.reserveTask(entry.index);
-          await Promise.delay(_.random(500, 1000));
+          let entry = await node.actions.tasks.propose(tasks[i]);
+          await node.actions.tasks.reserve(entry.index);
+          //await Promise.delay(_.random(100, 500));
           console.log(2, entry.index, i);
-          await node.executeTask(entry.index);
+          await node.actions.tasks.execute(entry.index);
         } catch (e) {
-
+          console.log(e)
         }
       }
       console.log('accomplished! 2')
-    })()
+    })(),*/
 
-    /*        (async () => {
-              let node = nodes[3];
-              for (let i = 67; i < 100; i++) {
-                let entry = await node.proposeTask(tasks[i]);
-                await node.reserveTask(entry.index).catch(e=>console.log(e));
-                await Promise.delay(_.random(500, 1000));
-                console.log(3, entry.index, i);
-                await node.executeTask(entry.index).catch(() => null);
-              }
+/*    (async () => {
+      let node = nodes[3];
+      for (let i = 67; i < 100; i++) {
+        try {
+          let entry = await node.actions.tasks.propose(tasks[i]);
+          await node.actions.tasks.reserve(entry.index);
+          await Promise.delay(_.random(100, 500));
+          console.log(3, entry.index, i);
+          await node.actions.tasks.execute(entry.index);
+        } catch (e) {
+          console.log(e)
+        }
+      }
 
-              console.log('accomplished! 3')
-            })()*/
+      console.log('accomplished! 3')
+    })()*/
   ]);
 
-  await Promise.delay(60000);
+  await Promise.delay(20000);
 
   setInterval(async () => {
     console.log('---checking entities------', new Date());
@@ -152,7 +148,8 @@ const init = async () => {
     console.log(entities1.length, entities2.length, entities3.length);
 
     console.log('---test---');
-    console.log(await nodes[1].log.getFreeTasks())
+  //  console.log(await nodes[1].log.getFreeTasks())
+  //  console.log(await nodes[1].log.getMetaEntriesAfter())
 
   }, 10000);
 

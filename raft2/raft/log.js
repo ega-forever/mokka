@@ -24,7 +24,6 @@ class Log {
     this.node = node;
     this.committedIndex = 0;
     this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
-    this.metaDb = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
     this.scheduler = setInterval(async () => {
 
       let {index} = await this.getLastInfo();//todo check quorum (replicated factor)
@@ -32,23 +31,16 @@ class Log {
 
 
       for (let meta of metas) {
-
         if (meta.executed && meta.executed + 10 < index && meta.reserved) {
           await this.db.del(meta.executed);
           await this.db.del(meta.reserved);
           await this.db.del(meta.task);
-          await this.metaDb.del(meta.task);
           continue;
         }
 
-        if (!meta.executed && meta.reserved && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created) {
+        if (!meta.executed && meta.reserved && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created)
           await this.db.del(meta.reserved);
-          await this.putMeta(meta.task, _.omit(meta, ['reserved', 'timeout']));
-        }
-
-
       }
-
 
     }, schedulerTimeout)
   }
@@ -70,8 +62,13 @@ class Log {
    */
   async saveCommand (command, term, index) {
 
-    return new Promise(res => {
+    return await new Promise((res, rej) => {
       semaphore.take(async () => {
+
+        if (!command || _.isEmpty(command)) {
+          semaphore.leave();
+          return rej({code: 0, message: 'task can\'t be empty'});
+        }
 
         if (!index) {
           const {
@@ -91,33 +88,11 @@ class Log {
           }],
           shares: [],
           minShares: 0,
-          reserved: {
-            peer: null,
-            timeout: 0
-          },
+          created: Date.now(),
           command
         };
 
         await this.put(entry);
-
-        if (command.task) {
-          await this.metaDb.put(entry.index, {created: Date.now(), task: entry.index});
-        }
-
-        if (command.reserve) {
-          let data = await this.metaDb.get(command.reserve);
-          data.reserved = entry.index;
-          data.timeout = command.timeout;
-          await this.putMeta(command.reserve, data);
-        }
-
-
-        if (command.executed) {
-          let data = await this.metaDb.get(command.executed);
-          data.executed = entry.index;
-          await this.putMeta(command.executed, data);
-        }
-
         res(entry);
         semaphore.leave();
 
@@ -137,18 +112,23 @@ class Log {
     return await this.db.put(entry.index, entry);
   }
 
-  async putMeta (index, entry) {
-    return await this.metaDb.put(index, entry);
-  }
-
   async isReserved (index) {
 
-    let entry = await this.metaDb.get(index).catch(() => null);
+    let reserved = false;
 
-    if (!entry)
-      return false;
-
-    return entry.reserved;
+    return await new Promise((resolve, reject) => {
+      this.db.createReadStream({gt: index})
+        .on('data', data => {
+          if (data.value.command.reserve === index)
+            reserved = true;
+        })
+        .on('error', err => {
+          reject(err)
+        })
+        .on('end', () => {
+          resolve(reserved);
+        })
+    });
 
   }
 
@@ -178,17 +158,35 @@ class Log {
   }
 
 
-  async getMetaEntriesAfter (index) {
-    const entries = [];
+  async getMetaEntriesAfter (index, limit) {
+    let entries = {};
     return await new Promise((resolve, reject) => {
-      this.metaDb.createReadStream({gt: index})
+      this.db.createReadStream({gt: index, limit: limit})
         .on('data', data => {
-          entries.push(data.value);
+
+          if (data.value.command.task !== null) {
+            _.set(entries, `${data.value.index}.task`, data.value.index);
+            _.set(entries, `${data.value.index}.created`, data.value.created);
+          }
+
+          if (_.isNumber(data.value.command.reserve)) {
+
+            _.set(entries, `${data.value.command.reserve}.reserved`, data.value.index);
+            _.set(entries, `${data.value.command.reserve}.timeout`, data.value.command.timeout);
+          }
+
+          if (_.isNumber(data.value.command.executed))
+            _.set(entries, `${data.value.command.executed}.executed`, data.value.index);
         })
         .on('error', err => {
           reject(err)
         })
         .on('end', () => {
+          entries = _.chain(entries)
+            .values()
+            .filter(entity => _.isNumber(entity.task))
+            .value();
+
           resolve(entries);
         })
     });
