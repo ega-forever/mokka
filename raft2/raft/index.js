@@ -155,11 +155,17 @@ class Raft extends EventEmitter {
         if (packet.last.index !== index && packet.last.index !== 0) {
           const hasIndex = await raft.log.has(packet.last.index);
 
-          if (hasIndex) raft.log.removeEntriesAfter(packet.last.index);
-          else return raft.actions.message.message(states.LEADER, await raft.actions.message.packet('append fail', {
+          if(!hasIndex)
+          return raft.actions.message.message(states.LEADER, await raft.actions.message.packet('append fail', {
             term: packet.last.term,
             index: packet.last.index
           }));
+
+     /*     if (hasIndex) raft.log.removeEntriesAfter(packet.last.index); //todo think about stage rules
+          else return raft.actions.message.message(states.LEADER, await raft.actions.message.packet('append fail', {
+            term: packet.last.term,
+            index: packet.last.index
+          }));*/
         }
 
         if (packet.data) {
@@ -174,7 +180,7 @@ class Raft extends EventEmitter {
 
         if (raft.log.committedIndex < packet.last.committedIndex) {
           const entries = await raft.log.getUncommittedEntriesUpToIndex(packet.last.committedIndex, packet.last.term);
-          raft.commitEntries(entries);
+          await raft.commitEntries(entries);
         }
 
         return;
@@ -206,6 +212,7 @@ class Raft extends EventEmitter {
 
       if (packet.type === 'task_voted') {
         this.actions.tasks.voted(packet.data.taskId, packet.data.payload, packet.address);
+        this.emit('task_voted', packet.data.taskId);
         return;
       }
 

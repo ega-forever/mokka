@@ -29,16 +29,15 @@ class Log {
       let {index} = await this.getLastInfo();//todo check quorum (replicated factor)
       let metas = await this.getMetaEntriesAfter();
 
-
       for (let meta of metas) {
-        if (meta.executed && meta.executed + 10 < index && meta.reserved) {
+        if (meta.committedExecuted && meta.executed + 10 < index && meta.committedReserve && meta.committedTask) {
           await this.db.del(meta.executed);
           await this.db.del(meta.reserved);
           await this.db.del(meta.task);
           continue;
         }
 
-        if (!meta.executed && meta.reserved && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created)
+        if (!meta.executed && meta.reserved && meta.committedReserve && meta.committedTask && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created)
           await this.db.del(meta.reserved);
       }
 
@@ -88,10 +87,10 @@ class Log {
           }],
           shares: [],
           minShares: 0,
-          created: Date.now(),
           command
         };
 
+        command.created = Date.now();
         await this.put(entry);
         res(entry);
         semaphore.leave();
@@ -164,19 +163,24 @@ class Log {
       this.db.createReadStream({gt: index, limit: limit})
         .on('data', data => {
 
-          if (data.value.command.task !== null) {
+          if (data.value.command.task) {
             _.set(entries, `${data.value.index}.task`, data.value.index);
-            _.set(entries, `${data.value.index}.created`, data.value.created);
+            _.set(entries, `${data.value.index}.created`, data.value.command.created);
+            _.set(entries, `${data.value.index}.committedTask`, data.value.committed);
+
           }
 
           if (_.isNumber(data.value.command.reserve)) {
 
             _.set(entries, `${data.value.command.reserve}.reserved`, data.value.index);
             _.set(entries, `${data.value.command.reserve}.timeout`, data.value.command.timeout);
+            _.set(entries, `${data.value.command.reserve}.committedReserve`, data.value.committed);
+
           }
 
           if (_.isNumber(data.value.command.executed))
             _.set(entries, `${data.value.command.executed}.executed`, data.value.index);
+          _.set(entries, `${data.value.command.executed}.committedExecuted`, data.value.committed);
         })
         .on('error', err => {
           reject(err)

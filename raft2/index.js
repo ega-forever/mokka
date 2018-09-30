@@ -80,15 +80,14 @@ const init = async () => {
   await Promise.all([
     (async () => {
       let node = nodes[1];
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 30; i++) {
         try {
           let entry = await node.actions.tasks.propose(tasks[i]);
           await node.actions.tasks.reserve(entry.index);
           console.log(1, entry.index, i);
           await node.actions.tasks.execute(entry.index);
-        } catch (e) {
-          console.log('error on: ', i)
 
+        } catch (e) {
           console.log(e)
         }
 
@@ -96,13 +95,12 @@ const init = async () => {
       console.log('accomplished! 1')
 
     })(),
-/*    (async () => {
+    (async () => {
       let node = nodes[2];
-      for (let i = 340; i < 660; i++) {
+      for (let i = 31; i < 66; i++) {
         try {
           let entry = await node.actions.tasks.propose(tasks[i]);
           await node.actions.tasks.reserve(entry.index);
-          //await Promise.delay(_.random(100, 500));
           console.log(2, entry.index, i);
           await node.actions.tasks.execute(entry.index);
         } catch (e) {
@@ -110,15 +108,14 @@ const init = async () => {
         }
       }
       console.log('accomplished! 2')
-    })(),*/
+    })(),
 
-/*    (async () => {
+    (async () => {
       let node = nodes[3];
       for (let i = 67; i < 100; i++) {
         try {
           let entry = await node.actions.tasks.propose(tasks[i]);
           await node.actions.tasks.reserve(entry.index);
-          await Promise.delay(_.random(100, 500));
           console.log(3, entry.index, i);
           await node.actions.tasks.execute(entry.index);
         } catch (e) {
@@ -127,10 +124,8 @@ const init = async () => {
       }
 
       console.log('accomplished! 3')
-    })()*/
+    })()
   ]);
-
-  await Promise.delay(20000);
 
   setInterval(async () => {
     console.log('---checking entities------', new Date());
@@ -145,11 +140,24 @@ const init = async () => {
     let entities2 = await nodes[2].log.getEntriesAfter();
     let entities3 = await nodes[3].log.getEntriesAfter();
 
-    console.log(entities1.length, entities2.length, entities3.length);
 
-    console.log('---test---');
+    let metaEntities1 = await nodes[1].log.getMetaEntriesAfter();
+    let metaEntities2 = await nodes[2].log.getMetaEntriesAfter();
+    let metaEntities3 = await nodes[3].log.getMetaEntriesAfter();
+
+    console.log(nodes[1].state, nodes[2].state, nodes[3].state);
+    console.log(entities1.length, entities2.length, entities3.length);
+    console.log(metaEntities1.length, metaEntities2.length, metaEntities3.length);
+
+/*    console.log(entities1);
+
+    console.log('---------')
+
+    console.log(entities2)
+
+    console.log('---test---');*/
   //  console.log(await nodes[1].log.getFreeTasks())
-  //  console.log(await nodes[1].log.getMetaEntriesAfter())
+    //console.log(await nodes[1].log.getMetaEntriesAfter())
 
   }, 10000);
 

@@ -100,6 +100,23 @@ const execute = async function (taskId) {
     let packet = await this.actions.message.packet('task_vote', {taskId: taskId, share: shares[index]});
     await this.actions.message.message(addresses[index], packet);
   }
+
+
+  //todo await for voting
+
+  let voteCallback = (res, mintedTaskId) => {
+    if (taskId === mintedTaskId)
+      res();
+  };
+
+  await new Promise((res) => {
+    this.once('task_voted', voteCallback.bind(this, res));
+  }).timeout(this.election.max * 2).catch(() => {
+    this.removeListener('task_voted', voteCallback);
+    return Promise.reject({code: 0, message: 'vote timeout'})
+  });
+
+
 };
 
 const vote = async function (taskId, share, peer, term) {
@@ -143,8 +160,6 @@ const voted = async function (taskId, payload, peer) {
 
   if (entry.minShares === entry.shares.length)
     await this.actions.tasks.executed(taskId);
-
-
 };
 
 const executed = async function (taskId) {
