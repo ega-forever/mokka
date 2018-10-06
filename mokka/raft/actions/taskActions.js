@@ -18,7 +18,7 @@ const propose = async function (task) {
 
     if (this.state !== states.LEADER)
       return await this.actions.tasks.propose(task);
-  }
+  } //todo make sure that we use the last term before becoming the leader.
 
   const entry = await this.log.saveCommand({task: task}, this.term);
   const appendPacket = await this.actions.message.appendPacket(entry);

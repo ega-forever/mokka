@@ -1,65 +1,38 @@
 const encode = require('encoding-down'),
   _ = require('lodash'),
   semaphore = require('semaphore')(1),
+  MerkleTools = require('merkle-tools'),
   levelup = require('levelup');
 
-/**
- * @typedef Entry
- * @property {number} index the key for the entry
- * @property {number} term the term that the entry was saved in
- * @property {boolean} Committed if the entry has been committed
- * @property {array}  responses number of followers that have saved the log entry
- * @property {object}  command The command to be used in the raft state machine
- */
+
 class Log {
-  /**
-   * @class
-   * @param {object} node    The raft node using this log
-   * @param {object} Options         Options object
-   * @param {object}   Options.[adapter= require('leveldown')] Leveldown adapter, defaults to leveldown
-   * @param {string}   Options.[path='./']    Path to save the log db to
-   * @return {Log}
-   */
+
   constructor (node, {adapter = require('memdown')}, schedulerTimeout = 10000) {
     this.node = node;
     this.committedIndex = 0;
     this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
-    this.scheduler = setInterval(async () => {
+    /*    this.scheduler = setInterval(async () => {
 
-      let {index} = await this.getLastInfo();//todo check quorum (replicated factor)
-      let metas = await this.getMetaEntriesAfter();
+          let {index} = await this.getLastInfo();//todo check quorum (replicated factor)
+          let metas = await this.getMetaEntriesAfter();
 
-      for (let meta of metas) {
-        if (meta.committedExecuted && meta.executed + 10 < index && meta.committedReserve && meta.committedTask) {
-          await this.db.del(meta.executed);
-          await this.db.del(meta.reserved);
-          await this.db.del(meta.task);
-          continue;
-        }
+          for (let meta of metas) {
+            if (meta.committedExecuted && meta.executed + 10 < index && meta.committedReserve && meta.committedTask) {
+              await this.db.del(meta.executed);
+              await this.db.del(meta.reserved);
+              await this.db.del(meta.task);
+              continue;
+            }
 
-        if (!meta.executed && meta.reserved && meta.committedReserve && meta.committedTask && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created)
-          await this.db.del(meta.reserved);
-      }
+            if (!meta.executed && meta.reserved && meta.committedReserve && meta.committedTask && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created)
+              await this.db.del(meta.reserved);
+          }
 
-    }, schedulerTimeout)
+        }, schedulerTimeout)*/
   }
 
-  /**
-   * saveCommand - Saves a command to the log
-   * Initially the command is uncommitted. Once a majority
-   * of follower nodes have saved the log entry it will be
-   * committed.
-   *
-   * A follow node will also use this method to save a received command to
-   * its log
-   *
-   * @async
-   * @param {object} command A json object to save to the log
-   * @param {number} term    Term to save with the log entry
-   * @param {number} [index] Index to save the entry with. This is used by the followers
-   * @return {Promise<entry>} Description
-   */
-  async saveCommand (command, term, index) {
+
+  async saveCommand (command, term, index, checkHash) {
 
     return await new Promise((res, rej) => {
       semaphore.take(async () => {
@@ -69,17 +42,38 @@ class Log {
           return rej({code: 0, message: 'task can\'t be empty'});
         }
 
-        if (!index) {
-          const {
-            index: lastIndex
-          } = await this.getLastInfo();
 
-          index = lastIndex + 1;
+        const {index: lastIndex, hash: lastHash} = await this.getLastInfo();
+
+        if (_.isNumber(index) && index !== 0 && index <= lastIndex) {
+          semaphore.leave();
+          return rej({code: 0, message: 'can\'t rewrite chain!'});
         }
+
+
+        if (!index)
+          index = lastIndex + 1;
+
+
+        const merkleTools = new MerkleTools();
+        merkleTools.addLeaf(lastHash);
+
+        merkleTools.addLeaf(JSON.stringify(command), true);
+        merkleTools.makeTree();
+
+        let generatedHash = merkleTools.getMerkleRoot().toString('hex');
+
+        if(checkHash && generatedHash !== checkHash){
+          semaphore.leave();
+          return rej({code: 0, message: 'can\'t wrong hash!'});
+        }
+
+
 
         const entry = {
           term: term,
-          index,
+          index: index,
+          hash: generatedHash,
           committed: false,
           responses: [{
             publicKey: this.node.publicKey, // start with vote from leader
@@ -90,7 +84,6 @@ class Log {
           command
         };
 
-        command.created = Date.now();
         await this.put(entry);
         res(entry);
         semaphore.leave();
@@ -212,6 +205,47 @@ class Log {
     }));
   }
 
+  async removeEntriesAfterLastCheckpoint (pubKey, logOwnerPubKey) {
+    /*    const entries = await this.getEntriesAfter(index);
+        return Promise.all(entries.map(entry => {
+          return this.db.del(entry.index);
+        }));*/
+
+    let index = await new Promise((resolve, reject) => {
+      let item = 0;//todo make rule
+
+      this.db.createReadStream({reverse: true})
+        .on('data', data => {
+
+          if (item)
+            return;
+
+          if(data.value.responses.length === 1)
+            return;
+
+          console.log(data.value.responses)
+          let foundPub = _.find(data.value.responses, {publicKey: pubKey, ack: true});
+          let foundOwnerPub = _.find(data.value.responses, {publicKey: logOwnerPubKey, ack: true});
+
+          if (foundPub && foundOwnerPub)
+            index = data.value.index;
+        })
+        .on('error', err => {
+          reject(err)
+        })
+        .on('end', () => {
+          resolve(item);
+        });
+    });
+
+    console.log('stage: ', index)
+
+    if (index)
+      return await this.removeEntriesAfter(index);
+
+
+  }
+
   /**
    * has - Checks if entry exists at index
    *
@@ -248,11 +282,12 @@ class Log {
    * @return {Promise<Object>} Last entries index, term and committedIndex
    */
   async getLastInfo () {
-    const {index, term} = await this.getLastEntry();
+    const {index, term, hash} = await this.getLastEntry();
 
     return {
       index,
       term,
+      hash,
       committedIndex: this.committedIndex
     };
   }
@@ -264,19 +299,17 @@ class Log {
    */
   async getLastEntry () {
     return await new Promise((resolve, reject) => {
-      let hasResolved = false;
       let entry = {
         index: 0,
+        hash: _.fill(new Array(32), 0).join(''),
         term: this.node.term
       };
 
       this.db.createReadStream({reverse: true, limit: 1})
         .on('data', data => {
-          hasResolved = true;
           entry = data.value;
         })
         .on('error', err => {
-          hasResolved = true;
           reject(err)
         })
         .on('end', () => {
@@ -295,11 +328,12 @@ class Log {
    * @return {Promise<object>} {index, term, committedIndex}
    */
   async getEntryInfoBefore (entry) {
-    const {index, term} = await this.getEntryBefore(entry);
+    const {index, term, hash} = await this.getEntryBefore(entry);
 
     return {
       index,
       term,
+      hash,
       committedIndex: this.committedIndex
     };
   }
@@ -316,7 +350,8 @@ class Log {
   getEntryBefore (entry) {
     const defaultInfo = {
       index: 0,
-      term: this.node.term
+      term: this.node.term,
+      hash: _.fill(new Array(32), 0).join('')
     };
     // We know it is the first entry, so save the query time
     if (entry.index === 1) {
@@ -432,52 +467,57 @@ class Log {
     return this.db.close();
   }
 
-  async appendShare (index, share, peer) {
-    let entry;
-    try {
-      entry = await this.get(index);
-    } catch (err) {
-      return {
-        shares: []
+  /*  async appendShare (index, share, peer) {
+      let entry;
+      try {
+        entry = await this.get(index);
+      } catch (err) {
+        return {
+          shares: []
+        }
       }
+
+      if (!entry.shares.includes(share)) {
+        entry.shares.push({share: share, peer: peer});
+      }
+
+      await this.put(entry);
+
+      return entry;
     }
 
-    if (!entry.shares.includes(share)) {
-      entry.shares.push({share: share, peer: peer});
+
+    async setMinShare (index, minShares) {
+      let entry;
+      try {
+        entry = await this.get(index);
+      } catch (err) {
+        return {}
+      }
+
+      entry.minShares = minShares;
+
+      await this.put(entry);
+      return entry;
     }
 
-    await this.put(entry);
 
-    return entry;
-  }
-
-
-  async setMinShare (index, minShares) {
-    let entry;
-    try {
-      entry = await this.get(index);
-    } catch (err) {
-      return {}
+    async getFreeTasks () {
+      const entities = await this.getMetaEntriesAfter();
+      return _.chain(entities).reject(entity =>
+        entity.executed || (entity.reserved && Date.now() - entity.timeout < entity.created)
+      ).map(entity => entity.task).value();
     }
 
-    entry.minShares = minShares;
-
-    await this.put(entry);
-    return entry;
-  }
-
-
-  async getFreeTasks () {
-    const entities = await this.getMetaEntriesAfter();
-    return _.chain(entities).reject(entity =>
-      entity.executed || (entity.reserved && Date.now() - entity.timeout < entity.created)
-    ).map(entity => entity.task).value();
-  }
-
-  async remove (index) {
-    return this.db.del(index);
-  }
+    async remove (index) {
+      return this.db.del(index);
+    }*/
 
 }
+
+/*process.on('unhandledRejection', err=>{
+  console.log(err);
+  process.exit(0)
+})*/
 
 module.exports = Log;

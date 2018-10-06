@@ -6,6 +6,7 @@ const EventEmitter = require('eventemitter3'),
   states = require('./factories/stateFactory'),
   TaskActions = require('./actions/taskActions'),
   Multiaddr = require('multiaddr'),
+  messageTypes = require('./factories/messageTypesFactory'),
   hashUils = require('./utils/hashes'),
   NodeActions = require('./actions/nodeActions'),
   MessageActions = require('./actions/messageActions'),
@@ -35,6 +36,12 @@ class Raft extends EventEmitter {
       granted: 0                // How many votes we're granted to us.
     };
 
+    this.orhpanVotes = {
+      for: null,
+      positive: 0,
+      negative: 0
+    };
+
     this.write = this.write || options.write || null;
     this.threshold = options.threshold || 0.8;
     this.timers = new Tick(this);
@@ -58,7 +65,6 @@ class Raft extends EventEmitter {
       this.address = options.address;
       this.id = hashUils.getIpfsHashFromHex(this.publicKey);
     }
-
 
 
     this.state = options.state || states.FOLLOWER;    // Our current state.
@@ -117,30 +123,92 @@ class Raft extends EventEmitter {
         raft.heartbeat(raft.timeout());
       }
 
-      if (packet.type === 'vote') {
-        if (raft.votes.for && raft.votes.for !== packet.publicKey) {
-          raft.emit('vote', packet, false);
-          return write(await raft.actions.message.packet('voted', {granted: false}));
+      if (packet.type === messageTypes.ORPHAN_VOTE) {
+        /*        if (raft.orhpanVotes.for && raft.orhpanVotes.for !== packet.publicKey) { //may be remove
+                  raft.emit(messageTypes.ORPHAN_VOTE, packet, false);
+                  let reply = await raft.actions.message.packet(messageTypes.ORPHAN_VOTED, {granted: false});
+                  return write(reply);
+                }*/
+
+        let hasLog = await raft.log.has(packet.data.index);
+
+        if (!hasLog) {
+          let reply = await raft.actions.message.packet(messageTypes.ORPHAN_VOTED, {
+            provided: packet.data.hash,
+            accepted: null
+          });
+          return write(reply);
         }
 
-        if (raft.log) {
-          const {index, term} = await raft.log.getLastInfo();
 
-          if (index > packet.last.index && term > packet.last.term) {
-            raft.emit('vote', packet, false);
-            return write(await raft.actions.message.packet('voted', {granted: false}));
+        let {hash: currentHash} = await this.log.get(packet.data.index);
+        let reply = await raft.actions.message.packet(messageTypes.ORPHAN_VOTED, {
+          provided: packet.data.hash,
+          accepted: currentHash
+        });
+        return write(reply);
+      }
+
+      if (packet.type === messageTypes.ORPHAN_VOTED) {
+
+        if (raft.orhpanVotes.for !== packet.data.provided)
+          return; //ignore event
+
+        if (raft.orhpanVotes.for === packet.data.accepted)
+          raft.orhpanVotes.positive++;
+
+
+        if (raft.orhpanVotes.for !== packet.data.accepted)
+          raft.orhpanVotes.negative++;
+
+
+        if (raft.orhpanVotes.negative + raft.orhpanVotes.positive < this.majority())
+          return;
+
+        if (raft.orhpanVotes.negative >= raft.orhpanVotes.positive) {//todo rollback
+          console.log('reset node state');
+         // process.exit(0)
+
+          await this.log.removeEntriesAfter(0);
+          this.log.committedIndex = 0;
+          return;
+        }
+
+        if (raft.orhpanVotes.positive >= raft.orhpanVotes.negative) {
+          raft.orhpanVotes = {
+            for: null,
+            negative: 0,
+            positive: 0
           }
         }
 
+      }
+
+      if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)
+        if (raft.votes.for && raft.votes.for !== packet.publicKey) {
+          raft.emit(messageTypes.VOTE, packet, false);
+          return write(await raft.actions.message.packet(messageTypes.VOTED, {granted: false}));
+        }
+
+
+        const {index, term, hash} = await raft.log.getLastInfo();
+
+        if ((index > packet.last.index && term > packet.last.term) || packet.last.hash !== hash || packet.last.committedIndex < raft.log.committedIndex) {
+          //if (index > packet.last.index && term > packet.last.term) {
+          raft.emit(messageTypes.VOTE, packet, false);
+          return write(await raft.actions.message.packet(messageTypes.VOTED, {granted: false}));
+        }
+
+
         raft.votes.for = packet.publicKey;
-        raft.emit('vote', packet, true);
+        raft.emit(messageTypes.VOTE, packet, true);
         raft.change({leader: packet.publicKey, term: packet.term});
-        write(await raft.actions.message.packet('voted', {granted: true}));
+        write(await raft.actions.message.packet(messageTypes.VOTED, {granted: true}));
         raft.heartbeat(raft.timeout());
         return;
       }
 
-      if (packet.type === 'voted') {
+      if (packet.type === messageTypes.VOTED) {
         if (states.CANDIDATE !== raft.state) {
           return write(await raft.actions.message.packet('error', 'No longer a candidate, ignoring vote'));
         }
@@ -157,35 +225,72 @@ class Raft extends EventEmitter {
         return;
       }
 
-      if (packet.type === 'error') {
+      if (packet.type === messageTypes.ERROR) {
         raft.emit('error', new Error(packet.data));
         return;
       }
 
-      if (packet.type === 'append') {
-        const {index} = await raft.log.getLastInfo();
+      if (packet.type === messageTypes.APPEND) {
+        const {index, hash} = await raft.log.getLastInfo();
+
+        if (packet.last.hash !== hash && packet.last.index === index) {//todo make rule for controlling alter-history (orphaned blocks)
+//          console.log('branch forking has been found!', hash, packet.last.hash);
+
+          raft.orhpanVotes.for = hash;
+
+          let reply = await raft.actions.message.packet(messageTypes.ORPHAN_VOTE, {hash: hash});
+
+          await raft.actions.message.message(states.CANDIDATE, reply);
+          await raft.actions.message.message(states.CHILD, reply);
+          return;
+          // await this.log.removeEntriesAfterLastCheckpoint(this.publicKey, packet.last.publicKey); //vote for orphan
+        }
 
         if (packet.last.index !== index && packet.last.index !== 0) {
           const hasIndex = await raft.log.has(packet.last.index);
 
-          if (!hasIndex)
-            return raft.actions.message.message(states.LEADER, await raft.actions.message.packet('append fail', {
-              term: packet.last.term,
-              index: packet.last.index
-            }));
 
-          /*     if (hasIndex) raft.log.removeEntriesAfter(packet.last.index); //todo think about stage rules
-               else return raft.actions.message.message(states.LEADER, await raft.actions.message.packet('append fail', {
-                 term: packet.last.term,
-                 index: packet.last.index
-               }));*/
+          if (!hasIndex) {
+            let {index: lastIndex} = await this.log.getLastInfo(); //todo validate
+            return raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_FAIL, {
+              index: lastIndex+1
+            }));
+          }
+
+          /*       let {hash} = await raft.log.get(packet.last.index); //todo validate
+
+                 if (hash !== packet.last.hash)
+                   return raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_FAIL, {
+                     term: packet.last.term,
+                     index: packet.last.index
+                   }));*/
+
+      /*    if (hasIndex) //won't ever meet this
+            return await raft.log.removeEntriesAfter(packet.last.index); //todo think about stage rules
+*/
+          /*return raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_FAIL, {
+            term: packet.last.term,
+            index: packet.last.index,
+            hash: packet.last.hash
+          }));*/
         }
 
         if (packet.data) {
-          const entry = packet.data[0];
-          await raft.log.saveCommand(entry.command, entry.term, entry.index);
+          const entry = packet.data[0]; //todo make validation of appended packet (can't rewrite chain)
+          //await raft.log.saveCommand(entry.command, entry.term, entry.index, entry.hash);
 
-          raft.actions.message.message(states.LEADER, await raft.actions.message.packet('append ack', {
+          try {
+            await raft.log.saveCommand(entry.command, entry.term, entry.index, entry.hash);
+          }catch (e) {
+            let {index: lastIndex} = await raft.log.getLastInfo();
+            return raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_FAIL, {//can't get your entry, give me next to mine index!
+              index: lastIndex + 1
+            }));
+          }
+
+
+
+          raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_ACK, {
             term: entry.term,
             index: entry.index
           }));
@@ -199,18 +304,18 @@ class Raft extends EventEmitter {
         return;
       }
 
-      if (packet.type === 'append ack') {
+      if (packet.type === messageTypes.APPEND_ACK) {
         const entry = await raft.log.commandAck(packet.data.index, packet.publicKey);
         if (raft.quorum(entry.responses.length) && !entry.committed) {
           const entries = await raft.log.getUncommittedEntriesUpToIndex(entry.index, entry.term);
-          raft.commitEntries(entries);
+          await raft.commitEntries(entries);
         }
 
         this.emit('append_ack', entry.index);
         return;
       }
 
-      if (packet.type === 'append fail') {
+      if (packet.type === messageTypes.APPEND_FAIL) {
         const previousEntry = await raft.log.get(packet.data.index);
         const append = await raft.actions.message.appendPacket(previousEntry);
         write(append);
@@ -218,22 +323,22 @@ class Raft extends EventEmitter {
       }
 
 
-      if (packet.type === 'task_vote') {
-        this.actions.tasks.vote(packet.data.taskId, packet.data.share, packet.publicKey, packet.term);
-        return;
-      }
+      /*      if (packet.type === messageTypes.TASK_VOTE) {
+              this.actions.tasks.vote(packet.data.taskId, packet.data.share, packet.publicKey, packet.term);
+              return;
+            }
 
-      if (packet.type === 'task_voted') {
-        this.actions.tasks.voted(packet.data.taskId, packet.data.payload, packet.publicKey);
-        this.emit('task_voted', packet.data.taskId);
-        return;
-      }
+            if (packet.type === messageTypes.TASK_VOTED) {
+              this.actions.tasks.voted(packet.data.taskId, packet.data.payload, packet.publicKey);
+              this.emit('task_voted', packet.data.taskId);
+              return;
+            }
 
 
-      if (packet.type === 'task_executed') {
-        this.actions.tasks.executed(packet.data.taskId, packet.data.payload, packet.publicKey);
-        return;
-      }
+            if (packet.type === messageTypes.TASK_EXECUTED) {
+              this.actions.tasks.executed(packet.data.taskId, packet.data.payload, packet.publicKey);
+              return;
+            }*/
 
 
       if (raft.listeners('rpc').length) {
@@ -264,7 +369,7 @@ class Raft extends EventEmitter {
      * @api private
      */
     function initialize (err) {
-      if (err) return raft.emit('error', err);
+      if (err) return raft.emit(messageTypes.ERROR, err);
 
       raft.emit('initialize');
       raft.heartbeat(raft.timeout());
@@ -314,9 +419,9 @@ class Raft extends EventEmitter {
       // idle state of a LEADER as it didn't get any messages to append/commit to
       // the FOLLOWER'S.
       //
-      let packet = await raft.actions.message.packet('append');
+      let packet = await raft.actions.message.packet(messageTypes.APPEND);
 
-      raft.emit('heartbeat', packet);
+      raft.emit(messageTypes.HEARTBEAT, packet);
       raft.actions.message.message(states.FOLLOWER, packet).heartbeat(raft.beat);
     }, duration);
 
@@ -374,7 +479,7 @@ class Raft extends EventEmitter {
   async commitEntries (entries) {
     entries.forEach(async (entry) => {
       await this.log.commit(entry.index);
-      this.emit('commit', entry.command);
+      this.emit(messageTypes.COMMIT, entry.command);
     });
   }
 }

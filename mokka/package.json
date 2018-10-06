@@ -30,6 +30,7 @@
     "leveldown": "^4.0.1",
     "levelup": "^3.1.1",
     "memdown": "^3.0.0",
+    "merkle-tools": "^1.4.0",
     "millisecond": "^0.1.2",
     "modification": "^1.0.0",
     "multiaddr": "^5.0.0",
