@@ -151,8 +151,9 @@ class Raft extends EventEmitter {
 
       if (packet.type === messageTypes.ORPHAN_VOTED) {
 
-        if (raft.orhpanVotes.for !== packet.data.provided)
-          return; //ignore event
+        if (raft.orhpanVotes.for !== packet.data.provided) {
+         return;
+        }
 
         if (raft.orhpanVotes.for === packet.data.accepted)
           raft.orhpanVotes.positive++;
@@ -316,7 +317,17 @@ class Raft extends EventEmitter {
       }
 
       if (packet.type === messageTypes.APPEND_FAIL) {
-        const previousEntry = await raft.log.get(packet.data.index);
+        let previousEntry = await raft.log.get(packet.data.index);
+
+        if(!previousEntry){
+          previousEntry = await raft.log.getLastEntry();
+
+     /*     let {index: lastIndex} = await this.log.getLastInfo();
+
+          console.log('no entry', packet.data.index, lastIndex)
+          process.exit(0)*/
+        }
+
         const append = await raft.actions.message.appendPacket(previousEntry);
         write(append);
         return;

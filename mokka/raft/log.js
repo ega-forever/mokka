@@ -271,7 +271,12 @@ class Log {
    * @public
    */
   async get (index) {
-    return await this.db.get(index);
+    try {
+      return await this.db.get(index);
+    } catch (err) {
+      return null;
+    }
+
   }
 
   /**
@@ -385,14 +390,12 @@ class Log {
   }
 
   async commandAck (index, publicKey) {
-    let entry;
-    try {
-      entry = await this.get(index);
-    } catch (err) {
+    let entry = await this.get(index);
+
+    if(!entry)
       return {
         responses: []
-      }
-    }
+      };
 
     const entryIndex = await entry.responses.findIndex(resp => resp.publicKey === publicKey);
     // node hasn't voted yet. Add response

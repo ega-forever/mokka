@@ -88,11 +88,11 @@ const init = async () => {
   await Promise.all([
     (async () => {
       let node = nodes[1];
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 333; i++) {
         try {
           let entry = await Promise.resolve(node.actions.tasks.propose(tasks[i])).timeout(60000);
           console.log(1, entry.index, entry.hash, i);
-          //await Promise.delay(100);
+          await Promise.delay(100);
 /*
           await node.actions.tasks.reserve(entry.index);
           console.log(1, entry.index, i);
@@ -100,6 +100,19 @@ const init = async () => {
 */
 
         } catch (e) {
+
+          if(e instanceof Promise.TimeoutError){
+            console.log('task has been reverted by timeout:', i);
+
+            const index1 = await nodes[1].log.getLastInfo();
+            const index2 = await nodes[2].log.getLastInfo();
+            const index3 = await nodes[3].log.getLastInfo();
+
+            console.log(index1, index2, index3);
+
+            continue;
+          }
+
           console.log(e)
         }
 
@@ -109,11 +122,25 @@ const init = async () => {
     })(),
     (async () => {
       let node = nodes[2];
-      for (let i = 31; i < 66; i++) {
+      for (let i = 332; i < 660; i++) {
         try {
           let entry = await Promise.resolve(node.actions.tasks.propose(tasks[i])).timeout(60000);
           console.log(2, entry.index, entry.hash, i);
+          await Promise.delay(100);
         } catch (e) {
+
+          if(e instanceof Promise.TimeoutError){
+            console.log('task has been reverted by timeout:', i);
+
+            const index1 = await nodes[1].log.getLastInfo();
+            const index2 = await nodes[2].log.getLastInfo();
+            const index3 = await nodes[3].log.getLastInfo();
+
+            console.log(index1, index2, index3);
+
+            continue;
+          }
+
           console.log(e)
         }
       }
@@ -122,11 +149,25 @@ const init = async () => {
 
     (async () => {
       let node = nodes[3];
-      for (let i = 67; i < 100; i++) {
+      for (let i = 667; i < 1000; i++) {
         try {
           let entry = await Promise.resolve(node.actions.tasks.propose(tasks[i])).timeout(60000);
           console.log(3, entry.index, entry.hash, i);
+          await Promise.delay(100);
         } catch (e) {
+
+          if(e instanceof Promise.TimeoutError){
+            console.log('task has been reverted by timeout:', i);
+
+            const index1 = await nodes[1].log.getLastInfo();
+            const index2 = await nodes[2].log.getLastInfo();
+            const index3 = await nodes[3].log.getLastInfo();
+
+            console.log(index1, index2, index3);
+
+            continue;
+          }
+
           console.log(e)
         }
       }
