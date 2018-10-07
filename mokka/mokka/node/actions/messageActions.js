@@ -23,7 +23,6 @@ const _timing  = function (latency) {
   return true;
 };
 
-
 const message = function (who, what, when) {
 
   if (typeof who === 'undefined') {

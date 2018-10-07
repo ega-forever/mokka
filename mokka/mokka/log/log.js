@@ -205,47 +205,6 @@ class Log {
     }));
   }
 
-  async removeEntriesAfterLastCheckpoint (pubKey, logOwnerPubKey) {
-    /*    const entries = await this.getEntriesAfter(index);
-        return Promise.all(entries.map(entry => {
-          return this.db.del(entry.index);
-        }));*/
-
-    let index = await new Promise((resolve, reject) => {
-      let item = 0;//todo make rule
-
-      this.db.createReadStream({reverse: true})
-        .on('data', data => {
-
-          if (item)
-            return;
-
-          if(data.value.responses.length === 1)
-            return;
-
-          console.log(data.value.responses)
-          let foundPub = _.find(data.value.responses, {publicKey: pubKey, ack: true});
-          let foundOwnerPub = _.find(data.value.responses, {publicKey: logOwnerPubKey, ack: true});
-
-          if (foundPub && foundOwnerPub)
-            index = data.value.index;
-        })
-        .on('error', err => {
-          reject(err)
-        })
-        .on('end', () => {
-          resolve(item);
-        });
-    });
-
-    console.log('stage: ', index)
-
-    if (index)
-      return await this.removeEntriesAfter(index);
-
-
-  }
-
   /**
    * has - Checks if entry exists at index
    *
@@ -381,8 +340,6 @@ class Log {
         })
         .on('end', () => {
           if (!hasResolved) {
-            // Returns empty index if there is no items
-            // before entry or log is empty
             resolve(defaultInfo);
           }
         });
@@ -438,7 +395,6 @@ class Log {
    */
   getUncommittedEntriesUpToIndex (index) {
     return new Promise((resolve, reject) => {
-      let hasResolved = false;
       const entries = [];
 
       this.db.createReadStream({
@@ -469,58 +425,7 @@ class Log {
   end () {
     return this.db.close();
   }
-
-  /*  async appendShare (index, share, peer) {
-      let entry;
-      try {
-        entry = await this.get(index);
-      } catch (err) {
-        return {
-          shares: []
-        }
-      }
-
-      if (!entry.shares.includes(share)) {
-        entry.shares.push({share: share, peer: peer});
-      }
-
-      await this.put(entry);
-
-      return entry;
-    }
-
-
-    async setMinShare (index, minShares) {
-      let entry;
-      try {
-        entry = await this.get(index);
-      } catch (err) {
-        return {}
-      }
-
-      entry.minShares = minShares;
-
-      await this.put(entry);
-      return entry;
-    }
-
-
-    async getFreeTasks () {
-      const entities = await this.getMetaEntriesAfter();
-      return _.chain(entities).reject(entity =>
-        entity.executed || (entity.reserved && Date.now() - entity.timeout < entity.created)
-      ).map(entity => entity.task).value();
-    }
-
-    async remove (index) {
-      return this.db.del(index);
-    }*/
-
 }
 
-/*process.on('unhandledRejection', err=>{
-  console.log(err);
-  process.exit(0)
-})*/
 
 module.exports = Log;

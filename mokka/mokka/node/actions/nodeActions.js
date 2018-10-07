@@ -1,6 +1,6 @@
 const _ = require('lodash'),
   Multiaddr = require('multiaddr'),
-  hashUtils = require('../utils/hashes'),
+  hashUtils = require('../../utils/hashes'),
   uniqid = require('uniqid'),
   secrets = require('secrets.js-grempe'),
   messageTypes = require('../factories/messageTypesFactory'),

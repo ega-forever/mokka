@@ -1,10 +1,10 @@
 const debug = require('diagnostics')('raft'),
-  Log = require('./raft/log'),
+  Log = require('./mokka/log/log'),
   Promise = require('bluebird'),
   Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
-  hashUtils = require('./raft/utils/hashes'),
-  MsgRaft = require('./controllers/MsgRaft');
+  hashUtils = require('./mokka/utils/hashes'),
+  TCPMokka = require('./mokka/implementation/TCP');
 
 
 process.on('unhandledRejection', function (reason, p) {
@@ -29,8 +29,7 @@ const init = async () => {
 
   for (let index = 0; index < ports.length; index++) {
 
-    const raft = new MsgRaft({
-      //address: `tcp://127.0.0.1:${ports[index]}`,
+    const raft = new TCPMokka({
       address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
       election_min: 2000,
       election_max: 5000,
@@ -85,12 +84,13 @@ const init = async () => {
 
   await Promise.delay(1000);
 
+
   await Promise.all([
     (async () => {
       let node = nodes[1];
       for (let i = 0; i < 333; i++) {
         try {
-          let entry = await Promise.resolve(node.actions.tasks.propose(tasks[i])).timeout(60000);
+          let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(1, entry.index, entry.hash, i);
           await Promise.delay(100);
 /*
@@ -124,7 +124,7 @@ const init = async () => {
       let node = nodes[2];
       for (let i = 332; i < 660; i++) {
         try {
-          let entry = await Promise.resolve(node.actions.tasks.propose(tasks[i])).timeout(60000);
+          let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(2, entry.index, entry.hash, i);
           await Promise.delay(100);
         } catch (e) {
@@ -151,7 +151,7 @@ const init = async () => {
       let node = nodes[3];
       for (let i = 667; i < 1000; i++) {
         try {
-          let entry = await Promise.resolve(node.actions.tasks.propose(tasks[i])).timeout(60000);
+          let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(3, entry.index, entry.hash, i);
           await Promise.delay(100);
         } catch (e) {
