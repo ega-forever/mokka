@@ -1,6 +1,9 @@
 const _ = require('lodash'),
   Multiaddr = require('multiaddr'),
   hashUtils = require('../utils/hashes'),
+  uniqid = require('uniqid'),
+  secrets = require('secrets.js-grempe'),
+  messageTypes = require('../factories/messageTypesFactory'),
   states = require('../factories/stateFactory');
 
 const join = function (multiaddr, write) {
@@ -17,7 +20,7 @@ const join = function (multiaddr, write) {
 
   let node = raft.clone({
     write: write,
-    publicKey:  publicKey,
+    publicKey: publicKey,
     address: `${mOptions.transport}://${mOptions.host}:${mOptions.port}`,
     state: states.CHILD
   });
@@ -88,10 +91,37 @@ const promote = async function () {
 
   raft.votes.for = raft.publicKey;
   raft.votes.granted = 1;
+  raft.votes.secret = secrets.str2hex(uniqid());
+  raft.votes.shares = [];
 
-  const packet = await raft.actions.message.packet('vote');
 
-  raft.actions.message.message(states.FOLLOWER, packet);
+  if(this.majority() < 2){
+    console.log('majority less than 2');
+    process.exit(0);
+  }
+
+
+  const followerNodes = _.filter(this.nodes, node=> node.state !== states.LEADER);
+
+  if(followerNodes.length !== 0){
+
+    let shares = secrets.share(raft.votes.secret, followerNodes.length, Math.ceil(followerNodes.length / 2) + 1);
+
+    for (let index = 0; index < followerNodes.length; index++) {
+      raft.votes.shares.push({
+        share: shares[index],
+        publicKey: followerNodes[index].publicKey,
+        voted: false
+      });
+
+      const packet = await raft.actions.message.packet(messageTypes.VOTE, {share: shares[index]});
+
+      await raft.actions.message.message(followerNodes[index].publicKey, packet);
+
+    }
+  }
+
+
 
   raft.timers
     .clear('heartbeat, election')

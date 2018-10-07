@@ -8,6 +8,10 @@ const EventEmitter = require('eventemitter3'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUils = require('./utils/hashes'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
+  secrets = require('secrets.js-grempe'),
+  EthUtil = require('ethereumjs-util'),
   NodeActions = require('./actions/nodeActions'),
   MessageActions = require('./actions/messageActions'),
   emits = require('emits');
@@ -32,8 +36,10 @@ class Raft extends EventEmitter {
     this.beat = options.heartbeat || 50;
 
     this.votes = {
-      for: null,                // Who did we vote for in this current term.
-      granted: 0                // How many votes we're granted to us.
+      for: null,
+      granted: 0,
+      shares: [],
+      secret: null
     };
 
     this.orhpanVotes = {
@@ -80,6 +86,8 @@ class Raft extends EventEmitter {
     raft.on('term change', function change () {
       raft.votes.for = null;
       raft.votes.granted = 0;
+      raft.votes.shares = [];
+      raft.votes.secret = null;
     });
 
     raft.on('state change', function change (state) {
@@ -152,7 +160,7 @@ class Raft extends EventEmitter {
       if (packet.type === messageTypes.ORPHAN_VOTED) {
 
         if (raft.orhpanVotes.for !== packet.data.provided) {
-         return;
+          return;
         }
 
         if (raft.orhpanVotes.for === packet.data.accepted)
@@ -168,7 +176,6 @@ class Raft extends EventEmitter {
 
         if (raft.orhpanVotes.negative >= raft.orhpanVotes.positive) {//todo rollback
           console.log('reset node state');
-         // process.exit(0)
 
           await this.log.removeEntriesAfter(0);
           this.log.committedIndex = 0;
@@ -186,9 +193,18 @@ class Raft extends EventEmitter {
       }
 
       if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)
-        if (raft.votes.for && raft.votes.for !== packet.publicKey) {
+
+        if (!packet.data.share) {
           raft.emit(messageTypes.VOTE, packet, false);
           return write(await raft.actions.message.packet(messageTypes.VOTED, {granted: false}));
+        }
+
+
+        const signedShare = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
+
+        if (raft.votes.for && raft.votes.for !== packet.publicKey) {
+          raft.emit(messageTypes.VOTE, packet, false);
+          return write(await raft.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare}));
         }
 
 
@@ -197,28 +213,65 @@ class Raft extends EventEmitter {
         if ((index > packet.last.index && term > packet.last.term) || packet.last.hash !== hash || packet.last.committedIndex < raft.log.committedIndex) {
           //if (index > packet.last.index && term > packet.last.term) {
           raft.emit(messageTypes.VOTE, packet, false);
-          return write(await raft.actions.message.packet(messageTypes.VOTED, {granted: false}));
+          return write(await raft.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare}));
         }
 
 
         raft.votes.for = packet.publicKey;
         raft.emit(messageTypes.VOTE, packet, true);
         raft.change({leader: packet.publicKey, term: packet.term});
-        write(await raft.actions.message.packet(messageTypes.VOTED, {granted: true}));
+        let reply = await raft.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
+        write(reply);
         raft.heartbeat(raft.timeout());
         return;
       }
 
       if (packet.type === messageTypes.VOTED) {
         if (states.CANDIDATE !== raft.state) {
-          return write(await raft.actions.message.packet('error', 'No longer a candidate, ignoring vote'));
+          return write(await raft.actions.message.packet(states.ERROR, 'No longer a candidate, ignoring vote'));
         }
 
-        if (packet.data.granted) {
+        if (!packet.data.signed)
+          return write(await raft.actions.message.packet(states.ERROR, 'the vote hasn\'t been singed, ignoring vote'));
+
+        const restoredPublicKey = EthUtil.ecrecover(
+          Buffer.from(packet.data.signed.messageHash.replace('0x', ''), 'hex'),
+          parseInt(packet.data.signed.v),
+          Buffer.from(packet.data.signed.r.replace('0x', ''), 'hex'),
+          Buffer.from(packet.data.signed.s.replace('0x', ''), 'hex')).toString('hex');
+
+        let localShare = _.find(this.votes.shares, {
+          publicKey: restoredPublicKey,
+          share: packet.data.signed.message,
+          voted: false
+        });
+
+        if (!localShare)
+          return write(await raft.actions.message.packet(states.ERROR, 'wrong share for vote provided!'));
+
+        localShare.voted = true;
+
+
+        if (packet.data.granted)
           raft.votes.granted++;
-        }
 
         if (raft.quorum(raft.votes.granted)) {
+
+          let validatedShares = this.votes.shares.map(share => share.share);
+
+          let comb = secrets.combine(validatedShares);
+
+          if (comb !== this.votes.secret) {
+            this.votes = {
+              for: null,
+              granted: 0,
+              shares: [],
+              secret: null
+            };
+
+            return;
+          }
+
           raft.change({leader: raft.publicKey, state: states.LEADER});
           raft.actions.message.message(states.FOLLOWER, await raft.actions.message.packet('append'));
         }
@@ -254,7 +307,7 @@ class Raft extends EventEmitter {
           if (!hasIndex) {
             let {index: lastIndex} = await this.log.getLastInfo(); //todo validate
             return raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_FAIL, {
-              index: lastIndex+1
+              index: lastIndex + 1
             }));
           }
 
@@ -266,9 +319,9 @@ class Raft extends EventEmitter {
                      index: packet.last.index
                    }));*/
 
-      /*    if (hasIndex) //won't ever meet this
-            return await raft.log.removeEntriesAfter(packet.last.index); //todo think about stage rules
-*/
+          /*    if (hasIndex) //won't ever meet this
+                return await raft.log.removeEntriesAfter(packet.last.index); //todo think about stage rules
+    */
           /*return raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_FAIL, {
             term: packet.last.term,
             index: packet.last.index,
@@ -282,13 +335,12 @@ class Raft extends EventEmitter {
 
           try {
             await raft.log.saveCommand(entry.command, entry.term, entry.index, entry.hash);
-          }catch (e) {
+          } catch (e) {
             let {index: lastIndex} = await raft.log.getLastInfo();
             return raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_FAIL, {//can't get your entry, give me next to mine index!
               index: lastIndex + 1
             }));
           }
-
 
 
           raft.actions.message.message(states.LEADER, await raft.actions.message.packet(messageTypes.APPEND_ACK, {
@@ -319,13 +371,13 @@ class Raft extends EventEmitter {
       if (packet.type === messageTypes.APPEND_FAIL) {
         let previousEntry = await raft.log.get(packet.data.index);
 
-        if(!previousEntry){
+        if (!previousEntry) {
           previousEntry = await raft.log.getLastEntry();
 
-     /*     let {index: lastIndex} = await this.log.getLastInfo();
+          /*     let {index: lastIndex} = await this.log.getLastInfo();
 
-          console.log('no entry', packet.data.index, lastIndex)
-          process.exit(0)*/
+               console.log('no entry', packet.data.index, lastIndex)
+               process.exit(0)*/
         }
 
         const append = await raft.actions.message.appendPacket(previousEntry);
