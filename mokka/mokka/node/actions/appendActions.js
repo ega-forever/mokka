@@ -13,8 +13,9 @@ const append = async function (packet, write) {
 
     let reply = await this.actions.message.packet(messageTypes.ORPHAN_VOTE, {hash: hash});
 
-        await this.actions.message.message(states.CANDIDATE, reply);
-        await this.actions.message.message(states.CHILD, reply);
+    await this.actions.message.message(states.CANDIDATE, reply);
+    await this.actions.message.message(states.CHILD, reply);
+    return;
   }
 
   if (packet.last.index !== index && packet.last.index !== 0) {
@@ -31,12 +32,17 @@ const append = async function (packet, write) {
   if (packet.data) {
     const entry = packet.data[0]; //todo make validation of appended packet (can't rewrite chain)
 
-    try {
-      await this.log.saveCommand(entry.command, entry.term, entry.index, entry.hash);
-    } catch (e) {
-      let {index: lastIndex} = await this.log.getLastInfo();
-      let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex + 1});
-      return this.actions.message.message(states.LEADER, reply);
+    let localEntry = await this.log.get(entry.index);
+
+
+    if (!localEntry) {
+      try {
+        await this.log.saveCommand(entry.command, entry.term, entry.index, entry.hash, entry.owner);
+      } catch (e) {
+        let {index: lastIndex} = await this.log.getLastInfo();
+        let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex});
+        return this.actions.message.message(states.LEADER, reply);
+      }
     }
 
     let reply = await this.actions.message.packet(messageTypes.APPEND_ACK, {
@@ -64,12 +70,15 @@ const appendAck = async function (packet, write) {
   this.emit('append_ack', entry.index);
 };
 
-const appendFail = async function(packet, write){
+const appendFail = async function (packet, write) {
 
   let previousEntry = await this.log.get(packet.data.index);
 
   if (!previousEntry)
     previousEntry = await this.log.getLastEntry();
+
+  console.log(packet.data)
+  console.log('append fail: ', packet.data.index, previousEntry.index, Date.now());
 
   const append = await this.actions.message.appendPacket(previousEntry);
   write(append);

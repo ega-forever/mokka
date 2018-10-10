@@ -6,17 +6,17 @@ const EventEmitter = require('eventemitter3'),
   states = require('./factories/stateFactory'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
+  eventTypes = require('./factories/eventFactory'),
   hashUils = require('../utils/hashes'),
   VoteActions = require('./actions/voteActions'),
   NodeActions = require('./actions/nodeActions'),
   AppendActions = require('./actions/appendActions'),
   MessageActions = require('./actions/messageActions'),
-  Api = require('./api'),
-  emits = require('emits');
+  Api = require('./api');
 
 const change = require('modification')(' change');
 
-class Raft extends EventEmitter {
+class Mokka extends EventEmitter {
   constructor (options = {}) {
     super();
 
@@ -46,12 +46,11 @@ class Raft extends EventEmitter {
       negative: 0
     };
 
-    this.write = this.write || options.write || null;
+    //this.write = this.write || options.write || null;
     this.threshold = options.threshold || 0.8;
     this.timers = new Tick(this);
     this.Log = options.Log;
     this.change = change;
-    this.emits = emits;
     this.latency = 0;
     this.log = null;
     this.nodes = [];
@@ -130,6 +129,20 @@ class Raft extends EventEmitter {
 
         raft.heartbeat(raft.timeout());
       }
+
+
+      if (packet.type === messageTypes.STATE) {
+        return this.actions.node.state(packet, write);
+      }
+
+      if (packet.type === messageTypes.STATE_RECEIVED) {
+        return this.actions.node.stateReceived(packet, write);
+      }
+
+      if (packet.type === messageTypes.ORPHAN_VOTE) {
+        return this.actions.vote.orphanVote(packet, write);
+      }
+
 
       if (packet.type === messageTypes.ORPHAN_VOTE) {
         return this.actions.vote.orphanVote(packet, write);
@@ -294,4 +307,4 @@ class Raft extends EventEmitter {
 }
 
 
-module.exports = Raft;
+module.exports = Mokka;

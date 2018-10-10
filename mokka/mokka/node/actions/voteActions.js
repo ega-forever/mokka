@@ -3,12 +3,40 @@ const messageTypes = require('../factories/messageTypesFactory'),
   states = require('../factories/stateFactory'),
   secrets = require('secrets.js-grempe'),
   _ = require('lodash'),
+  Promise = require('bluebird'),
   EthUtil = require('ethereumjs-util'),
   web3 = new Web3();
 
 
+const vote = async function (packet, write) {
 
-const vote = async function(packet, write){
+  const {index, term, hash} = await this.log.getLastInfo();
+
+
+  if (index) {
+
+    let lastEntry = await this.log.getLastEntry();
+
+    /*  console.log(lastEntry)
+      if(!lastEntry.committed){
+        this.emit(messageTypes.VOTE, packet, false);
+        return write(await this.actions.message.packet(messageTypes.VOTED, {granted: false}));
+      }*/
+
+    let reply = await this.actions.message.packet(messageTypes.STATE);
+    await this.actions.message.message(lastEntry.owner, reply);
+
+    let state = await new Promise(res => this.once(states.STATE_RECEIVED, res)).timeout(this.election.max).catch(() => null);
+
+    if (state && (state.index !== index || !state.committed)) {
+   // if (state && (state.index !== index)) {
+      this.emit(messageTypes.VOTE, packet, false);
+      return write(await this.actions.message.packet(messageTypes.VOTED, {granted: false}));
+    }
+
+
+  }
+
 
   if (!packet.data.share) {
     this.emit(messageTypes.VOTE, packet, false);
@@ -24,14 +52,17 @@ const vote = async function(packet, write){
   }
 
 
-  const {index, term, hash} = await this.log.getLastInfo();
-
   if ((index > packet.last.index && term > packet.last.term) || packet.last.hash !== hash || packet.last.committedIndex < this.log.committedIndex) {
     //if (index > packet.last.index && term > packet.last.term) {
     this.emit(messageTypes.VOTE, packet, false);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
     return write(reply);
   }
+  //todo voting based on sync state
+  //rule 1 - dominate vote comes from the previous master node (from where logs are repapulate to the followers) + each
+  // follower provide its state with merkle proof based on the last index received from candidate
+
+  //rule 2 - the previous master node is not available. In this case, we vote by the majority of voices
 
 
   this.votes.for = packet.publicKey;
@@ -42,7 +73,7 @@ const vote = async function(packet, write){
   this.heartbeat(this.timeout());
 };
 
-const voted = async function(packet, write){
+const voted = async function (packet, write) {
 
   if (states.CANDIDATE !== this.state) {
     let reply = await this.actions.message.packet(states.ERROR, 'No longer a candidate, ignoring vote');
@@ -99,7 +130,7 @@ const voted = async function(packet, write){
   write();
 };
 
-const orphanVote = async function(packet, write){
+const orphanVote = async function (packet, write) {
 
   let entry = await this.log.get(packet.data.index);
 
@@ -119,7 +150,7 @@ const orphanVote = async function(packet, write){
   return write(reply);
 };
 
-const orphanVoted = async function (packet){
+const orphanVoted = async function (packet) {
 
 
   if (this.orhpanVotes.for !== packet.data.provided)
@@ -136,7 +167,7 @@ const orphanVoted = async function (packet){
     return;
 
   if (this.orhpanVotes.negative >= this.orhpanVotes.positive) {//todo rollback
-    //console.log('reset node state');
+    console.log('reset node state');
 
     await this.log.removeEntriesAfter(0);
     this.log.committedIndex = 0;

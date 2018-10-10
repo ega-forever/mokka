@@ -32,7 +32,7 @@ class Log {
   }
 
 
-  async saveCommand (command, term, index, checkHash) {
+  async saveCommand (command, term, index, checkHash, owner) {
 
     return await new Promise((res, rej) => {
       semaphore.take(async () => {
@@ -47,7 +47,7 @@ class Log {
 
         if (_.isNumber(index) && index !== 0 && index <= lastIndex) {
           semaphore.leave();
-          return rej({code: 0, message: 'can\'t rewrite chain!'});
+          return rej({code: 1, message: `can't rewrite chain (received ${index} while current is ${lastIndex})!`});
         }
 
 
@@ -65,7 +65,7 @@ class Log {
 
         if(checkHash && generatedHash !== checkHash){
           semaphore.leave();
-          return rej({code: 0, message: 'can\'t wrong hash!'});
+          return rej({code: 2, message: 'can\'t wrong hash!'});
         }
 
 
@@ -75,6 +75,7 @@ class Log {
           index: index,
           hash: generatedHash,
           committed: false,
+          owner: owner || this.node.publicKey,
           responses: [{
             publicKey: this.node.publicKey, // start with vote from leader
             ack: true
@@ -83,6 +84,12 @@ class Log {
           minShares: 0,
           command
         };
+
+        if(owner)
+          entry.responses = [
+            {publicKey: owner},
+            entry.responses[0]
+          ];
 
         await this.put(entry);
         res(entry);

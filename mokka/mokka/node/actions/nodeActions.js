@@ -7,92 +7,87 @@ const _ = require('lodash'),
   states = require('../factories/stateFactory');
 
 const join = function (multiaddr, write) {
-  let raft = this;
-
 
   const m = Multiaddr(multiaddr);
 
   const publicKey = hashUtils.getHexFromIpfsHash(m.getPeerId());
-  if (raft.publicKey === publicKey)
+  if (this.publicKey === publicKey)
     return;
 
   const mOptions = m.toOptions();
 
-  let node = raft.clone({
+  let node = this.clone({
     write: write,
     publicKey: publicKey,
     address: `${mOptions.transport}://${mOptions.host}:${mOptions.port}`,
     state: states.CHILD
   });
 
-  node.once('end', function end () {
-    raft.leave(node);
-  }, raft);
+  node.once('end', ()=> this.leave(node));
 
-  raft.nodes.push(node);
-  raft.emit('join', node);
+  this.nodes.push(node);
+  this.emit('join', node);
 
   return node;
 };
 
 const leave = function (publicKey) {
-  let raft = this,
-    index = -1,
+  let index = -1,
     node;
 
-  for (let i = 0; i < raft.nodes.length; i++) {
-    if (raft.nodes[i] === publicKey || raft.nodes[i].publicKey === publicKey) {
-      node = raft.nodes[i];
+  for (let i = 0; i < this.nodes.length; i++) {
+    if (this.nodes[i] === publicKey || this.nodes[i].publicKey === publicKey) {
+      node = this.nodes[i];
       index = i;
-      break;
+      break; //todo refactor
     }
   }
 
   if (~index && node) {
-    raft.nodes.splice(index, 1);
+    this.nodes.splice(index, 1);
 
-    if (node.end) node.end();
-    raft.emit('leave', node);
+    if (node.end)
+      node.end();
+
+    this.emit('leave', node);
   }
 
   return node;
 };
 
 const end = function () {
-  let raft = this;
 
-  if (states.STOPPED === raft.state) return false;
-  raft.change({state: states.STOPPED});
+  if (states.STOPPED === this.state)
+    return false;
 
-  if (raft.nodes.length)
-    for (let i = 0; i < raft.nodes.length; i++)
-      raft.leave(raft.nodes[i]);
+  this.change({state: states.STOPPED});
+
+  if (this.nodes.length)
+    for (let i = 0; i < this.nodes.length; i++)
+      this.leave(this.nodes[i]);
 
 
-  raft.emit('end');
-  raft.timers.end();
-  raft.removeAllListeners();
+  this.emit('end');
+  this.timers.end();
+  this.removeAllListeners();
+  this.log.end();
 
-  if (raft.log)
-    raft.log.end();
-
-  raft.timers = raft.Log = raft.beat = raft.election = null;
+  this.timers = this.Log = this.beat = this.election = null;
   return true;
 };
 
 const promote = async function () {
-  let raft = this;
 
-  raft.change({
+  this.change({
     state: states.CANDIDATE,  // We're now a candidate,
-    term: raft.term + 1,    // but only for this term.
+    term: this.term + 1,    // but only for this term.
     leader: ''              // We no longer have a leader.
   });
 
-  raft.votes.for = raft.publicKey;
-  raft.votes.granted = 1;
-  raft.votes.secret = secrets.str2hex(uniqid());
-  raft.votes.shares = [];
+  this.votes.for = this.publicKey;
+  this.votes.granted = 1;
+  this.votes.secret = secrets.str2hex(uniqid());
+  this.votes.shares = [];
 
 
   if(this.majority() < 2){
@@ -105,29 +100,42 @@ const promote = async function () {
 
   if(followerNodes.length !== 0){
 
-    let shares = secrets.share(raft.votes.secret, followerNodes.length, Math.ceil(followerNodes.length / 2) + 1);
+    let shares = secrets.share(this.votes.secret, followerNodes.length, Math.ceil(followerNodes.length / 2) + 1);
 
     for (let index = 0; index < followerNodes.length; index++) {
-      raft.votes.shares.push({
+      this.votes.shares.push({
         share: shares[index],
         publicKey: followerNodes[index].publicKey,
         voted: false
       });
 
-      const packet = await raft.actions.message.packet(messageTypes.VOTE, {share: shares[index]});
+      const packet = await this.actions.message.packet(messageTypes.VOTE, {share: shares[index]});
 
-      await raft.actions.message.message(followerNodes[index].publicKey, packet);
+      await this.actions.message.message(followerNodes[index].publicKey, packet);
 
     }
   }
 
 
 
-  raft.timers
+  this.timers
     .clear('heartbeat, election')
-    .setTimeout('election', raft.actions.node.promote, raft.timeout());
+    .setTimeout('election', this.actions.node.promote, this.timeout());
+};
 
-  return raft;
+const state = async function (packet, write) {
+
+  const entry = await this.log.getLastEntry();
+
+  let reply = await this.actions.message.packet(messageTypes.STATE_RECEIVED, {
+    index: entry.index,
+    committed: entry.committed
+  });
+  return write(reply);
+};
+
+const stateReceived = function (packet) {
+  this.emit(states.STATE_RECEIVED, _.merge({publicKey: packet.publicKey}, packet.data));
 };
 
 
@@ -137,7 +145,9 @@ module.exports = (instance) => {
     promote: promote.bind(instance),
     join: join.bind(instance),
     leave: leave.bind(instance),
-    end: end.bind(instance)
+    end: end.bind(instance),
+    state: state.bind(instance),
+    stateReceived: stateReceived.bind(instance)
   });
 
 };
