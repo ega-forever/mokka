@@ -28,7 +28,7 @@ const vote = async function (packet, write) {
 
     let state = await new Promise(res => this.once(states.STATE_RECEIVED, res)).timeout(this.election.max).catch(() => null);
 
-    if (state && (state.index !== index || !state.committed)) {
+    if (state && (state.index !== index || !state.committed || state.publicKey !== lastEntry.owner)) {
    // if (state && (state.index !== index)) {
       this.emit(messageTypes.VOTE, packet, false);
       return write(await this.actions.message.packet(messageTypes.VOTED, {granted: false}));
