@@ -1,4 +1,5 @@
 module.exports = {
+  ACK: 'ack',
   STATE: 'state',
   STATE_RECEIVED: 'state_received',
   VOTE: 'vote',

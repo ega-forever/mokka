@@ -74,6 +74,7 @@ class Log {
           term: term,
           index: index,
           hash: generatedHash,
+          createdAt: Date.now(),
           committed: false,
           owner: owner || this.node.publicKey,
           responses: [{

@@ -8,30 +8,29 @@ const messageTypes = require('../factories/messageTypesFactory'),
   web3 = new Web3();
 
 
-const vote = async function (packet, write) {
+const vote = async function (packet) {
 
   const {index, term, hash} = await this.log.getLastInfo();
-
 
   if (index) {
 
     let lastEntry = await this.log.getLastEntry();
 
-    /*  console.log(lastEntry)
-      if(!lastEntry.committed){
-        this.emit(messageTypes.VOTE, packet, false);
-        return write(await this.actions.message.packet(messageTypes.VOTED, {granted: false}));
-      }*/
-
     let reply = await this.actions.message.packet(messageTypes.STATE);
-    await this.actions.message.message(lastEntry.owner, reply);
+    this.actions.message.message(lastEntry.owner, reply);
 
     let state = await new Promise(res => this.once(states.STATE_RECEIVED, res)).timeout(this.election.max).catch(() => null);
 
-    if (state && (state.index !== index || !state.committed || state.publicKey !== lastEntry.owner)) {
-   // if (state && (state.index !== index)) {
+    if (state && state.index > index && Date.now() - state.createdAt > this.election.max){//todo think about skip (may be global lock)
+      let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: index + 1});
+      this.actions.message.message(lastEntry.owner, reply);
+    }
+
+
+    //if (state && (state.index !== index || !state.committed || state.publicKey !== lastEntry.owner)) {
+       if (state && (state.index !== index)) {
       this.emit(messageTypes.VOTE, packet, false);
-      return write(await this.actions.message.packet(messageTypes.VOTED, {granted: false}));
+      return await this.actions.message.packet(messageTypes.VOTED, {granted: false});
     }
 
 
@@ -40,7 +39,7 @@ const vote = async function (packet, write) {
 
   if (!packet.data.share) {
     this.emit(messageTypes.VOTE, packet, false);
-    return write(await this.actions.message.packet(messageTypes.VOTED, {granted: false}));
+    return await this.actions.message.packet(messageTypes.VOTED, {granted: false});
   }
 
 
@@ -48,15 +47,14 @@ const vote = async function (packet, write) {
 
   if (this.votes.for && this.votes.for !== packet.publicKey) {
     this.emit(messageTypes.VOTE, packet, false);
-    return write(await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare}));
+    return await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
   }
 
 
   if ((index > packet.last.index && term > packet.last.term) || packet.last.hash !== hash || packet.last.committedIndex < this.log.committedIndex) {
     //if (index > packet.last.index && term > packet.last.term) {
     this.emit(messageTypes.VOTE, packet, false);
-    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
-    return write(reply);
+    return await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
   }
   //todo voting based on sync state
   //rule 1 - dominate vote comes from the previous master node (from where logs are repapulate to the followers) + each
@@ -69,21 +67,18 @@ const vote = async function (packet, write) {
   this.emit(messageTypes.VOTE, packet, true);
   this.change({leader: packet.publicKey, term: packet.term});
   let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
-  write(reply);
   this.heartbeat(this.timeout());
+  return reply;
 };
 
-const voted = async function (packet, write) {
+const voted = async function (packet) {
 
-  if (states.CANDIDATE !== this.state) {
-    let reply = await this.actions.message.packet(states.ERROR, 'No longer a candidate, ignoring vote');
-    return write(reply);
-  }
+  if (states.CANDIDATE !== this.state)
+    return await this.actions.message.packet(states.ERROR, 'No longer a candidate, ignoring vote');
 
-  if (!packet.data.signed) {
-    const reply = await this.actions.message.packet(states.ERROR, 'the vote hasn\'t been singed, ignoring vote');
-    return write(reply);
-  }
+  if (!packet.data.signed)
+    return await this.actions.message.packet(states.ERROR, 'the vote hasn\'t been singed, ignoring vote');
+
 
   const restoredPublicKey = EthUtil.ecrecover(
     Buffer.from(packet.data.signed.messageHash.replace('0x', ''), 'hex'),
@@ -98,7 +93,7 @@ const voted = async function (packet, write) {
   });
 
   if (!localShare)
-    return write(await this.actions.message.packet(states.ERROR, 'wrong share for vote provided!'));
+    return await this.actions.message.packet(states.ERROR, 'wrong share for vote provided!');
 
   localShare.voted = true;
 
@@ -127,27 +122,24 @@ const voted = async function (packet, write) {
     const reply = await this.actions.message.packet(messageTypes.APPEND);
     this.actions.message.message(states.FOLLOWER, reply);
   }
-  write();
+
 };
 
-const orphanVote = async function (packet, write) {
+const orphanVote = async function (packet) {
 
   let entry = await this.log.get(packet.data.index);
 
   if (!entry) {
-    let reply = await this.actions.message.packet(messageTypes.ORPHAN_VOTED, {
+    return await this.actions.message.packet(messageTypes.ORPHAN_VOTED, {
       provided: packet.data.hash,
       accepted: null
     });
-    return write(reply);
   }
 
-
-  let reply = await this.actions.message.packet(messageTypes.ORPHAN_VOTED, {
+  return await this.actions.message.packet(messageTypes.ORPHAN_VOTED, {
     provided: packet.data.hash,
     accepted: entry.hash
   });
-  return write(reply);
 };
 
 const orphanVoted = async function (packet) {
@@ -167,7 +159,6 @@ const orphanVoted = async function (packet) {
     return;
 
   if (this.orhpanVotes.negative >= this.orhpanVotes.positive) {//todo rollback
-    console.log('reset node state');
 
     await this.log.removeEntriesAfter(0);
     this.log.committedIndex = 0;

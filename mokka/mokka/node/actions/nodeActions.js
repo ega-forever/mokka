@@ -111,7 +111,7 @@ const promote = async function () {
 
       const packet = await this.actions.message.packet(messageTypes.VOTE, {share: shares[index]});
 
-      await this.actions.message.message(followerNodes[index].publicKey, packet);
+       this.actions.message.message(followerNodes[index].publicKey, packet);
 
     }
   }
@@ -123,15 +123,16 @@ const promote = async function () {
     .setTimeout('election', this.actions.node.promote, this.timeout());
 };
 
-const state = async function (packet, write) {
+const state = async function () {
 
   const entry = await this.log.getLastEntry();
 
-  let reply = await this.actions.message.packet(messageTypes.STATE_RECEIVED, {
+  return await this.actions.message.packet(messageTypes.STATE_RECEIVED, {
     index: entry.index,
-    committed: entry.committed
+    committed: entry.committed,
+    createdAt: entry.createdAt
   });
-  return write(reply);
+
 };
 
 const stateReceived = function (packet) {

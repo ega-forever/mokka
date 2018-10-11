@@ -3,7 +3,7 @@ const _ = require('lodash'),
   states = require('../factories/stateFactory');
 
 
-const append = async function (packet, write) {
+const append = async function (packet) {
 
   const {index, hash} = await this.log.getLastInfo();
 
@@ -13,8 +13,8 @@ const append = async function (packet, write) {
 
     let reply = await this.actions.message.packet(messageTypes.ORPHAN_VOTE, {hash: hash});
 
-    await this.actions.message.message(states.CANDIDATE, reply);
-    await this.actions.message.message(states.CHILD, reply);
+    this.actions.message.message(states.CANDIDATE, reply);
+    this.actions.message.message(states.CHILD, reply);
     return;
   }
 
@@ -59,7 +59,7 @@ const append = async function (packet, write) {
   }
 };
 
-const appendAck = async function (packet, write) {
+const appendAck = async function (packet) {
 
   const entry = await this.log.commandAck(packet.data.index, packet.publicKey);
   if (this.quorum(entry.responses.length) && !entry.committed) {
@@ -70,7 +70,7 @@ const appendAck = async function (packet, write) {
   this.emit('append_ack', entry.index);
 };
 
-const appendFail = async function (packet, write) {
+const appendFail = async function (packet) {
 
   let previousEntry = await this.log.get(packet.data.index);
 
@@ -80,8 +80,7 @@ const appendFail = async function (packet, write) {
   console.log(packet.data)
   console.log('append fail: ', packet.data.index, previousEntry.index, Date.now());
 
-  const append = await this.actions.message.appendPacket(previousEntry);
-  write(append);
+  return await this.actions.message.appendPacket(previousEntry);
 };
 
 module.exports = (instance) => {

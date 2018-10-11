@@ -1,54 +1,73 @@
 const _ = require('lodash'),
+  Promise = require('bluebird'),
+  sem = require('semaphore')(1),
   states = require('../factories/stateFactory');
 
 
-const _timing  = function (latency) {
-  let raft = this,
-    sum = 0,
-    i = 0;
+const _timing = function (latency = []) {
 
-  if (states.STOPPED === raft.state)
+  if (states.STOPPED === this.state)
     return false;
 
-  for (; i < latency.length; i++) {
-    sum += latency[i];
-  }
 
-  raft.latency = Math.floor(sum / latency.length);
+  this.latency = Math.floor(_.sum(latency) / latency.length);
 
-  if (raft.latency > raft.election.min * raft.threshold) {
-    raft.emit('threshold');
+  if (this.latency > this.election.min * this.threshold) {
+    this.emit('threshold');
   }
 
   return true;
 };
 
-const message = function (who, what, when) {
 
-  if (typeof who === 'undefined') {
-    throw new Error('Cannot send message to `undefined`. Check your spelling!');
-  }
+const _sendMessageEnsure = async (nodes, message) => {
 
-  let output = {errors: {}, results: {}},
-    length = this.nodes.length,
-    errors = false,
-    latency = [],
+  await Promise.map(nodes, async client => {
+
+    let start = Date.now();
+    let output = {
+      client: client.publicKey,
+      error: null,
+      data: null
+    };
+
+
+    try {
+      let item = await new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))).timeout(this.election.max);
+      output.data = item;
+      raft.emit('data', item);
+
+    } catch (err) {
+      output.error = err;
+      raft.emit('error', err);
+    }
+
+    latency.push(Date.now() - start);
+
+    return output;
+  }, {concurrency: nodes.length});
+
+
+};
+
+const message = async function (who, what, options = {}) {
+
+  let latency = [],
     raft = this,
-    nodes = [],
-    i = 0;
+    nodes = [];
 
   switch (who) {
     case states.LEADER:
-      for (; i < length; i++)
-        if (raft.leader === raft.nodes[i].publicKey) {
-          nodes.push(raft.nodes[i]);
+      for (let node of raft.nodes)
+        if (raft.leader === node.publicKey) {
+          nodes.push(node);
         }
       break;
 
     case states.FOLLOWER:
-      for (; i < length; i++)
-        if (raft.leader !== raft.nodes[i].publicKey) {
-          nodes.push(raft.nodes[i]);
+      for (let node of raft.nodes)
+        if (raft.leader !== node.publicKey) {
+          nodes.push(node);
         }
       break;
 
@@ -57,31 +76,105 @@ const message = function (who, what, when) {
       break;
 
     default:
-      for (; i < length; i++)
-        if (who === raft.nodes[i].publicKey) {
-          nodes.push(raft.nodes[i]);
+      for (let node of raft.nodes)
+        if (who === node.publicKey) {
+          nodes.push(node);
         }
   }
 
-  /**
-   * A small wrapper to force indefinitely sending of a certain packet.
-   *
-   * @param {Raft} client Raft we need to write a message to.
-   * @param {Object} data Message that needs to be send.
-   * @api private
-   */
-  function wrapper (client, data) {
+  let op = Promise.all(nodes.map(async client => {
+
+    let start = Date.now();
+    let output = {
+      client: client.publicKey,
+      error: null,
+      data: null
+    };
+
+
+    try {
+      let item = await new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data)));//todo ack on each action
+      output.data = item;
+      raft.emit('data', item);
+
+    } catch (err) {
+      console.log(err)
+      output.error = err;
+      raft.emit('error', err);
+    }
+
+    latency.push(Date.now() - start);
+
+    return output;
+  }));
+
+  let op2 = new Promise(res => {
+
+    sem.take(async function () {
+
+      if (!options.serial)
+        sem.leave();
+
+      await op;
+      _timing.apply(raft, latency);
+
+      if (options.serial)
+        sem.leave();
+      res();
+    });
+
+  });
+
+
+  if (options.ensure)
+    await op2;
+
+
+};
+
+
+/*const message = function (who, what, when) {
+
+  let output = {errors: {}, results: {}},
+    latency = [],
+    raft = this,
+    nodes = [];
+
+  switch (who) {
+    case states.LEADER:
+      for (let node of raft.nodes)
+        if (raft.leader === node.publicKey) {
+          nodes.push(node);
+        }
+      break;
+
+    case states.FOLLOWER:
+      for (let node of raft.nodes)
+        if (raft.leader !== node.publicKey) {
+          nodes.push(node);
+        }
+      break;
+
+    case states.CHILD:
+      Array.prototype.push.apply(nodes, raft.nodes);
+      break;
+
+    default:
+      for (let node of raft.nodes)
+        if (who === node.publicKey) {
+          nodes.push(node);
+        }
+  }
+
+  for(let client of nodes){
+
     let start = +new Date();
 
-    client.write(data, function written (err, data) {
+
+    client.write(what, function written (err, data) {
       latency.push(+new Date() - start);
 
-      //
-      // Add the error or output to our `output` object to be
-      // passed to the callback when all the writing is done.
-      //
       if (err) {
-        errors = true;
         output.errors[client.publicKey] = err;
       } else {
         output.results[client.publicKey] = data;
@@ -90,25 +183,20 @@ const message = function (who, what, when) {
       if (err) raft.emit('error', err);
       else if (data) raft.emit('data', data);
 
-      if (latency.length === length) {
+      if (latency.length >= raft.nodes.length) {
         _timing.apply(raft, latency);
-        if (when)
-          when(errors ? output.errors : undefined, output.results);
-        latency.length = nodes.length = 0;
-        output = null;
+        if (when) {
+         console.log('callback')
+          when(Object.keys(output.errors).length ? output.errors : undefined, output.results);
+        }
       }
+
     });
-  }
 
-  length = nodes.length;
-  i = 0;
-
-  for (; i < length; i++) {
-    wrapper(nodes[i], what);
   }
 
   return raft;
-};
+};*/
 
 const packet = async function (type, data) {
   let raft = this,

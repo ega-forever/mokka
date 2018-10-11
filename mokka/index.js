@@ -92,7 +92,7 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(1, entry.index, entry.hash, i);
-          await Promise.delay(100);
+          //await Promise.delay(100);
 /*
           await node.actions.tasks.reserve(entry.index);
           console.log(1, entry.index, i);
@@ -126,7 +126,7 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(2, entry.index, entry.hash, i);
-          await Promise.delay(100);
+          //await Promise.delay(100);
         } catch (e) {
 
           if(e instanceof Promise.TimeoutError){
@@ -146,14 +146,13 @@ const init = async () => {
       }
       console.log('accomplished! 2')
     })(),
-
     (async () => {
       let node = nodes[3];
       for (let i = 667; i < 1000; i++) {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(3, entry.index, entry.hash, i);
-          await Promise.delay(100);
+          //await Promise.delay(100);
         } catch (e) {
 
           if(e instanceof Promise.TimeoutError){

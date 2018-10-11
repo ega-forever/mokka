@@ -96,24 +96,26 @@ class Mokka extends EventEmitter {
 
     raft.on('data', async (packet, write = () => {
     }) => {
-      let reason;
+
+      //  let reply = await raft.actions.message.packet(messageTypes.ACK);
+      let reply;
 
       if (!_.isObject(packet)) {
-        reason = 'Invalid packet received';
+        let reason = 'Invalid packet received';
         raft.emit(messageTypes.ERROR, new Error(reason));
         let reply = await raft.actions.message.packet(messageTypes.ERROR, reason);
         return write(reply);
       }
 
-
       if (packet.term > raft.term) {
+
         raft.change({
           leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
           state: states.FOLLOWER,
           term: packet.term
         });
       } else if (packet.term < raft.term) {
-        reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
+        let reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
         raft.emit('error', new Error(reason));
 
         let reply = await raft.actions.message.packet(messageTypes.ERROR, reason);
@@ -132,58 +134,57 @@ class Mokka extends EventEmitter {
 
 
       if (packet.type === messageTypes.STATE) {
-        return this.actions.node.state(packet, write);
+        reply = await this.actions.node.state();
       }
 
       if (packet.type === messageTypes.STATE_RECEIVED) {
-        return this.actions.node.stateReceived(packet, write);
+        this.actions.node.stateReceived(packet);
       }
 
       if (packet.type === messageTypes.ORPHAN_VOTE) {
-        return this.actions.vote.orphanVote(packet, write);
-      }
-
-
-      if (packet.type === messageTypes.ORPHAN_VOTE) {
-        return this.actions.vote.orphanVote(packet, write);
+        reply = await this.actions.vote.orphanVote(packet);
       }
 
       if (packet.type === messageTypes.ORPHAN_VOTED) {
-        return this.actions.vote.orphanVoted(packet, write);
+        reply = await this.actions.vote.orphanVoted(packet);
       }
 
       if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)
-        return this.actions.vote.vote(packet, write);
+        reply = await this.actions.vote.vote(packet);
       }
 
       if (packet.type === messageTypes.VOTED) {
-        return this.actions.vote.voted(packet, write);
+        let reply = await this.actions.vote.voted(packet);
       }
 
       if (packet.type === messageTypes.ERROR) {
         raft.emit(messageTypes.ERROR, new Error(packet.data));
-        return;
       }
 
 
       if (packet.type === messageTypes.APPEND) {
-        return this.actions.append.append(packet, write);
+        await this.actions.append.append(packet);
       }
 
       if (packet.type === messageTypes.APPEND_ACK) {
-        return this.actions.append.appendAck(packet, write);
+        await this.actions.append.appendAck(packet);
       }
 
       if (packet.type === messageTypes.APPEND_FAIL) {
-        return this.actions.append.appendFail(packet, write);
+        let reply = await this.actions.append.appendFail(packet, write);
       }
 
       if (raft.listeners('rpc').length) {
         raft.emit('rpc', packet, write);
       } else {
-        write(await raft.actions.message.packet('error', 'Unknown message type: ' + packet.type));
+        let reply = await raft.actions.message.packet('error', 'Unknown message type: ' + packet.type);
       }
 
+
+      if (!reply)
+        reply = await raft.actions.message.packet(messageTypes.ACK);
+
+      write(reply);
 
     });
 
@@ -244,7 +245,8 @@ class Mokka extends EventEmitter {
       let packet = await raft.actions.message.packet(messageTypes.APPEND);
 
       raft.emit(messageTypes.HEARTBEAT, packet);
-      raft.actions.message.message(states.FOLLOWER, packet).heartbeat(raft.beat);
+      await raft.actions.message.message(states.FOLLOWER, packet);
+      raft.heartbeat(raft.beat);
     }, duration);
 
     return raft;

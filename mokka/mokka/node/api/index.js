@@ -18,7 +18,14 @@ const propose = async function (task) {
 
   const entry = await this.log.saveCommand({task: task}, this.term);
   const appendPacket = await this.actions.message.appendPacket(entry);
-  this.actions.message.message(states.FOLLOWER, appendPacket);
+
+  let options = {
+    ensure: true,
+    serial: true
+  };
+
+  await this.actions.message.message(states.FOLLOWER, appendPacket, options);
+  // this.actions.message.message(states.FOLLOWER, appendPacket);
   return entry;
 };
 
