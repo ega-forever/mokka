@@ -23,7 +23,7 @@ const join = function (multiaddr, write) {
     state: states.CHILD
   });
 
-  node.once('end', ()=> this.leave(node));
+  node.once('end', () => this.leave(node));
 
   this.nodes.push(node);
   this.emit('join', node);
@@ -76,11 +76,11 @@ const end = function () {
   return true;
 };
 
-const promote = async function () {
+const promote = async function (priority = 1) {
 
   this.change({
     state: states.CANDIDATE,  // We're now a candidate,
-    term: this.term + 1,    // but only for this term.
+    term: this.term + 1,    // but only for this term. //todo check
     leader: ''              // We no longer have a leader.
   });
 
@@ -90,15 +90,15 @@ const promote = async function () {
   this.votes.shares = [];
 
 
-  if(this.majority() < 2){
+  if (this.majority() < 2) {
     console.log('majority less than 2');
     process.exit(0);
   }
 
 
-  const followerNodes = _.filter(this.nodes, node=> node.state !== states.LEADER);
+  const followerNodes = _.filter(this.nodes, node => node.state !== states.LEADER);
 
-  if(followerNodes.length !== 0){
+  if (followerNodes.length !== 0) {
 
     let shares = secrets.share(this.votes.secret, followerNodes.length, Math.ceil(followerNodes.length / 2) + 1);
 
@@ -109,13 +109,12 @@ const promote = async function () {
         voted: false
       });
 
-      const packet = await this.actions.message.packet(messageTypes.VOTE, {share: shares[index]});
+      const packet = await this.actions.message.packet(messageTypes.VOTE, {share: shares[index], priority: priority});
 
-       this.actions.message.message(followerNodes[index].publicKey, packet);
+      this.actions.message.message(followerNodes[index].publicKey, packet);
 
     }
   }
-
 
 
   this.timers
@@ -138,6 +137,7 @@ const state = async function () {
 const stateReceived = function (packet) {
   this.emit(states.STATE_RECEIVED, _.merge({publicKey: packet.publicKey}, packet.data));
 };
+
 
 
 module.exports = (instance) => {

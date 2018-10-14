@@ -3,82 +3,89 @@ const messageTypes = require('../factories/messageTypesFactory'),
   states = require('../factories/stateFactory'),
   secrets = require('secrets.js-grempe'),
   _ = require('lodash'),
-  Promise = require('bluebird'),
   EthUtil = require('ethereumjs-util'),
   web3 = new Web3();
 
 
-const vote = async function (packet) {
-
-  const {index, term, hash} = await this.log.getLastInfo();
-
-  if (index) {
-
-    let lastEntry = await this.log.getLastEntry();
-
-    let reply = await this.actions.message.packet(messageTypes.STATE);
-    this.actions.message.message(lastEntry.owner, reply);
-
-    let state = await new Promise(res => this.once(states.STATE_RECEIVED, res)).timeout(this.election.max).catch(() => null);
-
-    if (state && state.index > index && Date.now() - state.createdAt > this.election.max){//todo think about skip (may be global lock)
-      let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: index + 1});
-      this.actions.message.message(lastEntry.owner, reply);
-    }
+const vote = async function (packet, write) { //todo timeout leader on election
 
 
-    //if (state && (state.index !== index || !state.committed || state.publicKey !== lastEntry.owner)) {
-       if (state && (state.index !== index)) {
-      this.emit(messageTypes.VOTE, packet, false);
-      return await this.actions.message.packet(messageTypes.VOTED, {granted: false});
-    }
-
-
-  }
-
-
-  if (!packet.data.share) {
-    this.emit(messageTypes.VOTE, packet, false);
-    return await this.actions.message.packet(messageTypes.VOTED, {granted: false});
-  }
-
+  const {index, hash, createdAt} = await this.log.getLastInfo();
 
   const signedShare = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
 
+  let timeout = Date.now() - this.votes.started > this.election.max;
+
+  if (packet.data.priority === 2)
+    timeout = this.votes.priority === 1 ? false : Date.now() - this.votes.started > this.election.min;
+
+  if (timeout || !packet.data.share || (Date.now() - createdAt < this.election.max && index !== 0)) {
+    // if (!packet.data.share || (Date.now() - createdAt < this.election.max && index !== 0)) {
+    this.emit(messageTypes.VOTE, packet, false);
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
+    return write(reply);
+  }
+
+/*  if(this.state === states.LEADER){
+    this.change({state: states.FOLLOWER, leader: ''});
+    this.heartbeat(this.timeout());
+  }*/
+
+  this.votes.started = Date.now();
+  this.votes.started = packet.data.priority || 1;
+
   if (this.votes.for && this.votes.for !== packet.publicKey) {
     this.emit(messageTypes.VOTE, packet, false);
-    return await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
+    return write(reply);
   }
 
+  //provide merkleroot, in case packet.last.index < index
 
-  if ((index > packet.last.index && term > packet.last.term) || packet.last.hash !== hash || packet.last.committedIndex < this.log.committedIndex) {
-    //if (index > packet.last.index && term > packet.last.term) {
+  if (index > packet.last.index) { //in case the candidate is outdated
     this.emit(messageTypes.VOTE, packet, false);
-    return await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
-  }
-  //todo voting based on sync state
-  //rule 1 - dominate vote comes from the previous master node (from where logs are repapulate to the followers) + each
-  // follower provide its state with merkle proof based on the last index received from candidate
 
-  //rule 2 - the previous master node is not available. In this case, we vote by the majority of voices
+    //todo build proof
+
+    /*    let ensureIndex = packet.last.index > 5 ? packet.last.index - 5 : 0;
+        let ensureLimit = packet.last.index > 5 ? 5 : packet.last.index;
+
+        let entries = await this.log.getEntriesAfterIndex(ensureIndex, ensureIndex);
+        */
+
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
+    return write(reply);
+  }
+
+  if (index !== packet.last.index || packet.last.hash !== hash) {
+    this.emit(messageTypes.VOTE, packet, false);
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
+    return write(reply);
+  }
 
 
   this.votes.for = packet.publicKey;
   this.emit(messageTypes.VOTE, packet, true);
   this.change({leader: packet.publicKey, term: packet.term});
   let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
-  this.heartbeat(this.timeout());
-  return reply;
+  //this.heartbeat(this.timeout());
+  return write(reply);
 };
 
-const voted = async function (packet) {
+const voted = async function (packet, write) {
 
-  if (states.CANDIDATE !== this.state)
-    return await this.actions.message.packet(states.ERROR, 'No longer a candidate, ignoring vote');
+  console.log(`i am going to be voted[${this.index}]`)
 
-  if (!packet.data.signed)
-    return await this.actions.message.packet(states.ERROR, 'the vote hasn\'t been singed, ignoring vote');
+  if (states.CANDIDATE !== this.state) {
+    console.log(`my state[${this.index}]: `, this.state)
+    let reply = await this.actions.message.packet(states.ERROR, 'No longer a candidate, ignoring vote');
+    return write(reply);
+  }
 
+  if (!packet.data.signed) {
+    let reply = await this.actions.message.packet(states.ERROR, 'the vote hasn\'t been singed, ignoring vote');
+    return write(reply);
+  }
 
   const restoredPublicKey = EthUtil.ecrecover(
     Buffer.from(packet.data.signed.messageHash.replace('0x', ''), 'hex'),
@@ -92,86 +99,143 @@ const voted = async function (packet) {
     voted: false
   });
 
-  if (!localShare)
-    return await this.actions.message.packet(states.ERROR, 'wrong share for vote provided!');
+  if (!localShare) {
+    let reply = await this.actions.message.packet(states.ERROR, 'wrong share for vote provided!');
+    return write(reply);
+  }
+
+  if (localShare.voted) {
+    let reply = await this.actions.message.packet(states.ERROR, 'already voted for this candidate!');
+    return write(reply);
+  }
 
   localShare.voted = true;
+  localShare.granted = packet.data.granted;
+  localShare.leader = packet.leader;
+  localShare.last = packet.last;
 
+  // console.log(packet.data)
 
-  if (packet.data.granted)
-    this.votes.granted++;
+  /*  if (packet.data.granted)
+      this.votes.granted++;*/
 
-  if (this.quorum(this.votes.granted)) {
+  let votedAmount = _.chain(this.votes.shares).filter({voted: true}).size().value();
 
-    let validatedShares = this.votes.shares.map(share => share.share);
-
-    let comb = secrets.combine(validatedShares);
-
-    if (comb !== this.votes.secret) {
-      this.votes = {
-        for: null,
-        granted: 0,
-        shares: [],
-        secret: null
-      };
-
-      return;
-    }
-
-    this.change({leader: this.publicKey, state: states.LEADER});
-    const reply = await this.actions.message.packet(messageTypes.APPEND);
-    this.actions.message.message(states.FOLLOWER, reply);
-  }
-
-};
-
-const orphanVote = async function (packet) {
-
-  let entry = await this.log.get(packet.data.index);
-
-  if (!entry) {
-    return await this.actions.message.packet(messageTypes.ORPHAN_VOTED, {
-      provided: packet.data.hash,
-      accepted: null
-    });
-  }
-
-  return await this.actions.message.packet(messageTypes.ORPHAN_VOTED, {
-    provided: packet.data.hash,
-    accepted: entry.hash
-  });
-};
-
-const orphanVoted = async function (packet) {
-
-
-  if (this.orhpanVotes.for !== packet.data.provided)
+  if (!this.quorum(votedAmount))
     return;
 
-  if (this.orhpanVotes.for === packet.data.accepted)
-    this.orhpanVotes.positive++;
+  console.log(`quorum[${this.index}]`)
 
 
-  if (this.orhpanVotes.for !== packet.data.accepted)
-    this.orhpanVotes.negative++;
+  let badVotes = _.filter(this.votes.shares, {granted: false});
+  let leader = _.chain(this.votes.shares)
+    .transform((result, item) => {
+      if (item.leader)
+        result[item.leader] = (result[item.leader] || 0) + 1;
+    }, {})
+    .toPairs()
+    .map(pair => ({
+      total: pair[1],
+      leader: pair[0]
+    }))
+    .sortBy('total')
+    .last()
+    .get('leader')
+    .value();
 
-  if (this.orhpanVotes.negative + this.orhpanVotes.positive < this.majority())
-    return;
+  let maxLeaderIndex = _.chain(this.votes.shares)
+    .find({publicKey: leader})
+    .get('last.index', 0)
+    .value();
 
-  if (this.orhpanVotes.negative >= this.orhpanVotes.positive) {//todo rollback
+  if (!maxLeaderIndex)
+    maxLeaderIndex = _.chain(this.votes.shares)
+      .sortBy(share => _.get(share, 'last.index', 0))
+      .last()
+      .get('last.index', 0)
+      .value();
 
-    await this.log.removeEntriesAfter(0);
-    this.log.committedIndex = 0;
-    return;
-  }
+  //in case index < packet.last.index - then we compare the merke root, in case the root is bad - we drop to previous term,
+  //otherwise we just ask about the next log
 
-  if (this.orhpanVotes.positive >= this.orhpanVotes.negative) {
-    this.orhpanVotes = {
+  //todo compare last index with leader's and wait until they will be the same
+
+
+  console.log(`bad votes[${this.index}]: ${badVotes.length}, leader: ${leader}`);
+  console.log(`good votes[${this.index}]:${_.filter(this.votes.shares, {granted: true}).length}, leader: ${leader}`);
+
+  if (this.quorum(badVotes.length)) {
+
+    this.votes = {
       for: null,
-      negative: 0,
-      positive: 0
+      granted: 0,
+      shares: [],
+      secret: null
+    };
+
+    let reply = await this.actions.message.packet(messageTypes.ACK);
+    return write(reply);
+
+/*
+    console.log(this.votes.shares);
+    process.exit(0)
+
+
+    const {index: index, committed: committed} = await this.log.getLastEntry();
+
+    console.log(`master index is[${this.index}]`, maxLeaderIndex, 'while mine is', index);
+    console.log(`master is[${this.index}]: ${leader}`);
+    console.log(`changes are committed[${this.index}]: ${committed}`);
+
+    if (maxLeaderIndex > 0 && index < maxLeaderIndex && committed) {
+
+      let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: index.index + 1});
+      console.log(`leader[${this.index}]: `, leader);
+      this.change({leader: leader, state: states.FOLLOWER});
+      return await this.actions.message.message(leader, reply);
     }
+*/
+
+
   }
+
+  /*  if (this.quorum(badVotes.length) && leader && packet.last.index !== 0) { //todo make rule for drop history
+
+    let prevTerm = await this.log.getLastEntryForPrevTerm();
+
+    console.log(`dropping to previous term after vote: ${prevTerm.index + 1} -> ${prevTerm.index}`)
+
+    await this.log.removeEntriesAfter(prevTerm.index);
+    this.log.committedIndex = prevTerm.index;
+    this.term = prevTerm.index;
+
+    //todo stage
+    let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: prevTerm.index + 1});
+    console.log(`leader[${this.index}]: `, leader);
+    this.change({leader: leader, state: states.FOLLOWER});
+    return await this.actions.message.message(leader, reply);
+  }*/
+
+
+  let validatedShares = this.votes.shares.map(share => share.share);
+
+  let comb = secrets.combine(validatedShares);
+
+  if (comb !== this.votes.secret) {
+    this.votes = {
+      for: null,
+      granted: 0,
+      shares: [],
+      secret: null
+    };
+
+    let reply = await this.actions.message.packet(messageTypes.ACK);
+    return write(reply);
+  }
+
+  this.change({leader: this.publicKey, state: states.LEADER});
+  const reply = await this.actions.message.packet(messageTypes.APPEND);
+  this.actions.message.message(states.FOLLOWER, reply);
 
 };
 
@@ -179,9 +243,7 @@ module.exports = (instance) => {
 
   _.set(instance, 'actions.vote', {
     vote: vote.bind(instance),
-    voted: voted.bind(instance),
-    orphanVote: orphanVote.bind(instance),
-    orphanVoted: orphanVoted.bind(instance)
+    voted: voted.bind(instance)
   });
 
 };

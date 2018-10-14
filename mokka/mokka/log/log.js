@@ -9,7 +9,6 @@ class Log {
 
   constructor (node, {adapter = require('memdown')}, schedulerTimeout = 10000) {
     this.node = node;
-    this.committedIndex = 0;
     this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
     /*    this.scheduler = setInterval(async () => {
 
@@ -50,8 +49,19 @@ class Log {
           return rej({code: 1, message: `can't rewrite chain (received ${index} while current is ${lastIndex})!`});
         }
 
+        if (_.isNumber(index) && index !== 0 && index !== lastIndex + 1) {
+          semaphore.leave();
+          console.log('!!')
+          return rej({code: 3, message: `can't apply logs not in direct order (received ${index} while current is ${lastIndex})!`});
+        }
 
-        if (!index)
+
+        /*        if (_.isNumber(term) && term !== 0 && term > lastTerm + 1) {
+                  semaphore.leave();
+                  return rej({code: 3, message: `can't rewrite term (received ${term} while current is ${lastTerm})!`});
+                }*/
+
+        if (!_.isNumber(index))
           index = lastIndex + 1;
 
 
@@ -63,11 +73,10 @@ class Log {
 
         let generatedHash = merkleTools.getMerkleRoot().toString('hex');
 
-        if(checkHash && generatedHash !== checkHash){
+        if (checkHash && generatedHash !== checkHash) {
           semaphore.leave();
-          return rej({code: 2, message: 'can\'t wrong hash!'});
+          return rej({code: 2, message: `can't save wrong hash!`});
         }
-
 
 
         const entry = {
@@ -86,7 +95,7 @@ class Log {
           command
         };
 
-        if(owner)
+        if (owner)
           entry.responses = [
             {publicKey: owner},
             entry.responses[0]
@@ -254,13 +263,13 @@ class Log {
    * @return {Promise<Object>} Last entries index, term and committedIndex
    */
   async getLastInfo () {
-    const {index, term, hash} = await this.getLastEntry();
+    const {index, term, hash, createdAt} = await this.getLastEntry();
 
     return {
       index,
       term,
       hash,
-      committedIndex: this.committedIndex
+      createdAt
     };
   }
 
@@ -274,7 +283,9 @@ class Log {
       let entry = {
         index: 0,
         hash: _.fill(new Array(32), 0).join(''),
-        term: this.node.term
+        term: this.node.term,
+        committed: true,
+        createdAt: Date.now()
       };
 
       this.db.createReadStream({reverse: true, limit: 1})
@@ -283,6 +294,32 @@ class Log {
         })
         .on('error', err => {
           reject(err)
+        })
+        .on('end', () => {
+          resolve(entry);
+        })
+    });
+  }
+
+  async getLastEntryForPrevTerm (depth = 1) {
+    return await new Promise((resolve, reject) => {
+      let entry = {
+        index: 0,
+        hash: _.fill(new Array(32), 0).join(''),
+        term: this.node.term
+      };
+      let currentDepth = 0;
+
+      this.db.createReadStream({reverse: true})
+        .on('data', data => {
+          if (entry.term === data.value.term || currentDepth > depth)
+            return;
+
+            entry = data.value;
+            currentDepth++;
+        })
+        .on('error', err => {
+          reject(err);
         })
         .on('end', () => {
           resolve(entry);
@@ -300,13 +337,13 @@ class Log {
    * @return {Promise<object>} {index, term, committedIndex}
    */
   async getEntryInfoBefore (entry) {
-    const {index, term, hash} = await this.getEntryBefore(entry);
+    const {index, term, hash, createdAt} = await this.getEntryBefore(entry);
 
     return {
       index,
       term,
       hash,
-      committedIndex: this.committedIndex
+      createdAt
     };
   }
 
@@ -354,10 +391,35 @@ class Log {
     });
   }
 
+  getEntriesAfterIndex (index, limit = 1) {
+    const items = [];
+    // We know it is the first entry, so save the query time
+    if (index === 0) {
+      return Promise.resolve(items);
+    }
+
+    return new Promise((resolve, reject) => {
+
+      this.db.createReadStream({
+        limit: limit,
+        gt: index
+      })
+        .on('data', (data) => {
+          items.push(data.value);
+        })
+        .on('error', (err) => {
+          reject(err);
+        })
+        .on('end', () => {
+            resolve(items);
+        });
+    });
+  }
+
   async commandAck (index, publicKey) {
     let entry = await this.get(index);
 
-    if(!entry)
+    if (!entry)
       return {
         responses: []
       };

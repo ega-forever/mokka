@@ -6,7 +6,6 @@ const EventEmitter = require('eventemitter3'),
   states = require('./factories/stateFactory'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
-  eventTypes = require('./factories/eventFactory'),
   hashUils = require('../utils/hashes'),
   VoteActions = require('./actions/voteActions'),
   NodeActions = require('./actions/nodeActions'),
@@ -37,13 +36,9 @@ class Mokka extends EventEmitter {
       for: null,
       granted: 0,
       shares: [],
-      secret: null
-    };
-
-    this.orhpanVotes = {
-      for: null,
-      positive: 0,
-      negative: 0
+      secret: null,
+      started: Date.now(),
+      priority: 1
     };
 
     //this.write = this.write || options.write || null;
@@ -85,6 +80,7 @@ class Mokka extends EventEmitter {
       raft.votes.granted = 0;
       raft.votes.shares = [];
       raft.votes.secret = null;
+      raft.votes.started = Date.now();
     });
 
     raft.on('state change', function change (state) {
@@ -107,14 +103,19 @@ class Mokka extends EventEmitter {
         return write(reply);
       }
 
-      if (packet.term > raft.term) {
+
+      if(packet.type === states.APPEND)
+      console.log(packet.term, raft.term)
+
+      if(packet.type === states.APPEND && packet.term > raft.term){
+        console.log('changing leader')
 
         raft.change({
           leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
           state: states.FOLLOWER,
           term: packet.term
         });
-      } else if (packet.term < raft.term) {
+      } else if (packet.term < raft.term && packet.type === states.APPEND) {
         let reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
         raft.emit('error', new Error(reason));
 
@@ -122,7 +123,8 @@ class Mokka extends EventEmitter {
         return write(reply);
       }
 
-      if (states.LEADER === packet.state) {
+      if (states.LEADER === packet.state && packet.type !== messageTypes.VOTED) {
+
         if (states.FOLLOWER !== raft.state)
           raft.change({state: states.FOLLOWER});
 
@@ -141,20 +143,12 @@ class Mokka extends EventEmitter {
         this.actions.node.stateReceived(packet);
       }
 
-      if (packet.type === messageTypes.ORPHAN_VOTE) {
-        reply = await this.actions.vote.orphanVote(packet);
-      }
-
-      if (packet.type === messageTypes.ORPHAN_VOTED) {
-        reply = await this.actions.vote.orphanVoted(packet);
-      }
-
       if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)
-        reply = await this.actions.vote.vote(packet);
+        await this.actions.vote.vote(packet, write);
       }
 
       if (packet.type === messageTypes.VOTED) {
-        let reply = await this.actions.vote.voted(packet);
+        return await this.actions.vote.voted(packet, write);
       }
 
       if (packet.type === messageTypes.ERROR) {
@@ -163,7 +157,7 @@ class Mokka extends EventEmitter {
 
 
       if (packet.type === messageTypes.APPEND) {
-        await this.actions.append.append(packet);
+        return await this.actions.append.append(packet, write); //move write
       }
 
       if (packet.type === messageTypes.APPEND_ACK) {
@@ -171,7 +165,7 @@ class Mokka extends EventEmitter {
       }
 
       if (packet.type === messageTypes.APPEND_FAIL) {
-        let reply = await this.actions.append.appendFail(packet, write);
+        let reply = await this.actions.append.appendFail(packet);
       }
 
       if (raft.listeners('rpc').length) {
@@ -179,7 +173,6 @@ class Mokka extends EventEmitter {
       } else {
         let reply = await raft.actions.message.packet('error', 'Unknown message type: ' + packet.type);
       }
-
 
       if (!reply)
         reply = await raft.actions.message.packet(messageTypes.ACK);
@@ -235,6 +228,10 @@ class Mokka extends EventEmitter {
     }
 
     raft.timers.setTimeout('heartbeat', async () => {
+
+  //    return; //todo disabled heartbeat
+
+
       if (states.LEADER !== raft.state) {
         raft.emit('heartbeat timeout');
 
@@ -243,6 +240,8 @@ class Mokka extends EventEmitter {
 
 
       let packet = await raft.actions.message.packet(messageTypes.APPEND);
+
+      console.log('send append from heartbeat')
 
       raft.emit(messageTypes.HEARTBEAT, packet);
       await raft.actions.message.message(states.FOLLOWER, packet);

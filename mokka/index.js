@@ -21,7 +21,10 @@ const ports = [
 let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
 let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
-let tasks = _.chain(new Array(1000)).fill(0).map((item, index) => [100 - index]).value();
+//let tasks = _.chain(new Array(100000)).fill(0).map((item, index) => [100 - index]).value();
+let tasks = _.chain(new Array(5000)).fill(0).map((item, index) => [100 - index]).value();
+
+let chunks = [Math.round(tasks.length * 0.3), Math.round(tasks.length * 0.6), tasks.length];
 
 const init = async () => {
 
@@ -33,28 +36,30 @@ const init = async () => {
       address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
       election_min: 2000,
       election_max: 5000,
-      heartbeat: 1000,
+      heartbeat: 30000,
       Log: Log,
       privateKey: privKeys[index],
       peers: pubKeys
     });
 
+    raft.index = index + 1;
+
     raft.on('heartbeat timeout', function () {
-      debug('heart beat timeout, starting election');
+      console.log('heart beat timeout, starting election');
     });
 
-    raft.on('term change', function (to, from) {
-      debug('were now running on term %s -- was %s', to, from);
+/*    raft.on('term change', function (to, from) {
+      console.log('were now running on term %s -- was %s', to, from);
     }).on('leader change', function (to, from) {
-      debug('we have a new leader to: %s -- was %s', to, from);
+      console.log('we have a new leader to: %s -- was %s', to, from);
     }).on('state change', function (to, from) {
-      debug('we have a state to: %s -- was %s', to, from);
+      console.log('we have a state to: %s -- was %s', to, from);
     });
 
 
     raft.on('leader', function () {
       console.log(`node ${index} selected as leader`)
-    });
+    });*/
 
     /*  raft.on('candidate', function () {
         console.log('----------------------------------');
@@ -63,9 +68,9 @@ const init = async () => {
       });
     */
 
-    /*    raft.on('error', function (err) {
+        raft.on('error', function (err) {
           console.log(err);
-        });*/
+        });
 
 
     nodes.push(raft);
@@ -84,11 +89,12 @@ const init = async () => {
 
   await Promise.delay(1000);
 
+  let start = Date.now();
 
   await Promise.all([
     (async () => {
       let node = nodes[1];
-      for (let i = 0; i < 333; i++) {
+      for (let i = 0; i < chunks[0]; i++) {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(1, entry.index, entry.hash, i);
@@ -122,7 +128,7 @@ const init = async () => {
     })(),
     (async () => {
       let node = nodes[2];
-      for (let i = 332; i < 660; i++) {
+      for (let i = chunks[0] + 1; i < chunks[1]; i++) {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(2, entry.index, entry.hash, i);
@@ -148,7 +154,7 @@ const init = async () => {
     })(),
     (async () => {
       let node = nodes[3];
-      for (let i = 667; i < 1000; i++) {
+      for (let i = chunks[1] + 1; i < chunks[2]; i++) {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
           console.log(3, entry.index, entry.hash, i);
@@ -175,6 +181,24 @@ const init = async () => {
     })()
   ]);
 
+  let time = (Date.now() - start) / 1000;
+  console.log('benchmark: ', time);
+  console.log('process tx per second', tasks.length / time);
+
+  const index1 = await nodes[1].log.getLastInfo();
+  const index2 = await nodes[2].log.getLastInfo();
+  const index3 = await nodes[3].log.getLastInfo();
+
+  console.log(index1, index2, index3);
+
+  let entities1 = await nodes[1].log.getEntriesAfter();
+  let entities2 = await nodes[2].log.getEntriesAfter();
+  let entities3 = await nodes[3].log.getEntriesAfter();
+
+  console.log(entities1.length, entities2.length, entities3.length);
+
+  process.exit(0)
+
 
   setInterval(async () => {
     console.log('---checking entities------', new Date());
@@ -189,12 +213,6 @@ const init = async () => {
     let entities2 = await nodes[2].log.getEntriesAfter();
     let entities3 = await nodes[3].log.getEntriesAfter();
 
-
-/*    let metaEntities1 = await nodes[1].log.getMetaEntriesAfter();
-    let metaEntities2 = await nodes[2].log.getMetaEntriesAfter();
-    let metaEntities3 = await nodes[3].log.getMetaEntriesAfter();*/
-
-  //  console.log(nodes[1].state, nodes[2].state, nodes[3].state);
     console.log(entities1.length, entities2.length, entities3.length);
 //    console.log(metaEntities1.length, metaEntities2.length, metaEntities3.length);
 

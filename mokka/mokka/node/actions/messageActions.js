@@ -19,37 +19,6 @@ const _timing = function (latency = []) {
   return true;
 };
 
-
-const _sendMessageEnsure = async (nodes, message) => {
-
-  await Promise.map(nodes, async client => {
-
-    let start = Date.now();
-    let output = {
-      client: client.publicKey,
-      error: null,
-      data: null
-    };
-
-
-    try {
-      let item = await new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))).timeout(this.election.max);
-      output.data = item;
-      raft.emit('data', item);
-
-    } catch (err) {
-      output.error = err;
-      raft.emit('error', err);
-    }
-
-    latency.push(Date.now() - start);
-
-    return output;
-  }, {concurrency: nodes.length});
-
-
-};
-
 const message = async function (who, what, options = {}) {
 
   let latency = [],
@@ -93,12 +62,11 @@ const message = async function (who, what, options = {}) {
 
 
     try {
-      let item = await new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data)));//todo ack on each action
+      let item = await new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))).timeout(this.election.max);//todo ack on each action
       output.data = item;
       raft.emit('data', item);
 
     } catch (err) {
-      console.log(err)
       output.error = err;
       raft.emit('error', err);
     }
@@ -132,72 +100,6 @@ const message = async function (who, what, options = {}) {
 
 };
 
-
-/*const message = function (who, what, when) {
-
-  let output = {errors: {}, results: {}},
-    latency = [],
-    raft = this,
-    nodes = [];
-
-  switch (who) {
-    case states.LEADER:
-      for (let node of raft.nodes)
-        if (raft.leader === node.publicKey) {
-          nodes.push(node);
-        }
-      break;
-
-    case states.FOLLOWER:
-      for (let node of raft.nodes)
-        if (raft.leader !== node.publicKey) {
-          nodes.push(node);
-        }
-      break;
-
-    case states.CHILD:
-      Array.prototype.push.apply(nodes, raft.nodes);
-      break;
-
-    default:
-      for (let node of raft.nodes)
-        if (who === node.publicKey) {
-          nodes.push(node);
-        }
-  }
-
-  for(let client of nodes){
-
-    let start = +new Date();
-
-
-    client.write(what, function written (err, data) {
-      latency.push(+new Date() - start);
-
-      if (err) {
-        output.errors[client.publicKey] = err;
-      } else {
-        output.results[client.publicKey] = data;
-      }
-
-      if (err) raft.emit('error', err);
-      else if (data) raft.emit('data', data);
-
-      if (latency.length >= raft.nodes.length) {
-        _timing.apply(raft, latency);
-        if (when) {
-         console.log('callback')
-          when(Object.keys(output.errors).length ? output.errors : undefined, output.results);
-        }
-      }
-
-    });
-
-  }
-
-  return raft;
-};*/
-
 const packet = async function (type, data) {
   let raft = this,
     wrapped = {
@@ -210,7 +112,6 @@ const packet = async function (type, data) {
     };
 
 
-  if (raft.log)
     wrapped.last = await raft.log.getLastInfo();
 
   if (arguments.length === 2)
