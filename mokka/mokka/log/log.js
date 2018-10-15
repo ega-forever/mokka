@@ -51,7 +51,6 @@ class Log {
 
         if (_.isNumber(index) && index !== 0 && index !== lastIndex + 1) {
           semaphore.leave();
-          console.log('!!')
           return rej({code: 3, message: `can't apply logs not in direct order (received ${index} while current is ${lastIndex})!`});
         }
 

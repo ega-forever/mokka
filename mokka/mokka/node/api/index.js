@@ -13,9 +13,7 @@ const propose = async function (task, delay = true) {
     return await propose.call(this, task);
   }
 
-
   if (this.state !== states.LEADER) {
-    //await Promise.delay(this.election.max);
     if(delay)
       await Promise.delay(_.random(this.election.min, this.election.max));
 

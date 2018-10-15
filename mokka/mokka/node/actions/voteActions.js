@@ -29,6 +29,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
 
   this.votes.started = Date.now();
   this.votes.priority = packet.data.priority || 1;
+  this.votes.share = packet.data.share;
 
   if (this.votes.for && this.votes.for !== packet.publicKey) {
     console.log(`already voted for another candidate[${this.index}]`);
@@ -57,7 +58,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
   }
 
   if(packet.last.index > index){
-    console.log(`the candidate has the higher history[${this.index}]: ${packet.last.index} vs ${index}`);
+   // console.log(`the candidate has the higher history[${this.index}]: ${packet.last.index} vs ${index}`);
 
     this.votes.for = packet.publicKey;
     this.emit(messageTypes.VOTE, packet, true);
@@ -68,7 +69,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
 
   if (packet.last.hash !== hash) {
     this.emit(messageTypes.VOTE, packet, false);
-    console.log('we have different history')
+    //console.log('we have different history')
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
     return write(reply);
   }
@@ -123,6 +124,7 @@ const voted = async function (packet, write) {
   localShare.granted = packet.data.granted;
   localShare.leader = packet.leader;
   localShare.last = packet.last;
+  localShare.signed = packet.data.signed;
 
   // console.log(packet.data)
 
@@ -246,7 +248,7 @@ const voted = async function (packet, write) {
   }
 
   this.change({leader: this.publicKey, state: states.LEADER});
-  const reply = await this.actions.message.packet(messageTypes.APPEND);
+  const reply = await this.actions.message.packet(messageTypes.APPEND_LEADER, {shares: this.votes.shares.map(share=> _.pick(share, 'share', 'signed')), secret: this.votes.secret});
   this.actions.message.message(states.FOLLOWER, reply);
 
 };

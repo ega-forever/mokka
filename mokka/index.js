@@ -1,5 +1,4 @@
-const debug = require('diagnostics')('raft'),
-  Log = require('./mokka/log/log'),
+const Log = require('./mokka/log/log'),
   Promise = require('bluebird'),
   Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),

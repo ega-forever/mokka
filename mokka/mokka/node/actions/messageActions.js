@@ -1,7 +1,8 @@
 const _ = require('lodash'),
   Promise = require('bluebird'),
   sem = require('semaphore')(1),
-  states = require('../factories/stateFactory');
+  states = require('../factories/stateFactory'),
+  messageTypes = require('../factories/messageTypesFactory');
 
 
 const _timing = function (latency = []) {
@@ -128,9 +129,9 @@ const appendPacket = async function (entry) {
     term: raft.term,
     address: raft.address, //todo remove
     publicKey: raft.publicKey,
-    type: 'append',
+    type: messageTypes.APPEND,
     leader: raft.leader,
-    data: [entry],
+    data: _.isArray(entry) ? entry : [entry],
     last
   };
 };

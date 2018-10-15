@@ -100,7 +100,7 @@ const appendAck = async function (packet) {
   this.emit(states.APPEND_ACK, entry.index);
 };
 
-const appendFail = async function (packet) {
+const appendFail = async function (packet, write) {
 
     let {index} = await this.log.getLastInfo();
 
@@ -109,13 +109,19 @@ const appendFail = async function (packet) {
 
     let entity = packet.data.recursive ? await this.log.getEntriesAfter(packet.data.index - 1) : [await this.log.get(packet.data.index)];
 
-  console.log(`append fail[${this.index}]: requested - ${packet.data.index}, recursive: ${packet.data.recursive}`);
+  console.log(`append fail[${this.index}]: requested - ${packet.data.index}, current: ${packet.last.index}, recursive: ${!!packet.data.recursive}, will send ${entity.length} items`);
 
   /*  if (packet.data.index !== previousEntry.index) {
       process.exit(0)
     }*/
 
-  return await this.actions.message.appendPacket(entity);
+/*  if(entity.length === 1){
+    console.log(entity[0]);
+    process.exit(0)
+  }*/
+
+  let reply = await this.actions.message.appendPacket(entity);
+  return write(reply);
 };
 
 module.exports = (instance) => {

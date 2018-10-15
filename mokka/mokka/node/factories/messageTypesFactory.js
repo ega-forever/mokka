@@ -6,6 +6,7 @@ module.exports = {
   VOTED: 'voted',
   ERROR: 'error',
   APPEND: 'append',
+  APPEND_LEADER: 'append_leader',
   APPEND_FAIL: 'append_fail',
   APPEND_ACK: 'append_ack',
   HEARTBEAT: 'heartbeat',

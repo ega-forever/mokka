@@ -8,8 +8,10 @@ const EventEmitter = require('eventemitter3'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUils = require('../utils/hashes'),
   VoteActions = require('./actions/voteActions'),
+  EthUtil = require('ethereumjs-util'),
   NodeActions = require('./actions/nodeActions'),
   AppendActions = require('./actions/appendActions'),
+  secrets = require('secrets.js-grempe'),
   MessageActions = require('./actions/messageActions'),
   Api = require('./api');
 
@@ -80,7 +82,7 @@ class Mokka extends EventEmitter {
       raft.votes.granted = 0;
       raft.votes.shares = [];
       raft.votes.secret = null;
-     // raft.votes.started = Date.now();
+      // raft.votes.started = Date.now();
     });
 
     raft.on('state change', function change (state) {
@@ -103,26 +105,82 @@ class Mokka extends EventEmitter {
         return write(reply);
       }
 
-      if(packet.type === messageTypes.VOTE && packet.term > raft.term){
+      if (packet.type === messageTypes.VOTE && packet.term > raft.term) {
         console.log('someone voted')
         raft.change({term: packet.term});
       }
 
-      if(packet.type === messageTypes.APPEND && packet.term > raft.term){
-        console.log('changing leader', packet.term)
 
-        raft.change({
-          leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
-          state: states.FOLLOWER,
-          term: packet.term
-        });
-      } else if (packet.term < raft.term && packet.type === messageTypes.APPEND) {
-        let reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
-        raft.emit('error', new Error(reason));
+      if (packet.type === messageTypes.APPEND_LEADER && _.has(packet, 'data.secret')) {
 
-        let reply = await raft.actions.message.packet(messageTypes.ERROR, reason);
-        return write(reply);
+        let includedShare = !!_.find(packet.data.shares, {share: this.votes.share});
+
+        if (!includedShare) {
+          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided');
+          return write(reply);
+        }
+
+        //todo add pub key validation
+
+
+        let pubKeys = this.nodes.map(node => node.publicKey);
+        pubKeys.push(this.publicKey);
+
+
+        let notFoundKeys = _.chain(packet.data.shares)
+          .reject(item => {
+            if(!_.get(item, 'signed.messageHash'))
+              return true;
+
+            const restoredPublicKey = EthUtil.ecrecover(
+              Buffer.from(item.signed.messageHash.replace('0x', ''), 'hex'),
+              parseInt(item.signed.v),
+              Buffer.from(item.signed.r.replace('0x', ''), 'hex'),
+              Buffer.from(item.signed.s.replace('0x', ''), 'hex')).toString('hex');
+            return pubKeys.includes(restoredPublicKey);
+          })
+          .size()
+          .value();
+
+        if (notFoundKeys) {
+          console.log(notFoundKeys);
+          process.exit(0)
+          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided');
+          return write(reply);
+        }
+
+
+        let validatedShares = _.chain(packet.data.shares).filter(share=>_.has(share, 'signed'))
+          .map(share => share.share)
+          .value();
+
+        let comb = secrets.combine(validatedShares);
+        if(comb !== packet.data.secret){
+          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'not enough nodes voted for you');
+          return write(reply);
+        }
+
+        if (packet.term > raft.term) {
+          console.log('changing leader', packet.term)
+
+          raft.change({
+            leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
+            state: states.FOLLOWER,
+            term: packet.term
+          });
+        }
+
+        if (packet.term < raft.term) {
+          let reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
+          raft.emit('error', new Error(reason));
+
+          let reply = await raft.actions.message.packet(messageTypes.ERROR, reason);
+          return write(reply);
+        }
+
+
       }
+
 
       if (states.LEADER === packet.state && packet.type !== messageTypes.VOTED) {
 
@@ -166,7 +224,7 @@ class Mokka extends EventEmitter {
       }
 
       if (packet.type === messageTypes.APPEND_FAIL) {
-        let reply = await this.actions.append.appendFail(packet);
+        return await this.actions.append.appendFail(packet, write);
       }
 
       if (raft.listeners('rpc').length) {
@@ -230,7 +288,7 @@ class Mokka extends EventEmitter {
 
     raft.timers.setTimeout('heartbeat', async () => {
 
-  //    return; //todo disabled heartbeat
+      //    return; //todo disabled heartbeat
 
 
       if (states.LEADER !== raft.state) {
