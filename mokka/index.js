@@ -22,7 +22,7 @@ let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generat
 let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
 //let tasks = _.chain(new Array(100000)).fill(0).map((item, index) => [100 - index]).value();
-let tasks = _.chain(new Array(5000)).fill(0).map((item, index) => [100 - index]).value();
+let tasks = _.chain(new Array(10000)).fill(0).map((item, index) => [100 - index]).value();
 
 let chunks = [Math.round(tasks.length * 0.3), Math.round(tasks.length * 0.6), tasks.length];
 
@@ -36,7 +36,7 @@ const init = async () => {
       address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
       election_min: 2000,
       election_max: 5000,
-      heartbeat: 30000,
+      heartbeat: 3000,
       Log: Log,
       privateKey: privKeys[index],
       peers: pubKeys
@@ -185,17 +185,28 @@ const init = async () => {
   console.log('benchmark: ', time);
   console.log('process tx per second', tasks.length / time);
 
-  const index1 = await nodes[1].log.getLastInfo();
-  const index2 = await nodes[2].log.getLastInfo();
-  const index3 = await nodes[3].log.getLastInfo();
+  const index1 = await nodes[0].log.getLastInfo();
+  const index2 = await nodes[1].log.getLastInfo();
+  const index3 = await nodes[2].log.getLastInfo();
+  const index4 = await nodes[3].log.getLastInfo();
+  const index5 = await nodes[4].log.getLastInfo();
+  const index6 = await nodes[5].log.getLastInfo();
 
-  console.log(index1, index2, index3);
+  console.log(index1);
+  console.log(index2);
+  console.log(index3);
+  console.log(index4);
+  console.log(index5);
+  console.log(index6);
 
-  let entities1 = await nodes[1].log.getEntriesAfter();
-  let entities2 = await nodes[2].log.getEntriesAfter();
-  let entities3 = await nodes[3].log.getEntriesAfter();
+  let entities1 = await nodes[0].log.getEntriesAfter();
+  let entities2 = await nodes[1].log.getEntriesAfter();
+  let entities3 = await nodes[2].log.getEntriesAfter();
+  let entities4 = await nodes[3].log.getEntriesAfter();
+  let entities5 = await nodes[4].log.getEntriesAfter();
+  let entities6 = await nodes[5].log.getEntriesAfter();
 
-  console.log(entities1.length, entities2.length, entities3.length);
+  console.log(entities1.length, entities2.length, entities3.length, entities4.length, entities5.length, entities6.length);
 
   process.exit(0)
 

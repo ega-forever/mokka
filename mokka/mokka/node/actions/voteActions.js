@@ -21,20 +21,17 @@ const vote = async function (packet, write) { //todo timeout leader on election
 
   if (timeout || !packet.data.share || (Date.now() - createdAt < this.election.max && index !== 0)) {
     // if (!packet.data.share || (Date.now() - createdAt < this.election.max && index !== 0)) {
+    console.log(`already voted recently or has recent record[${this.index}]`)
     this.emit(messageTypes.VOTE, packet, false);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
     return write(reply);
   }
 
-/*  if(this.state === states.LEADER){
-    this.change({state: states.FOLLOWER, leader: ''});
-    this.heartbeat(this.timeout());
-  }*/
-
   this.votes.started = Date.now();
-  this.votes.started = packet.data.priority || 1;
+  this.votes.priority = packet.data.priority || 1;
 
   if (this.votes.for && this.votes.for !== packet.publicKey) {
+    console.log(`already voted for another candidate[${this.index}]`);
     this.emit(messageTypes.VOTE, packet, false);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
     return write(reply);
@@ -44,6 +41,8 @@ const vote = async function (packet, write) { //todo timeout leader on election
 
   if (index > packet.last.index) { //in case the candidate is outdated
     this.emit(messageTypes.VOTE, packet, false);
+
+    console.log(`candidate is outdated[${this.index}]`);
 
     //todo build proof
 
@@ -57,8 +56,19 @@ const vote = async function (packet, write) { //todo timeout leader on election
     return write(reply);
   }
 
-  if (index !== packet.last.index || packet.last.hash !== hash) {
+  if(packet.last.index > index){
+    console.log(`the candidate has the higher history[${this.index}]: ${packet.last.index} vs ${index}`);
+
+    this.votes.for = packet.publicKey;
+    this.emit(messageTypes.VOTE, packet, true);
+    this.change({leader: packet.publicKey, term: packet.term});
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
+    return write(reply);
+  }
+
+  if (packet.last.hash !== hash) {
     this.emit(messageTypes.VOTE, packet, false);
+    console.log('we have different history')
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: false, signed: signedShare});
     return write(reply);
   }
@@ -68,7 +78,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
   this.emit(messageTypes.VOTE, packet, true);
   this.change({leader: packet.publicKey, term: packet.term});
   let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
-  //this.heartbeat(this.timeout());
+  this.heartbeat(this.timeout());
   return write(reply);
 };
 
@@ -165,6 +175,8 @@ const voted = async function (packet, write) {
   console.log(`good votes[${this.index}]:${_.filter(this.votes.shares, {granted: true}).length}, leader: ${leader}`);
 
   if (this.quorum(badVotes.length)) {
+
+    console.log('max leader index: ', maxLeaderIndex);
 
     this.votes = {
       for: null,

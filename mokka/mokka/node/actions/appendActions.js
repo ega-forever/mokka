@@ -4,8 +4,13 @@ const _ = require('lodash'),
 
 const append = async function (packet, write) { //todo move write to index.js
 
-  if (packet.leader !== this.leader)
-    return console.log(`tried to append the package from not a leader[${this.index}]`);
+  console.log(`append[${this.index}]`)
+
+  if (packet.leader !== this.leader){
+    console.log('not a leader anymore')
+    let reply = await this.actions.message.packet(messageTypes.ACK);
+    return write(reply);
+  }
 
   const {index, hash} = await this.log.getLastInfo();
 
@@ -18,7 +23,16 @@ const append = async function (packet, write) { //todo move write to index.js
     return this.actions.message.message(states.LEADER, reply);
   }
 
+  if(!packet.data && packet.last.index > index){
+    console.log('current log is', index, 'requesting ', index + 1, 'form leader: ', this.leader);
+    let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: index + 1, recursive: true});
+    return write(reply);
+  }
+
+
   if (packet.data) {
+
+    packet.data = _.sortBy(packet.data, 'index');
 
     for (let entry of packet.data) {
 
@@ -56,7 +70,7 @@ const append = async function (packet, write) { //todo move write to index.js
         }
 
         if (err.code === 3) {
-          console.log('current log is', lastIndex, 'requesting ', lastIndex + 1, 'form leader: ', this.leader)
+          console.log(`current log is[${this.index}]`, lastIndex, 'requesting ', lastIndex + 1, 'form leader: ', this.leader)
           reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex + 1, recursive: true});
           return this.actions.message.message(packet.publicKey, reply);
         }

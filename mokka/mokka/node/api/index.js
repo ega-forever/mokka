@@ -5,6 +5,15 @@ const states = require('../factories/stateFactory'),
 
 const propose = async function (task, delay = true) {
 
+  let {createdAt, index, owner} = await this.log.getLastEntry();
+
+  if(Date.now() - createdAt < this.election.max && index !== 0 && owner !== this.publicKey){
+    console.log(`await for state from another node before promote:[${this.index}]`)
+    await Promise.delay(Date.now() - createdAt);
+    return await propose.call(this, task);
+  }
+
+
   if (this.state !== states.LEADER) {
     //await Promise.delay(this.election.max);
     if(delay)
@@ -27,6 +36,8 @@ const propose = async function (task, delay = true) {
     serial: true
   };
 
+  //this.timeout;
+  this.heartbeat(this.beat);
   await this.actions.message.message(states.FOLLOWER, appendPacket, options);
   // this.actions.message.message(states.FOLLOWER, appendPacket);
   return entry;

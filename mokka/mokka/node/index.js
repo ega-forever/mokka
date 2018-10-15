@@ -80,7 +80,7 @@ class Mokka extends EventEmitter {
       raft.votes.granted = 0;
       raft.votes.shares = [];
       raft.votes.secret = null;
-      raft.votes.started = Date.now();
+     // raft.votes.started = Date.now();
     });
 
     raft.on('state change', function change (state) {
@@ -103,19 +103,20 @@ class Mokka extends EventEmitter {
         return write(reply);
       }
 
+      if(packet.type === messageTypes.VOTE && packet.term > raft.term){
+        console.log('someone voted')
+        raft.change({term: packet.term});
+      }
 
-      if(packet.type === states.APPEND)
-      console.log(packet.term, raft.term)
-
-      if(packet.type === states.APPEND && packet.term > raft.term){
-        console.log('changing leader')
+      if(packet.type === messageTypes.APPEND && packet.term > raft.term){
+        console.log('changing leader', packet.term)
 
         raft.change({
           leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
           state: states.FOLLOWER,
           term: packet.term
         });
-      } else if (packet.term < raft.term && packet.type === states.APPEND) {
+      } else if (packet.term < raft.term && packet.type === messageTypes.APPEND) {
         let reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
         raft.emit('error', new Error(reason));
 
