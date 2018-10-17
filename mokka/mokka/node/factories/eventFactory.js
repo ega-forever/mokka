@@ -1,5 +1,6 @@
 module.exports = {
   TERM_CHANGED: 'term_changed',
   STATE_CHANGED: 'state_changed',
-  LEADER: 'leader'
+  LEADER: 'leader',
+  VOTE_ERROR: 'vote_error'
 };

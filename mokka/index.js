@@ -21,7 +21,7 @@ let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generat
 let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
 //let tasks = _.chain(new Array(100000)).fill(0).map((item, index) => [100 - index]).value();
-let tasks = _.chain(new Array(10000)).fill(0).map((item, index) => [100 - index]).value();
+let tasks = _.chain(new Array(30000)).fill(0).map((item, index) => [100 - index]).value();
 
 let chunks = [Math.round(tasks.length * 0.3), Math.round(tasks.length * 0.6), tasks.length];
 
@@ -44,7 +44,7 @@ const init = async () => {
     raft.index = index + 1;
 
     raft.on('heartbeat timeout', function () {
-      console.log('heart beat timeout, starting election');
+      console.log(`heart beat timeout, starting election[${this.index}]`);
     });
 
 /*    raft.on('term change', function (to, from) {

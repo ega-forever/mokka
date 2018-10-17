@@ -1,42 +1,32 @@
 {
-  "name": "example",
+  "name": "mokka",
   "version": "1.0.0",
-  "description": "An example of a custom raft service",
+  "description": "mokka consensus",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/unshiftio/liferaft"
-  },
   "keywords": [
-    "example",
-    "raft"
+    "mokka"
   ],
-  "author": "Arnout Kazemier",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/unshiftio/liferaft/issues"
-  },
-  "homepage": "https://github.com/unshiftio/liferaft",
+  "author": "Egor Zuev",
+  "license": "AGPL",
   "dependencies": {
-    "argh": "0.1.x",
     "axon": "2.0.x",
-    "diagnostics": "1.1.x",
-    "emits": "^3.0.0",
+    "bluebird": "^3.5.2",
     "encoding-down": "^3.0.1",
-    "eventemitter3": "^3.1.0",
+    "ethereumjs-wallet": "^0.6.2",
     "leveldown": "^4.0.1",
     "levelup": "^3.1.1",
+    "lodash": "^4.17.11",
     "memdown": "^3.0.0",
     "merkle-tools": "^1.4.0",
-    "millisecond": "^0.1.2",
     "modification": "^1.0.0",
     "multiaddr": "^5.0.0",
-    "nanomsg": "4.0.x",
-    "one-time": "0.0.4",
+    "secrets.js-grempe": "^1.1.0",
+    "semaphore": "^1.1.0",
     "tick-tock": "^1.0.0",
-    "uniqid": "^5.0.3"
+    "uniqid": "^5.0.3",
+    "web3": "^1.0.0-beta.36"
   }
 }

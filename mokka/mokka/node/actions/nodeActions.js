@@ -2,6 +2,7 @@ const _ = require('lodash'),
   Multiaddr = require('multiaddr'),
   hashUtils = require('../../utils/hashes'),
   uniqid = require('uniqid'),
+  Promise = require('bluebird'),
   secrets = require('secrets.js-grempe'),
   messageTypes = require('../factories/messageTypesFactory'),
   states = require('../factories/stateFactory');
@@ -78,6 +79,16 @@ const end = function () {
 
 const promote = async function (priority = 1) {
 
+/*  const {index, createdAt} = await this.log.getLastEntry();
+
+  if (Date.now() - createdAt < this.election.max && index !== 0 && this.state !== states.LEADER) {
+    await Promise.delay(this.election.max - (Date.now() - createdAt));
+    console.log(`going to await[${this.index}], leader: ${this.leader}`)
+    this.timers.adjust('heartbeat', this.election.max - (Date.now() - createdAt))
+    return await promote.call(this, priority);
+  }*/
+
+
   this.change({
     state: states.CANDIDATE,  // We're now a candidate,
     term: this.term + 1,    // but only for this term. //todo check
@@ -116,28 +127,10 @@ const promote = async function (priority = 1) {
     }
   }
 
-
   this.timers
     .clear('heartbeat, election')
     .setTimeout('election', this.actions.node.promote, this.timeout());
 };
-
-const state = async function () {
-
-  const entry = await this.log.getLastEntry();
-
-  return await this.actions.message.packet(messageTypes.STATE_RECEIVED, {
-    index: entry.index,
-    committed: entry.committed,
-    createdAt: entry.createdAt
-  });
-
-};
-
-const stateReceived = function (packet) {
-  this.emit(states.STATE_RECEIVED, _.merge({publicKey: packet.publicKey}, packet.data));
-};
-
 
 
 module.exports = (instance) => {
@@ -146,9 +139,7 @@ module.exports = (instance) => {
     promote: promote.bind(instance),
     join: join.bind(instance),
     leave: leave.bind(instance),
-    end: end.bind(instance),
-    state: state.bind(instance),
-    stateReceived: stateReceived.bind(instance)
+    end: end.bind(instance)
   });
 
 };

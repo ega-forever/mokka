@@ -1,4 +1,4 @@
-const EventEmitter = require('eventemitter3'),
+const EventEmitter = require('events'),
   Tick = require('tick-tock'),
   Promise = require('bluebird'),
   _ = require('lodash'),
@@ -82,10 +82,10 @@ class Mokka extends EventEmitter {
       raft.votes.granted = 0;
       raft.votes.shares = [];
       raft.votes.secret = null;
-      // raft.votes.started = Date.now();
     });
 
     raft.on('state change', function change (state) {
+      console.log(`state changed[${this.index}]`)
       raft.timers.clear('heartbeat, election');
       raft.heartbeat(states.LEADER === raft.state ? raft.beat : raft.timeout());
       raft.emit(Object.keys(states)[state].toLowerCase());
@@ -106,7 +106,6 @@ class Mokka extends EventEmitter {
       }
 
       if (packet.type === messageTypes.VOTE && packet.term > raft.term) {
-        console.log('someone voted')
         raft.change({term: packet.term});
       }
 
@@ -143,8 +142,6 @@ class Mokka extends EventEmitter {
           .value();
 
         if (notFoundKeys) {
-          console.log(notFoundKeys);
-          process.exit(0)
           let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided');
           return write(reply);
         }
@@ -161,8 +158,6 @@ class Mokka extends EventEmitter {
         }
 
         if (packet.term > raft.term) {
-          console.log('changing leader', packet.term)
-
           raft.change({
             leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
             state: states.FOLLOWER,
@@ -181,7 +176,6 @@ class Mokka extends EventEmitter {
 
       }
 
-
       if (states.LEADER === packet.state && packet.type !== messageTypes.VOTED) {
 
         if (states.FOLLOWER !== raft.state)
@@ -191,15 +185,6 @@ class Mokka extends EventEmitter {
           raft.change({leader: packet.publicKey});
 
         raft.heartbeat(raft.timeout());
-      }
-
-
-      if (packet.type === messageTypes.STATE) {
-        reply = await this.actions.node.state();
-      }
-
-      if (packet.type === messageTypes.STATE_RECEIVED) {
-        this.actions.node.stateReceived(packet);
       }
 
       if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)

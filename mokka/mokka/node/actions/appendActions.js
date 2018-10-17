@@ -4,10 +4,8 @@ const _ = require('lodash'),
 
 const append = async function (packet, write) { //todo move write to index.js
 
-  console.log(`append[${this.index}]`)
-
   if (packet.leader !== this.leader){
-    console.log('not a leader anymore')
+    //console.log('not a leader anymore')
     let reply = await this.actions.message.packet(messageTypes.ACK);
     return write(reply);
   }
