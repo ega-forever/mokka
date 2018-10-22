@@ -1,9 +1,14 @@
 const _ = require('lodash'),
   Promise = require('bluebird'),
-  sem = require('semaphore')(1),
+  semaphore = require('semaphore'),
   states = require('../factories/stateFactory'),
   messageTypes = require('../factories/messageTypesFactory');
 
+const sems = _.chain(messageTypes)
+  .values()
+  .map(key=>[key, semaphore(1)])
+  .fromPairs()
+  .value();
 
 const _timing = function (latency = []) {
 
@@ -68,6 +73,10 @@ const message = async function (who, what, options = {}) {
       raft.emit('data', item);
 
     } catch (err) {
+
+      if(err instanceof Promise.TimeoutError)
+        return;
+
       output.error = err;
       raft.emit('error', err);
     }
@@ -76,6 +85,9 @@ const message = async function (who, what, options = {}) {
 
     return output;
   }));
+
+  let sem = sems[what.type];
+
 
   let op2 = new Promise(res => {
 
@@ -97,7 +109,6 @@ const message = async function (who, what, options = {}) {
 
   if (options.ensure)
     await op2;
-
 
 };
 

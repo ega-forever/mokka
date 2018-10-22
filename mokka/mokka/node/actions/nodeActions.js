@@ -1,8 +1,7 @@
 const _ = require('lodash'),
   Multiaddr = require('multiaddr'),
   hashUtils = require('../../utils/hashes'),
-  uniqid = require('uniqid'),
-  Promise = require('bluebird'),
+  speakeasy = require('speakeasy'),
   secrets = require('secrets.js-grempe'),
   messageTypes = require('../factories/messageTypesFactory'),
   states = require('../factories/stateFactory');
@@ -97,7 +96,14 @@ const promote = async function (priority = 1) {
 
   this.votes.for = this.publicKey;
   this.votes.granted = 1;
-  this.votes.secret = secrets.str2hex(uniqid());
+
+  let token = speakeasy.totp({
+    secret: this.networkSecret,
+    step: this.election.max / 1000
+  });
+
+
+  this.votes.secret = secrets.str2hex(token);
   this.votes.shares = [];
 
 
@@ -128,8 +134,9 @@ const promote = async function (priority = 1) {
   }
 
   this.timers
-    .clear('heartbeat, election')
-    .setTimeout('election', this.actions.node.promote, this.timeout());
+    .clear('heartbeat')
+//    .clear('heartbeat, election')
+   // .setTimeout('election', this.actions.node.promote, this.timeout());
 };
 
 

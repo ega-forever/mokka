@@ -7,6 +7,7 @@ const EventEmitter = require('events'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUils = require('../utils/hashes'),
+  speakeasy = require('speakeasy'),
   VoteActions = require('./actions/voteActions'),
   EthUtil = require('ethereumjs-util'),
   NodeActions = require('./actions/nodeActions'),
@@ -48,6 +49,7 @@ class Mokka extends EventEmitter {
     this.timers = new Tick(this);
     this.Log = options.Log;
     this.change = change;
+    this.networkSecret = options.networkSecret || '1234567';
     this.latency = 0;
     this.log = null;
     this.nodes = [];
@@ -78,14 +80,14 @@ class Mokka extends EventEmitter {
     let raft = this;
 
     raft.on('term change', function change () {
-      raft.votes.for = null;
-      raft.votes.granted = 0;
-      raft.votes.shares = [];
-      raft.votes.secret = null;
+        raft.votes.for = null;
+        raft.votes.granted = 0;
+        raft.votes.shares = [];
+        raft.votes.secret = null;
     });
 
     raft.on('state change', function change (state) {
-      console.log(`state changed[${this.index}]`)
+      console.log(`state changed[${this.index}]: ${_.invert(states)[state]}`)
       raft.timers.clear('heartbeat, election');
       raft.heartbeat(states.LEADER === raft.state ? raft.beat : raft.timeout());
       raft.emit(Object.keys(states)[state].toLowerCase());
@@ -105,8 +107,21 @@ class Mokka extends EventEmitter {
         return write(reply);
       }
 
-      if (packet.type === messageTypes.VOTE && packet.term > raft.term) {
-        raft.change({term: packet.term});
+      if (packet.type === messageTypes.VOTE && packet.term > raft.term) { //todo make round
+        //raft.change({term: packet.term});
+
+        if(raft.timers.active('term_change'))
+          raft.timers.clear('term_change');
+
+        raft.timers.setTimeout('term_change', async () => {
+
+          raft.votes.for = null;
+          raft.votes.granted = 0;
+          raft.votes.shares = [];
+          raft.votes.secret = null;
+
+        }, this.election.max); //todo adjust by timeout of election
+
       }
 
 
@@ -114,8 +129,16 @@ class Mokka extends EventEmitter {
 
         let includedShare = !!_.find(packet.data.shares, {share: this.votes.share});
 
-        if (!includedShare) {
-          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided');
+        let token = secrets.hex2str(packet.data.secret);
+
+        let verified = speakeasy.totp.verify({
+          secret: this.networkSecret,
+          token: token,
+          step: this.election.max / 1000
+        });
+
+        if (!includedShare && !verified) {
+          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided (1)');
           return write(reply);
         }
 
@@ -141,8 +164,11 @@ class Mokka extends EventEmitter {
           .size()
           .value();
 
-        if (notFoundKeys) {
-          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided');
+
+
+
+        if (!this.quorum(pubKeys.length - notFoundKeys)) {
+          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided (2)');
           return write(reply);
         }
 
@@ -279,16 +305,17 @@ class Mokka extends EventEmitter {
       if (states.LEADER !== raft.state) {
         raft.emit('heartbeat timeout');
 
+        console.log(`promoting by timeout[${this.index}]`);
         return raft.actions.node.promote();
       }
 
 
-      let packet = await raft.actions.message.packet(messageTypes.APPEND);
+      let packet = await raft.actions.message.packet(messageTypes.ACK);
 
-      console.log('send append from heartbeat')
+      console.log(`send append from heartbeat[${this.index}]`)
 
-      raft.emit(messageTypes.HEARTBEAT, packet);
-      await raft.actions.message.message(states.FOLLOWER, packet);
+      raft.emit(messageTypes.ACK, packet);
+      await raft.actions.message.message(states.FOLLOWER, packet, {ensure: false});
       raft.heartbeat(raft.beat);
     }, duration);
 

@@ -25,12 +25,14 @@ const vote = async function (packet, write) { //todo timeout leader on election
   this.heartbeat(this.timeout());
   const signedShare = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
 
-  let timeout = Date.now() - this.votes.started > this.election.max;
+//  let timeout = Date.now() - this.votes.started > this.election.max;
 
+/*
   if (packet.data.priority === 2)
     timeout = this.votes.priority === 1 ? false : Date.now() - this.votes.started > this.election.min;
+*/
 
-  if (timeout) {
+ /* if (timeout) {
     this.emit(messageTypes.VOTE, packet, false);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
@@ -39,7 +41,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
       code: 0
     });
     return write(reply);
-  }
+  }*/
 
 
   if (Date.now() - createdAt < this.election.max && index !== 0) {
@@ -52,6 +54,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
     });
     return write(reply);
   }
+
 
   this.votes.started = Date.now();
   this.votes.priority = packet.data.priority || 1;
@@ -122,7 +125,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
 
 const voted = async function (packet, write) {
 
-  this.heartbeat(this.timeout());
+  //this.heartbeat(this.timeout());
 
   if (states.CANDIDATE !== this.state) {
     let reply = await this.actions.message.packet(states.ERROR, 'No longer a candidate, ignoring vote');
@@ -163,10 +166,9 @@ const voted = async function (packet, write) {
   localShare.signed = packet.data.signed;
   localShare.code = packet.data.code;
 
-  if(!packet.data.granted){
-  console.log(`vote fail due to reason[${this.index}]: ${packet.data.reason}`)
+  if (!packet.data.granted) {
+    console.log(`vote fail due to reason[${this.index}]: ${packet.data.reason}`)
   }
-
 
 
   let votedAmount = _.chain(this.votes.shares).filter({voted: true}).size().value();
@@ -215,11 +217,11 @@ const voted = async function (packet, write) {
 
     const dominatedError = _.chain(this.votes.shares) //todo use error for making decision
       .filter({granted: false})
-      .transform((result, item)=>{
+      .transform((result, item) => {
         result[item.code] = (result[item.code] || 0) + 1;
       }, {})
       .toPairs()
-      .sortBy(pair=>pair[1])
+      .sortBy(pair => pair[1])
       .last()
       .get(0)
       .value();
@@ -231,6 +233,7 @@ const voted = async function (packet, write) {
       secret: null
     };
 
+    this.change({term: this.term - 1, state: states.FOLLOWER});
     let reply = await this.actions.message.packet(messageTypes.ACK);
     return write(reply);
 

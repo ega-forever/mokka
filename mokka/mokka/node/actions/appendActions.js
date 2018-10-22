@@ -38,7 +38,6 @@ const append = async function (packet, write) { //todo move write to index.js
         console.log(`master rewrite history`);
 
         await this.log.removeEntriesAfter(entry.index - 1);
-        this.term = entry.term;
       }
 
 

@@ -21,7 +21,7 @@ let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generat
 let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
 //let tasks = _.chain(new Array(100000)).fill(0).map((item, index) => [100 - index]).value();
-let tasks = _.chain(new Array(30000)).fill(0).map((item, index) => [100 - index]).value();
+let tasks = _.chain(new Array(10000)).fill(0).map((item, index) => [100 - index]).value();
 
 let chunks = [Math.round(tasks.length * 0.3), Math.round(tasks.length * 0.6), tasks.length];
 
@@ -33,9 +33,9 @@ const init = async () => {
 
     const raft = new TCPMokka({
       address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
-      election_min: 2000,
-      election_max: 5000,
-      heartbeat: 3000,
+      election_min: 200,
+      election_max: 500,
+      heartbeat: 100,
       Log: Log,
       privateKey: privKeys[index],
       peers: pubKeys
@@ -92,7 +92,7 @@ const init = async () => {
 
   await Promise.all([
     (async () => {
-      let node = nodes[1];
+      let node = nodes[0];
       for (let i = 0; i < chunks[0]; i++) {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
@@ -126,7 +126,7 @@ const init = async () => {
 
     })(),
     (async () => {
-      let node = nodes[2];
+      let node = nodes[1];
       for (let i = chunks[0] + 1; i < chunks[1]; i++) {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
@@ -152,7 +152,7 @@ const init = async () => {
       console.log('accomplished! 2')
     })(),
     (async () => {
-      let node = nodes[3];
+      let node = nodes[2];
       for (let i = chunks[1] + 1; i < chunks[2]; i++) {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
