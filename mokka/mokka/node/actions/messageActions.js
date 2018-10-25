@@ -151,8 +151,9 @@ const appendPacket = async function (entry) {
 
   entry = _.isArray(entry) ? entry : [entry];
 
-  let includesStartLog = _.find(entry, {index: proofEntry.index});
+//  let includesStartLog = _.find(entry, {index: proofEntry.index});
 
+/*
   let proof = includesStartLog ?
     {
       shares: proofEntry.proof.shares,
@@ -161,6 +162,7 @@ const appendPacket = async function (entry) {
       index: proofEntry.index,
       hash: proofEntry.hash
     };
+*/
 
   return {
     state: raft.state,

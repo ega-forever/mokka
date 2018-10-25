@@ -230,7 +230,7 @@ class Mokka extends EventEmitter {
         }*/
 
 
-        if(packet.proof.index){
+        if(packet.proof.index && _.has(packet, 'proof.proof.shares')){
 
        //   console.log(packet.data);
        //   console.log(packet.proof)

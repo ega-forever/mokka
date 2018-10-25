@@ -5,6 +5,11 @@ const _ = require('lodash'),
 
 module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
 
+  if(!secret) {
+   console.log('no secret')
+    return false;
+  }
+
   let token = secrets.hex2str(secret);
 
   let verified = speakeasy.totp.verify({
@@ -14,8 +19,10 @@ module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
     time: time / 1000
   });
 
-  if(!verified)
+  if(!verified) {
+   console.log('wrong token');
     return false;
+  }
 
   let notFoundKeys = _.chain(shares)
     .reject(item => {
@@ -35,8 +42,10 @@ module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
 
   let majority = Math.ceil(pubKeys.length / 2) + 1;
 
-  if (pubKeys.length - notFoundKeys < majority)
+  if (pubKeys.length - notFoundKeys < majority) {
+   console.log('voted witnout enough votes')
     return false;
+  }
 
 
   let validatedShares = _.chain(shares).filter(share => _.has(share, 'signed'))
