@@ -6,7 +6,7 @@ const _ = require('lodash'),
 
 const sems = _.chain(messageTypes)
   .values()
-  .map(key=>[key, semaphore(1)])
+  .map(key => [key, semaphore(1)])
   .fromPairs()
   .value();
 
@@ -15,12 +15,12 @@ const _timing = function (latency = []) {
   if (states.STOPPED === this.state)
     return false;
 
-
   this.latency = Math.floor(_.sum(latency) / latency.length);
 
   if (this.latency > this.election.min * this.threshold) {
     this.emit('threshold');
   }
+
 
   return true;
 };
@@ -30,6 +30,9 @@ const message = async function (who, what, options = {}) {
   let latency = [],
     raft = this,
     nodes = [];
+
+  if (!_.has(options, 'minConfirmations'))
+    options.minConfirmations = _.isArray(who) ? who.length : 1;
 
   switch (who) {
     case states.LEADER:
@@ -57,7 +60,7 @@ const message = async function (who, what, options = {}) {
         }
   }
 
-  let op = Promise.all(nodes.map(async client => {
+  let op = Promise.some(nodes.map(async client => {
 
     let start = Date.now();
     let output = {
@@ -68,14 +71,17 @@ const message = async function (who, what, options = {}) {
 
 
     try {
-      let item = await new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))).timeout(this.election.max);//todo ack on each action
+      let item = new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))); //todo ack on each action
+
+      item = options.timeout ?
+        await item.timeout(options.timeout) : await item;
       output.data = item;
       raft.emit('data', item);
 
     } catch (err) {
 
-      if(err instanceof Promise.TimeoutError)
-        return;
+      if (err instanceof Promise.TimeoutError)
+        return console.log(`[${Date.now()}]timeout error[${this.index}]`);
 
       output.error = err;
       raft.emit('error', err);
@@ -84,10 +90,9 @@ const message = async function (who, what, options = {}) {
     latency.push(Date.now() - start);
 
     return output;
-  }));
+  }), options.minConfirmations);
 
   let sem = sems[what.type];
-
 
   let op2 = new Promise(res => {
 
@@ -97,7 +102,7 @@ const message = async function (who, what, options = {}) {
         sem.leave();
 
       await op;
-      _timing.apply(raft, latency);
+      _timing.call(raft, latency);
 
       if (options.serial)
         sem.leave();
@@ -124,7 +129,7 @@ const packet = async function (type, data) {
     };
 
 
-    wrapped.last = await raft.log.getLastInfo();
+  wrapped.last = await raft.log.getLastInfo();
 
   if (arguments.length === 2)
     wrapped.data = data;
@@ -135,6 +140,28 @@ const packet = async function (type, data) {
 const appendPacket = async function (entry) {
   const raft = this;
   const last = await raft.log.getEntryInfoBefore(entry);
+  const proofEntry = await this.log.getFirstEntryByTerm(this.term);
+
+  /*  if(this.term > 0){
+      console.log(proofEntry);
+      let proof = await this.log.termDb.get(this.term);
+      console.log(proof)
+      process.exit(0)
+    }*/
+
+  entry = _.isArray(entry) ? entry : [entry];
+
+  let includesStartLog = _.find(entry, {index: proofEntry.index});
+
+  let proof = includesStartLog ?
+    {
+      shares: proofEntry.proof.shares,
+      secret: proofEntry.proof.secret
+    } : {
+      index: proofEntry.index,
+      hash: proofEntry.hash
+    };
+
   return {
     state: raft.state,
     term: raft.term,
@@ -142,7 +169,8 @@ const appendPacket = async function (entry) {
     publicKey: raft.publicKey,
     type: messageTypes.APPEND,
     leader: raft.leader,
-    data: _.isArray(entry) ? entry : [entry],
+    proof: proofEntry,
+    data: entry,
     last
   };
 };

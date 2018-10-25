@@ -10,6 +10,7 @@ class Log {
   constructor (node, {adapter = require('memdown')}, schedulerTimeout = 10000) {
     this.node = node;
     this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
+    this.termDb = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
     /*    this.scheduler = setInterval(async () => {
 
           let {index} = await this.getLastInfo();//todo check quorum (replicated factor)
@@ -51,14 +52,11 @@ class Log {
 
         if (_.isNumber(index) && index !== 0 && index !== lastIndex + 1) {
           semaphore.leave();
-          return rej({code: 3, message: `can't apply logs not in direct order (received ${index} while current is ${lastIndex})!`});
+          return rej({
+            code: 3,
+            message: `can't apply logs not in direct order (received ${index} while current is ${lastIndex})!`
+          });
         }
-
-
-        /*        if (_.isNumber(term) && term !== 0 && term > lastTerm + 1) {
-                  semaphore.leave();
-                  return rej({code: 3, message: `can't rewrite term (received ${term} while current is ${lastTerm})!`});
-                }*/
 
         if (!_.isNumber(index))
           index = lastIndex + 1;
@@ -117,7 +115,66 @@ class Log {
    * @public
    */
   async put (entry) {
+
+    let firstEntryByTerm = await this.getFirstEntryByTerm(entry.term);
+
+    if (!firstEntryByTerm.index) {
+
+      firstEntryByTerm.term = entry.term;
+      firstEntryByTerm.hash = entry.hash;
+      firstEntryByTerm.index = entry.index;
+
+      await this.termDb.put(entry.term, firstEntryByTerm);
+    }
+
     return await this.db.put(entry.index, entry);
+  }
+
+
+  async addProof (term, proof) {
+
+    let firstEntryByTerm = await this.getFirstEntryByTerm(term);
+
+    if (firstEntryByTerm.proof)
+      return;
+
+
+    return await this.termDb.put(term, {proof: proof});
+  }
+
+  async getFirstEntryByTerm (term) {
+    try {
+      return await this.termDb.get(term);
+    } catch (err) {
+      return {
+        index: 0,
+        hash: _.fill(new Array(32), 0).join(''),
+        term: this.node.term
+      };
+    }
+  }
+
+  async getLastEntryByTerm (term) {
+    try {
+      let headEntry = await this.getFirstEntryByTerm(term);
+
+      if (headEntry.index === 0)
+        return headEntry;
+
+      let nextEntry = await this.getFirstEntryByTerm(term + 1);
+
+      if (nextEntry.index === 0)
+        return await this.getLastEntry();
+
+      return await this.get(nextEntry.index - 1);
+
+    } catch (err) {
+      return {
+        index: 0,
+        hash: _.fill(new Array(32), 0).join(''),
+        term: this.node.term
+      };
+    }
   }
 
   async isReserved (index) {
@@ -148,10 +205,16 @@ class Log {
    * @return {Promise<Entry[]>} returns all entries
    * @public
    */
-  async getEntriesAfter (index) {
+  async getEntriesAfter (index, limit) {
     const entries = [];
+
+    let query = {gt: index};
+
+    if (limit)
+      query.limit = limit;
+
     return await new Promise((resolve, reject) => {
-      this.db.createReadStream({gt: index})
+      this.db.createReadStream(query)
         .on('data', data => {
           entries.push(data.value);
         })
@@ -216,9 +279,11 @@ class Log {
    */
   async removeEntriesAfter (index) {
     const entries = await this.getEntriesAfter(index);
-    return Promise.all(entries.map(entry => {
-      return this.db.del(entry.index);
-    }));
+
+    for (let entry of entries) {
+      await this.termDb.del(entry.term);
+      await this.db.del(entry.index);
+    }
   }
 
   /**
@@ -293,32 +358,6 @@ class Log {
         })
         .on('error', err => {
           reject(err)
-        })
-        .on('end', () => {
-          resolve(entry);
-        })
-    });
-  }
-
-  async getLastEntryForPrevTerm (depth = 1) {
-    return await new Promise((resolve, reject) => {
-      let entry = {
-        index: 0,
-        hash: _.fill(new Array(32), 0).join(''),
-        term: this.node.term
-      };
-      let currentDepth = 0;
-
-      this.db.createReadStream({reverse: true})
-        .on('data', data => {
-          if (entry.term === data.value.term || currentDepth > depth)
-            return;
-
-            entry = data.value;
-            currentDepth++;
-        })
-        .on('error', err => {
-          reject(err);
         })
         .on('end', () => {
           resolve(entry);
@@ -410,7 +449,7 @@ class Log {
           reject(err);
         })
         .on('end', () => {
-            resolve(items);
+          resolve(items);
         });
     });
   }

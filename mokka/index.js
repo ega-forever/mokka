@@ -21,7 +21,7 @@ let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generat
 let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
 //let tasks = _.chain(new Array(100000)).fill(0).map((item, index) => [100 - index]).value();
-let tasks = _.chain(new Array(10000)).fill(0).map((item, index) => [100 - index]).value();
+let tasks = _.chain(new Array(1000)).fill(0).map((item, index) => [100 - index]).value();
 
 let chunks = [Math.round(tasks.length * 0.3), Math.round(tasks.length * 0.6), tasks.length];
 
@@ -33,9 +33,9 @@ const init = async () => {
 
     const raft = new TCPMokka({
       address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
-      election_min: 200,
-      election_max: 500,
-      heartbeat: 100,
+      election_min: 2000,
+      election_max: 3000,
+      heartbeat: 1000,
       Log: Log,
       privateKey: privKeys[index],
       peers: pubKeys
@@ -95,15 +95,9 @@ const init = async () => {
       let node = nodes[0];
       for (let i = 0; i < chunks[0]; i++) {
         try {
-          let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
+          let entry = await Promise.resolve(node.api.propose(tasks[i]));
           console.log(1, entry.index, entry.hash, i);
-          //await Promise.delay(100);
-/*
-          await node.actions.tasks.reserve(entry.index);
-          console.log(1, entry.index, i);
-          await node.actions.tasks.execute(entry.index);
-*/
-
+          await Promise.delay(_.random(50, 100));
         } catch (e) {
 
           if(e instanceof Promise.TimeoutError){
@@ -115,6 +109,7 @@ const init = async () => {
 
             console.log(index1, index2, index3);
 
+            await Promise.delay(3000);
             continue;
           }
 
@@ -129,8 +124,10 @@ const init = async () => {
       let node = nodes[1];
       for (let i = chunks[0] + 1; i < chunks[1]; i++) {
         try {
-          let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
+          let entry = await Promise.resolve(node.api.propose(tasks[i]));
           console.log(2, entry.index, entry.hash, i);
+          await Promise.delay(_.random(50, 100));
+
           //await Promise.delay(100);
         } catch (e) {
 
@@ -142,6 +139,8 @@ const init = async () => {
             const index3 = await nodes[3].log.getLastInfo();
 
             console.log(index1, index2, index3);
+
+            await Promise.delay(3000);
 
             continue;
           }
@@ -155,8 +154,10 @@ const init = async () => {
       let node = nodes[2];
       for (let i = chunks[1] + 1; i < chunks[2]; i++) {
         try {
-          let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(60000);
+          let entry = await Promise.resolve(node.api.propose(tasks[i]));
           console.log(3, entry.index, entry.hash, i);
+          await Promise.delay(_.random(50, 100));
+
           //await Promise.delay(100);
         } catch (e) {
 
@@ -168,6 +169,8 @@ const init = async () => {
             const index3 = await nodes[3].log.getLastInfo();
 
             console.log(index1, index2, index3);
+
+            await Promise.delay(3000);
 
             continue;
           }

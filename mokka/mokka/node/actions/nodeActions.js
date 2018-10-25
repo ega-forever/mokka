@@ -2,6 +2,7 @@ const _ = require('lodash'),
   Multiaddr = require('multiaddr'),
   hashUtils = require('../../utils/hashes'),
   speakeasy = require('speakeasy'),
+  Promise = require('bluebird'),
   secrets = require('secrets.js-grempe'),
   messageTypes = require('../factories/messageTypesFactory'),
   states = require('../factories/stateFactory');
@@ -78,40 +79,31 @@ const end = function () {
 
 const promote = async function (priority = 1) {
 
-/*  const {index, createdAt} = await this.log.getLastEntry();
+  if (this.votes.for && this.votes.for === this.publicKey) {
+    console.log(`[${Date.now()}]already promoted myself[${this.index}]`);
+    return;
+  }
 
-  if (Date.now() - createdAt < this.election.max && index !== 0 && this.state !== states.LEADER) {
-    await Promise.delay(this.election.max - (Date.now() - createdAt));
-    console.log(`going to await[${this.index}], leader: ${this.leader}`)
-    this.timers.adjust('heartbeat', this.election.max - (Date.now() - createdAt))
-    return await promote.call(this, priority);
-  }*/
-
+  let {term: currentTerm} = await this.log.getLastInfo();
+  let {hash: prevTermHash} = await this.log.getFirstEntryByTerm(this.term - 1);
 
   this.change({
     state: states.CANDIDATE,  // We're now a candidate,
-    term: this.term + 1,    // but only for this term. //todo check
+    term: currentTerm + 1,    // but only for this term. //todo check
     leader: ''              // We no longer have a leader.
   });
 
   this.votes.for = this.publicKey;
   this.votes.granted = 1;
+  this.votes.started = Date.now();
 
   let token = speakeasy.totp({
     secret: this.networkSecret,
     step: this.election.max / 1000
   });
 
-
   this.votes.secret = secrets.str2hex(token);
   this.votes.shares = [];
-
-
-  if (this.majority() < 2) {
-    console.log('majority less than 2');
-    process.exit(0);
-  }
-
 
   const followerNodes = _.filter(this.nodes, node => node.state !== states.LEADER);
 
@@ -126,17 +118,30 @@ const promote = async function (priority = 1) {
         voted: false
       });
 
-      const packet = await this.actions.message.packet(messageTypes.VOTE, {share: shares[index], priority: priority});
-
+      const packet = await this.actions.message.packet(messageTypes.VOTE, {
+        share: shares[index],
+        priority: priority,
+        prevTermHash: prevTermHash
+      });
       this.actions.message.message(followerNodes[index].publicKey, packet);
-
     }
   }
 
-  this.timers
-    .clear('heartbeat')
-//    .clear('heartbeat, election')
-   // .setTimeout('election', this.actions.node.promote, this.timeout());
+  if (this.timers.active('term_change'))
+    this.timers.clear('term_change');
+
+  this.timers.setTimeout('term_change', async () => {
+
+    console.log(`[${Date.now()}]clean up vote[${this.index}]: ${this.state}`);
+    this.votes.for = null;
+    this.votes.granted = 0;
+    this.votes.shares = [];
+    this.votes.secret = null;
+    this.votes.started = null;
+    if (this.state === states.CANDIDATE)
+      this.change({state: states.FOLLOWER, term: this.term - 1});
+  }, this.election.max * _.random(1, 5));
+
 };
 
 
