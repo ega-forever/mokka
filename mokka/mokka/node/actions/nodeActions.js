@@ -99,7 +99,8 @@ const promote = async function (priority = 1) {
 
   let token = speakeasy.totp({
     secret: this.networkSecret,
-    step: this.election.max / 1000
+    //step: this.election.max / 1000
+    step: 30
   });
 
   this.votes.secret = secrets.str2hex(token);

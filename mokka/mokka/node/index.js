@@ -121,90 +121,14 @@ class Mokka extends EventEmitter {
         return write(reply);
       }
 
-
-      /*
-            if (packet.type === messageTypes.APPEND && _.has(packet, 'data.secret')) {
-
-              let includedShare = !!_.find(packet.data.shares, {share: this.votes.share});
-
-              let token = secrets.hex2str(packet.data.secret);
-
-              let verified = speakeasy.totp.verify({
-                secret: this.networkSecret,
-                token: token,
-                step: this.election.max / 1000
-              });
-
-              if (!includedShare && !verified) {
-                let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided (1)');
-                return write(reply);
-              }
-
-              //todo add pub key validation
-
-
-              let pubKeys = this.nodes.map(node => node.publicKey);
-              pubKeys.push(this.publicKey);
-
-
-              let notFoundKeys = _.chain(packet.data.shares)
-                .reject(item => {
-                  if (!_.get(item, 'signed.messageHash'))
-                    return true;
-
-                  const restoredPublicKey = EthUtil.ecrecover(
-                    Buffer.from(item.signed.messageHash.replace('0x', ''), 'hex'),
-                    parseInt(item.signed.v),
-                    Buffer.from(item.signed.r.replace('0x', ''), 'hex'),
-                    Buffer.from(item.signed.s.replace('0x', ''), 'hex')).toString('hex');
-                  return pubKeys.includes(restoredPublicKey);
-                })
-                .size()
-                .value();
-
-
-              if (!this.quorum(pubKeys.length - notFoundKeys)) {
-                let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided (2)');
-                return write(reply);
-              }
-
-
-              let validatedShares = _.chain(packet.data.shares).filter(share => _.has(share, 'signed'))
-                .map(share => share.share)
-                .value();
-
-              let comb = secrets.combine(validatedShares);
-              if (comb !== packet.data.secret) {
-                let reply = await raft.actions.message.packet(messageTypes.ERROR, 'not enough nodes voted for you');
-                return write(reply);
-              }
-
-              if (packet.term > raft.term) {
-                raft.change({
-                  leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
-                  state: states.FOLLOWER,
-                  term: packet.term
-                });
-              }
-
-              if (packet.term < raft.term) {
-                let reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
-                raft.emit('error', new Error(reason));
-
-                let reply = await raft.actions.message.packet(messageTypes.ERROR, reason);
-                return write(reply);
-              }
-
-
-            }
-
-      */
-
       if (states.LEADER === packet.state && packet.type === messageTypes.APPEND) {
 
-        //packet.proof.index || packet.proof.shares
 
         if(!_.has(packet, 'proof.index') && !_.has(packet, 'proof.shares')){
+
+          console.log(packet);
+          process.exit(0)
+
           let reply = await raft.actions.message.packet(messageTypes.ERROR, 'validation failed');
           return write(reply);
         }
@@ -230,144 +154,51 @@ class Mokka extends EventEmitter {
         }*/
 
 
-        if(packet.proof.index && _.has(packet, 'proof.proof.shares')){
-
-       //   console.log(packet.data);
-       //   console.log(packet.proof)
-          let {index} = await this.log.getLastInfo();
-  //        console.log(packet.proof.index, index)
-
-    //      console.log(packet.proof)
+        if(packet.proof.index && _.has(packet, 'proof.shares')){
 
           let proofEntry = await this.log.get(packet.proof.index);
-
-/*          console.log(proofEntry)
-
-          console.log(packet)
-
-          process.exit(0)*/
-
-/*if(proofEntry){
-  console.log(proofEntry);
-  process.exit(0)
-}*/
-
 
           let validated = validateSecretUtil(
             this.networkSecret,
             this.election.max,
             pubKeys,
-            packet.proof.proof.secret,
+            packet.proof.secret,
             _.get(proofEntry, 'createdAt', Date.now()),
-            packet.proof.proof.shares);
+            packet.proof.shares);
 
           if(!validated){
+            console.log('step1')
             let reply = await raft.actions.message.packet(messageTypes.ERROR, 'validation failed');
             return write(reply);
           }
 
-     /*     let fullProof = {
-            shares: packet.proof.shares,
-            secret: packet.proof.secret,
-            index: _.get(packet, 'proof.index', packet.last.index),
-            hash: _.get()
-          };*/
-
           await this.log.addProof(packet.term, packet.proof)
-
-
         }
 
 
-/*
-        if (proofEntry) {
-          console.log('--------after--------')
-          console.log(proofEntry);
-          process.exit(0)
-        } else {
-          console.log('------before-----')
-          console.log(packet)
-        }*/
+        if(packet.proof.index && !_.has(packet, 'proof.shares')){
 
+          let proofEntryShare = await this.log.getProof(packet.term);
 
-        /*    console.log(proofEntry);
+          if(!proofEntryShare){
+         // if(!proofEntryShare || proofEntryShare.hash !== packet.proof.hash){
+            console.log('step2')
+            console.log(proofEntryShare)
+            console.log('----')
+            console.log(packet)
 
-            console.log(packet.data)
-            console.log(packet.proof)
+            process.exit(0)
+            let reply = await raft.actions.message.packet(messageTypes.ERROR, 'validation failed');
+            return write(reply);
+          }
+        }
 
-            process.exit(0)*/
-
-        /*        let includedShare = !!_.find(packet.data.shares, {share: this.votes.share});
-
-                let token = secrets.hex2str(packet.data.secret);
-
-                let verified = speakeasy.totp.verify({
-                  secret: this.networkSecret,
-                  token: token,
-                  step: this.election.max / 1000
-                });
-
-                if (!includedShare && !verified) {
-                  let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided (1)');
-                  return write(reply);
-                }
-
-                //todo add pub key validation
-
-
-                let pubKeys = this.nodes.map(node => node.publicKey);
-                pubKeys.push(this.publicKey);
-
-
-                let notFoundKeys = _.chain(packet.data.shares)
-                  .reject(item => {
-                    if (!_.get(item, 'signed.messageHash'))
-                      return true;
-
-                    const restoredPublicKey = EthUtil.ecrecover(
-                      Buffer.from(item.signed.messageHash.replace('0x', ''), 'hex'),
-                      parseInt(item.signed.v),
-                      Buffer.from(item.signed.r.replace('0x', ''), 'hex'),
-                      Buffer.from(item.signed.s.replace('0x', ''), 'hex')).toString('hex');
-                    return pubKeys.includes(restoredPublicKey);
-                  })
-                  .size()
-                  .value();
-
-
-                if (!this.quorum(pubKeys.length - notFoundKeys)) {
-                  let reply = await raft.actions.message.packet(messageTypes.ERROR, 'wrong share provided (2)');
-                  return write(reply);
-                }
-
-
-                let validatedShares = _.chain(packet.data.shares).filter(share => _.has(share, 'signed'))
-                  .map(share => share.share)
-                  .value();
-
-                let comb = secrets.combine(validatedShares);
-                if (comb !== packet.data.secret) {
-                  let reply = await raft.actions.message.packet(messageTypes.ERROR, 'not enough nodes voted for you');
-                  return write(reply);
-                }
-                */
-
-
-        //  if (packet.term > raft.term) {
         raft.change({
           leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
           state: states.FOLLOWER,
           term: packet.term
         });
-        //  }
 
-        /*     if (packet.term < raft.term) {
-               let reason = 'Stale term detected, received `' + packet.term + '` we are at ' + raft.term;
-               raft.emit('error', new Error(reason));
-
-               let reply = await raft.actions.message.packet(messageTypes.ERROR, reason);
-               return write(reply);
-             }*/
       }
 
       // if (packet.type !== messageTypes.VOTED) {

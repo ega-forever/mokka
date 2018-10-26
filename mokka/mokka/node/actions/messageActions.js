@@ -151,18 +151,16 @@ const appendPacket = async function (entry) {
 
   entry = _.isArray(entry) ? entry : [entry];
 
-//  let includesStartLog = _.find(entry, {index: proofEntry.index});
+ let includesStartLog = _.find(entry, {index: proofEntry.index});
 
-/*
-  let proof = includesStartLog ?
-    {
-      shares: proofEntry.proof.shares,
-      secret: proofEntry.proof.secret
-    } : {
-      index: proofEntry.index,
-      hash: proofEntry.hash
-    };
-*/
+
+ let proof = {
+   index: proofEntry.index,
+   hash: proofEntry.hash
+ };
+
+ if(includesStartLog)
+   _.merge(proof, proofEntry);
 
   return {
     state: raft.state,
@@ -171,7 +169,7 @@ const appendPacket = async function (entry) {
     publicKey: raft.publicKey,
     type: messageTypes.APPEND,
     leader: raft.leader,
-    proof: proofEntry,
+    proof: proof,
     data: entry,
     last
   };

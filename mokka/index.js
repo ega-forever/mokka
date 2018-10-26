@@ -43,6 +43,8 @@ const init = async () => {
 
     raft.index = index + 1;
 
+    await Promise.delay(_.random(0, 100));
+
     raft.on('heartbeat timeout', function () {
       console.log(`heart beat timeout, starting election[${this.index}]`);
     });
@@ -97,7 +99,7 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i]));
           console.log(1, entry.index, entry.hash, i);
-          await Promise.delay(_.random(100, 200));
+          await Promise.delay(_.random(50, 100));
         } catch (e) {
 
           if(e instanceof Promise.TimeoutError){
@@ -126,7 +128,7 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i]));
           console.log(2, entry.index, entry.hash, i);
-          await Promise.delay(_.random(100, 200));
+          await Promise.delay(_.random(50, 100));
 
           //await Promise.delay(100);
         } catch (e) {
@@ -156,7 +158,7 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.api.propose(tasks[i]));
           console.log(3, entry.index, entry.hash, i);
-          await Promise.delay(_.random(100, 200));
+          await Promise.delay(_.random(50, 100));
 
           //await Promise.delay(100);
         } catch (e) {

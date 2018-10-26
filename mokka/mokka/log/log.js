@@ -139,7 +139,17 @@ class Log {
       return;
 
 
-    return await this.termDb.put(term, {proof: proof});
+    return await this.termDb.put(term, proof);
+  }
+
+  async getProof (term) {
+
+    try {
+      return await this.termDb.get(term);
+    } catch (e) {
+      return null
+    }
+
   }
 
   async getFirstEntryByTerm (term) {
@@ -156,17 +166,19 @@ class Log {
 
   async getLastEntryByTerm (term) {
     try {
-      let headEntry = await this.getFirstEntryByTerm(term);
+      let headEntry = await this.getFirstEntryByTerm(term + 1);
 
       if (headEntry.index === 0)
         return headEntry;
 
-      let nextEntry = await this.getFirstEntryByTerm(term + 1);
+      if (!headEntry)
+        return {
+          index: 0,
+          hash: _.fill(new Array(32), 0).join(''),
+          term: this.node.term
+        };
 
-      if (nextEntry.index === 0)
-        return await this.getLastEntry();
-
-      return await this.get(nextEntry.index - 1);
+      return headEntry;
 
     } catch (err) {
       return {
@@ -284,6 +296,11 @@ class Log {
       await this.termDb.del(entry.term);
       await this.db.del(entry.index);
     }
+
+    let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
+    console.log('super', lastTerm, lastIndex, index)
+    this.node.term = lastIndex === 0 ? 0 : lastTerm;
+
   }
 
   /**

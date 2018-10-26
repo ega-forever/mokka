@@ -15,12 +15,19 @@ module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
   let verified = speakeasy.totp.verify({
     secret: networkSecret,
     token: token,
-    step: window / 1000,
-    time: time / 1000
+    //step: window / 1000,
+    step: 30,
+    time: parseInt(time / 1000)
   });
 
   if(!verified) {
    console.log('wrong token');
+   console.log({
+     secret: networkSecret,
+     token: token,
+     step: window / 1000,
+     time: time / 1000
+   })
     return false;
   }
 
