@@ -7,14 +7,13 @@ const EventEmitter = require('events'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUils = require('../utils/hashes'),
-  speakeasy = require('speakeasy'),
   VoteActions = require('./actions/voteActions'),
-  EthUtil = require('ethereumjs-util'),
   validateSecretUtil = require('../utils/validateSecret'),
   NodeActions = require('./actions/nodeActions'),
   AppendActions = require('./actions/appendActions'),
-  secrets = require('secrets.js-grempe'),
   MessageActions = require('./actions/messageActions'),
+  bunyan = require('bunyan'),
+  log = bunyan.createLogger({name: 'node'}),
   Api = require('./api');
 
 const change = require('modification')(' change');
@@ -78,46 +77,46 @@ class Mokka extends EventEmitter {
   }
 
   _initialize (options) {
-    let raft = this;
+    let mokka = this;
 
-    raft.on('term change', function change () {
-      console.log(`[${Date.now()}]clear vote by changed term`);
-      raft.votes.for = null;
-      raft.votes.granted = 0;
-      raft.votes.shares = [];
-      raft.votes.secret = null;
-      raft.votes.started = null;
+    mokka.on('term change', function change () {
+      log.info('clear vote by term change');
+      mokka.votes.for = null;
+      mokka.votes.granted = 0;
+      mokka.votes.shares = [];
+      mokka.votes.secret = null;
+      mokka.votes.started = null;
     });
 
-    raft.on('state change', function change (state) {
-      console.log(`[${Date.now()}]state changed[${this.index}]: ${_.invert(states)[state]}`);
-      raft.heartbeat(states.LEADER === raft.state ? raft.beat : raft.timeout());
-      raft.emit(Object.keys(states)[state].toLowerCase());
+    mokka.on('state change', function change (state) {
+      log.info(`state changed[${this.index}]: ${_.invert(states)[state]}`);
+      //mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
+      mokka.heartbeat(mokka.beat);
+      mokka.emit(Object.keys(states)[state].toLowerCase());
     });
 
     this.on('threshold', async () => {
       if (this.state === states.LEADER) {
-        console.log(`[${Date.now()}]restarting vote by threshold[${this.index}]`);
+        log.info('restarting vote by threshold');
         this.change({state: states.FOLLOWER, leader: ''});
         this.timers.clear('heartbeat');
-        await Promise.delay(this.timeout());
-        raft.actions.node.promote();
+        await Promise.delay(this.window());
+        mokka.actions.node.promote();
       }
     });
 
-    raft.on('data', async (packet, write = () => {
+    mokka.on('data', async (packet, write = () => {
     }) => {
 
 
-      console.log(`[${Date.now()}]incoming packet type[${this.index}]: ${packet.type}`);
+      log.info(`[${Date.now()}]incoming packet type: ${packet.type}`);
 
-      //  let reply = await raft.actions.message.packet(messageTypes.ACK);
       let reply;
 
       if (!_.isObject(packet)) {
         let reason = 'Invalid packet received';
-        raft.emit(messageTypes.ERROR, new Error(reason));
-        let reply = await raft.actions.message.packet(messageTypes.ERROR, reason);
+        mokka.emit(messageTypes.ERROR, new Error(reason));
+        let reply = await mokka.actions.message.packet(messageTypes.ERROR, reason);
         return write(reply);
       }
 
@@ -125,34 +124,14 @@ class Mokka extends EventEmitter {
 
 
         if(!_.has(packet, 'proof.index') && !_.has(packet, 'proof.shares')){
-
-          console.log(packet);
-          process.exit(0)
-
-          let reply = await raft.actions.message.packet(messageTypes.ERROR, 'validation failed');
+          log.info('proof is not provided!');
+          let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
           return write(reply);
         }
 
 
         let pubKeys = this.nodes.map(node => node.publicKey);
         pubKeys.push(this.publicKey);
-
-/*        if (packet.proof.shares && !packet.last.index) {
-
-          let validated = validateSecretUtil(
-            this.networkSecret,
-            this.election.max,
-            pubKeys,
-            packet.proof.secret,
-            Date.now(),
-            packet.proof.shares);
-
-          if(!validated){
-            let reply = await raft.actions.message.packet(messageTypes.ERROR, 'validation failed');
-            return write(reply);
-          }
-        }*/
-
 
         if(packet.proof.index && _.has(packet, 'proof.shares')){
 
@@ -167,8 +146,8 @@ class Mokka extends EventEmitter {
             packet.proof.shares);
 
           if(!validated){
-            console.log('step1')
-            let reply = await raft.actions.message.packet(messageTypes.ERROR, 'validation failed');
+            log.error('the initial proof validation failed');
+            let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
             return write(reply);
           }
 
@@ -182,19 +161,14 @@ class Mokka extends EventEmitter {
 
           if(!proofEntryShare){
          // if(!proofEntryShare || proofEntryShare.hash !== packet.proof.hash){
-            console.log('step2')
-            console.log(proofEntryShare)
-            console.log('----')
-            console.log(packet)
-
-            process.exit(0)
-            let reply = await raft.actions.message.packet(messageTypes.ERROR, 'validation failed');
+            log.error('the secondary proof validation failed');
+            let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
             return write(reply);
           }
         }
 
-        raft.change({
-          leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || raft.leader,
+        mokka.change({
+          leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || mokka.leader,
           state: states.FOLLOWER,
           term: packet.term
         });
@@ -202,7 +176,9 @@ class Mokka extends EventEmitter {
       }
 
       // if (packet.type !== messageTypes.VOTED) {
-      raft.heartbeat(states.LEADER === raft.state ? raft.beat : raft.timeout());
+     // mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
+      log.info('append heartbeat from master');
+      mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
       // }
 
       if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)
@@ -214,7 +190,7 @@ class Mokka extends EventEmitter {
       }
 
       if (packet.type === messageTypes.ERROR) {
-        raft.emit(messageTypes.ERROR, new Error(packet.data));
+        mokka.emit(messageTypes.ERROR, new Error(packet.data));
       }
 
 
@@ -230,41 +206,40 @@ class Mokka extends EventEmitter {
         return await this.actions.append.appendFail(packet, write);
       }
 
-      if (raft.listeners('rpc').length) {
-        raft.emit('rpc', packet, write);
+      if (mokka.listeners('rpc').length) {
+        mokka.emit('rpc', packet, write);
       } else {
-        let reply = await raft.actions.message.packet('error', 'Unknown message type: ' + packet.type);
+        let reply = await mokka.actions.message.packet('error', 'Unknown message type: ' + packet.type);
       }
 
       if (!reply)
-        reply = await raft.actions.message.packet(messageTypes.ACK);
+        reply = await mokka.actions.message.packet(messageTypes.ACK);
 
-      // console.log(`reply type[${this.index}]: ${reply.type}`)
       write(reply);
 
     });
 
 
-    if (states.CHILD === raft.state)
-      return raft.emit('initialize');
+    if (states.CHILD === mokka.state)
+      return mokka.emit('initialize');
 
-    if (_.isFunction(raft.Log)) {
-      raft.log = new raft.Log(raft, options);
+    if (_.isFunction(mokka.Log)) {
+      mokka.log = new mokka.Log(mokka, options);
     }
 
 
     function initialize (err) {
-      if (err) return raft.emit(messageTypes.ERROR, err);
+      if (err) return mokka.emit(messageTypes.ERROR, err);
 
-      raft.emit('initialize');
-      // raft.heartbeat(raft.timeout());
-      raft.heartbeat(_.random(0, raft.election.max));
+      mokka.emit('initialize');
+      // mokka.heartbeat(mokka.timeout());
+      mokka.heartbeat(_.random(0, mokka.election.max));
     }
 
-    if (_.isFunction(raft.initialize)) {
-      if (raft.initialize.length === 2)
-        return raft.initialize(options, initialize);
-      raft.initialize(options);
+    if (_.isFunction(mokka.initialize)) {
+      if (mokka.initialize.length === 2)
+        return mokka.initialize(options, initialize);
+      mokka.initialize(options);
     }
 
     initialize();
@@ -281,39 +256,38 @@ class Mokka extends EventEmitter {
   }
 
   heartbeat (duration) {
-    let raft = this;
+    let mokka = this;
 
-    duration = duration || raft.beat;
+    duration = duration || mokka.beat;
 
-    if (raft.timers.active('heartbeat')) {
-      raft.timers.adjust('heartbeat', duration);
+    if (mokka.timers.active('heartbeat')) {
+      mokka.timers.adjust('heartbeat', duration);
 
-      return raft;
+      return mokka;
     }
 
-    raft.timers.setTimeout('heartbeat', async () => {
+    mokka.timers.setTimeout('heartbeat', async () => {
 
       //    return; //todo disabled heartbeat
 
 
-      if (states.LEADER !== raft.state) {
-        raft.emit('heartbeat timeout');
+      if (states.LEADER !== mokka.state) {
+        mokka.emit('heartbeat timeout');
 
-        console.log(`[${Date.now()}]promoting by timeout[${this.index}]`);
-        return raft.actions.node.promote();
+        log.info('promoting by timeout');
+        return mokka.actions.node.promote();
       }
 
 
-      let packet = await raft.actions.message.packet(messageTypes.ACK);
+      let packet = await mokka.actions.message.packet(messageTypes.ACK);
 
-      console.log(`[${Date.now()}]send append from heartbeat[${this.index}]: [${Date.now()}]`);
-
-      raft.emit(messageTypes.ACK, packet);
-      await raft.actions.message.message(states.FOLLOWER, packet, {ensure: false, timeout: this.election.max});
-      raft.heartbeat(raft.beat);
+      log.info('send append request by timeout');
+      mokka.emit(messageTypes.ACK, packet);
+      await mokka.actions.message.message(states.FOLLOWER, packet, {ensure: false, timeout: this.election.max});
+      mokka.heartbeat(mokka.beat);
     }, duration);
 
-    return raft;
+    return mokka;
   }
 
   /**
@@ -323,6 +297,10 @@ class Mokka extends EventEmitter {
    * @private
    */
   timeout () {
+    return _.random(this.beat, parseInt(this.beat * 1.5));
+  }
+
+  window () {
     return Math.floor(Math.random() * (this.election.max - this.election.min + 1) + this.election.min);
   }
 
@@ -332,19 +310,19 @@ class Mokka extends EventEmitter {
    * planning on doing.
    *
    * @param {Object} options Configuration that should override the default config.
-   * @returns {Raft} The newly created instance.
+   * @returns {mokka} The newly created instance.
    * @public
    */
   clone (options) { //todo replace with lodash
     options = options || {};
 
-    let raft = this,
+    let mokka = this,
       node = {
-        Log: raft.Log,
-        election_max: raft.election.max,
-        election_min: raft.election.min,
-        heartbeat: raft.beat,
-        threshold: raft.threshold
+        Log: mokka.Log,
+        election_max: mokka.election.max,
+        election_min: mokka.election.min,
+        heartbeat: mokka.beat,
+        threshold: mokka.threshold
       }, key;
 
     for (key in node) {
@@ -353,7 +331,7 @@ class Mokka extends EventEmitter {
       options[key] = node[key];
     }
 
-    return new raft.constructor(options);
+    return new mokka.constructor(options);
   }
 
 

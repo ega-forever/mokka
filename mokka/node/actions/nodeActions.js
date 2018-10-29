@@ -2,9 +2,10 @@ const _ = require('lodash'),
   Multiaddr = require('multiaddr'),
   hashUtils = require('../../utils/hashes'),
   speakeasy = require('speakeasy'),
-  Promise = require('bluebird'),
   secrets = require('secrets.js-grempe'),
   messageTypes = require('../factories/messageTypesFactory'),
+  bunyan = require('bunyan'),
+  log = bunyan.createLogger({name: 'node.actions.node'}),
   states = require('../factories/stateFactory');
 
 const join = function (multiaddr, write) {
@@ -65,7 +66,7 @@ const end = function () {
 
   if (this.nodes.length)
     for (let i = 0; i < this.nodes.length; i++)
-      this.leave(this.nodes[i]);
+      this.actions.node.leave(this.nodes[i]);
 
 
   this.emit('end');
@@ -80,7 +81,7 @@ const end = function () {
 const promote = async function (priority = 1) {
 
   if (this.votes.for && this.votes.for === this.publicKey) {
-    console.log(`[${Date.now()}]already promoted myself[${this.index}]`);
+    log.error('already promoted myself');
     return;
   }
 
@@ -100,7 +101,8 @@ const promote = async function (priority = 1) {
   let token = speakeasy.totp({
     secret: this.networkSecret,
     //step: this.election.max / 1000
-    step: 30
+    step: 30,
+    window: 2
   });
 
   this.votes.secret = secrets.str2hex(token);
@@ -132,8 +134,7 @@ const promote = async function (priority = 1) {
     this.timers.clear('term_change');
 
   this.timers.setTimeout('term_change', async () => {
-
-    console.log(`[${Date.now()}]clean up vote[${this.index}]: ${this.state}`);
+    log.info('clean up passed voting');
     this.votes.for = null;
     this.votes.granted = 0;
     this.votes.shares = [];

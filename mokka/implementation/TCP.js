@@ -1,21 +1,24 @@
 const Mokka = require('../node'),
-  msg = require('axon');
+  msg = require('axon'),
+  bunyan = require('bunyan'),
+  log = bunyan.createLogger({name: 'implementation.TCP'});
+
 
 class TCPMokka extends Mokka {
 
 
   initialize (options) {
-    console.log('initializing reply socket on port %s', this.address);
+    log.info('initializing reply socket on port %s', this.address);
 
-    const socket = this.socket = msg.socket('rep');
+    this.socket = msg.socket('rep');
 
-    socket.bind(this.address);
-    socket.on('message', (data, fn) => {
+    this.socket.bind(this.address);
+    this.socket.on('message', (data, fn) => {
       this.emit('data', data, fn);
     });
 
-    socket.on('error', () => {
-      debug('failed to initialize on port: ', this.address);
+    this.socket.on('error', () => {
+      log.error('failed to initialize on port: ', this.address);
     });
   }
 
@@ -36,7 +39,6 @@ class TCPMokka extends Mokka {
       });
     }
 
-   // console.log('writing packet to socket on port %s', this.address);
     this.socket.send(packet, (data) => {
       fn(undefined, data);
     });

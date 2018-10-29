@@ -17,7 +17,8 @@ module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
     token: token,
     //step: window / 1000,
     step: 30,
-    time: parseInt(time / 1000)
+    time: parseInt(time / 1000),
+    window: 2
   });
 
   if(!verified) {
@@ -25,8 +26,10 @@ module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
    console.log({
      secret: networkSecret,
      token: token,
-     step: window / 1000,
-     time: time / 1000
+     //step: window / 1000,
+     step: 30,
+     time: parseInt(time / 1000),
+     window: 2
    })
     return false;
   }

@@ -3,6 +3,8 @@ const messageTypes = require('../factories/messageTypesFactory'),
   states = require('../factories/stateFactory'),
   secrets = require('secrets.js-grempe'),
   _ = require('lodash'),
+  bunyan = require('bunyan'),
+  log = bunyan.createLogger({name: 'node.actions.vote'}),
   EthUtil = require('ethereumjs-util'),
   web3 = new Web3();
 
@@ -24,7 +26,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
 
   const signedShare = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
 
-//  let timeout = Date.now() - this.votes.started > this.election.max;
+  //let timeout = Date.now() - this.votes.started > this.election.max;
 
   /*
     if (packet.data.priority === 2)
@@ -80,13 +82,8 @@ const vote = async function (packet, write) { //todo timeout leader on election
   this.votes.priority = packet.data.priority || 1;
   this.votes.share = packet.data.share;
 
-  //provide merkleroot, in case packet.last.index < index
-
   if (this.term > packet.term) { //in case the candidate is outdated
     this.emit(messageTypes.VOTE, packet, false);
-
-    console.log(`[${Date.now()}]candidate is outdated[${this.index}]: ${index} vs ${packet.last.index} / ${this.term} vs ${packet.term}`);
-
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
       signed: signedShare,
@@ -103,16 +100,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
     return write(reply);
   }
 
-  if (packet.last.index === index && packet.last.hash !== hash) { //validation by proof supplied in first commit for entry
-    /*    this.emit(messageTypes.VOTE, packet, false);
-        //console.log('we have different history')
-        let reply = await this.actions.message.packet(messageTypes.VOTED, {
-          granted: false,
-          signed: signedShare,
-          reason: 'wrong history provided',
-          code: 4
-        });*/
-
+  if (packet.last.index === index && packet.last.hash !== hash) { //todo validation by proof supplied in first commit for entry
     this.votes.for = packet.publicKey;
     this.emit(messageTypes.VOTE, packet, true);
     //this.change({leader: packet.publicKey, term: packet.term});
@@ -120,7 +108,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
     return write(reply);
   }
 
-  let {hash: prevTermHash, term: superTerm} = await this.log.getFirstEntryByTerm(packet.term - 2);
+ // let {hash: prevTermHash, term: superTerm} = await this.log.getFirstEntryByTerm(packet.term - 2);
 
 
   /*  if(packet.data.prevTermHash !== prevTermHash){
@@ -142,6 +130,7 @@ const vote = async function (packet, write) { //todo timeout leader on election
   this.votes.for = packet.publicKey;
   this.emit(messageTypes.VOTE, packet, true);
   //this.change({leader: packet.publicKey, term: packet.term});
+  this.heartbeat(this.timeout()); //todo validate
   let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
   return write(reply);
 };
@@ -149,11 +138,10 @@ const vote = async function (packet, write) { //todo timeout leader on election
 const voted = async function (packet, write) {
 
 
-  console.log(`[${Date.now()}]received new vote[${this.index}]`)
+  log.info(`received new vote for term[${this.term}]`);
 
   if (states.CANDIDATE !== this.state) {
-    console.log(`[${Date.now()}]no longer a candidate[${this.index}]`)
-
+    log.info('no longer a candidate');
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'No longer a candidate, ignoring vote');
     return write(reply);
   }
@@ -176,13 +164,13 @@ const voted = async function (packet, write) {
   });
 
   if (!localShare) {
-    console.log(`[${Date.now()}]the share hasnt\'t been found [${this.index}]`)
+    log.info(`the share hasnt\'t been found on term [${this.term}]`);
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'wrong share for vote provided!');
     return write(reply);
   }
 
   if (localShare.voted) {
-    console.log(`[${Date.now()}]you have already voted for me[${this.index}]`)
+    log.info(`you have already voted for me on term [${this.term}]`);
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'already voted for this candidate!');
     return write(reply);
   }
@@ -195,17 +183,14 @@ const voted = async function (packet, write) {
   localShare.code = packet.data.code;
 
   if (!packet.data.granted) {
-    console.log(`[${Date.now()}]vote fail due to reason[${this.index}]: ${packet.data.reason}`)
+    log.error(`vote fail due to reason: ${packet.data.reason}`);
   }
 
 
   let votedAmount = _.chain(this.votes.shares).filter({voted: true}).size().value();
-  console.log(`[${Date.now()}]collected votes[${this.index}]: ${votedAmount}`)
 
   if (!this.quorum(votedAmount))
     return;
-
-  console.log(`[${Date.now()}]reached vote quorum[${this.index}]`)
 
   let badVotes = _.filter(this.votes.shares, {granted: false});
   let leader = _.chain(this.votes.shares)
@@ -230,8 +215,8 @@ const voted = async function (packet, write) {
   //todo compare last index with leader's and wait until they will be the same
 
 
-  console.log(`[${Date.now()}]bad votes[${this.index}]: ${badVotes.length}, leader: ${leader}`);
-  console.log(`[${Date.now()}]good votes[${this.index}]:${_.filter(this.votes.shares, {granted: true}).length}, leader: ${leader}`);
+ // console.log(`[${Date.now()}]bad votes[${this.index}]: ${badVotes.length}, leader: ${leader}`);
+ // console.log(`[${Date.now()}]good votes[${this.index}]:${_.filter(this.votes.shares, {granted: true}).length}, leader: ${leader}`);
 
   if (badVotes.length >= Math.ceil(votedAmount / 2) + 1) {
 

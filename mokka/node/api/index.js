@@ -1,6 +1,8 @@
 const states = require('../factories/stateFactory'),
   Promise = require('bluebird'),
   eventTypes = require('../factories/eventFactory'),
+  bunyan = require('bunyan'),
+  log = bunyan.createLogger({name: 'node.api'}),
   _ = require('lodash');
 
 const propose = async function (task) {
@@ -11,13 +13,12 @@ const propose = async function (task) {
     if (Date.now() - createdAt < this.election.max && index !== 0) {
       this.heartbeat(this.election.max);
       await Promise.delay(this.election.max - (Date.now() - createdAt));
-      console.log(`going to await[${this.index}], leader: ${this.leader}`)
-//
+      log.info('going to await for the current leader');
       return await propose.call(this, task);
     }
 
 
-    console.log(`promoting by propose[${this.index}]`);
+    log.info('promoting by propose');
     await this.actions.node.promote(2); //todo decide about promote
 
     this.timers.clear('heartbeat');
@@ -26,7 +27,7 @@ const propose = async function (task) {
     this.heartbeat(this.timeout());
 
     if (this.state !== states.LEADER) {
-      console.log(`trying to propose task again[${this.index}]`)
+      log.info('trying to propose task again');
       let timeout = this.timeout();
       this.heartbeat(timeout * 2);
       await Promise.delay(_.random(0, timeout));
@@ -44,7 +45,7 @@ const propose = async function (task) {
   let options = {
     ensure: true,
     serial: true,
-    timeout: this.election.max,
+    timeout: this.beat,
     minConfirmations: Math.ceil(followersAmount / 2) + 1
   };
 
