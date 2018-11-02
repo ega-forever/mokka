@@ -51,7 +51,7 @@ const append = async function (packet, write) { //todo move write to index.js
         await this.log.saveCommand(entry.command, entry.term, entry.index, entry.hash, entry.owner);
       } catch (err) {
         let {index: lastIndex, term} = await this.log.getLastInfo();
-        log.error(`error during save log: ${err}`);
+        log.error(`error during save log: ${err.toString()}`);
 
         if (err.code === 2) {
           let prevTermEntry = await this.log.getLastEntryByTerm(term - 1);

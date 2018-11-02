@@ -4,16 +4,58 @@
  * @author Egor Zuev <zyev.egor@gmail.com>
  */
 
-const Log = require('../../mokka/log/log'),
-  Promise = require('bluebird'),
+const Promise = require('bluebird'),
   Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
+  expect = require('chai').expect,
   hashUtils = require('../../mokka/utils/hashes'),
-  TCPMokka = require('../../mokka/implementation/TCP');
+  spawn = require('child_process').spawn,
+  path = require('path');
 
 module.exports = (ctx) => {
 
   before(async () => {
+
+    /*    ctx.nodes = [];
+
+        const nodePath = path.join(__dirname, '../node/node.js');
+
+        const ports = [
+          8081, 8082,
+          8083, 8084,
+          8085, 8086
+        ];
+
+        let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
+        let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
+
+        for (let index = 0; index < ports.length; index++) {
+
+          let uris = [];
+
+          for (let index1 = 0; index1 < ports.length; index1++) {
+            if (index === index1)
+              continue;
+            uris.push(`/ip4/127.0.0.1/tcp/${ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
+          }
+
+          let amount = 100;
+
+          const nodePid = spawn('node', [nodePath], {
+            env: _.merge({}, process.env, {
+              PRIVATE_KEY: privKeys[index],
+              PORT: ports[index],
+              PEERS: uris.join(';'),
+              CHUNKS: [amount * index + 1, amount * (index + 1)].join(':')
+            }),
+            stdio: 'inherit'
+          });
+
+          ctx.nodes.push(nodePid)
+
+        }*/
+
+    //  await Promise.delay(120000);
 
   });
 
@@ -21,118 +63,85 @@ module.exports = (ctx) => {
   it('run 1000 tasks serially (10 times)', async () => {
 
 
-    for (let tries = 1;tries <= 10;tries++) {
+    for (let tries = 1; tries <= 50; tries++) {
 
-      console.log(`run simulation ${tries}`);
+     console.log(`run simulation ${tries}`);
 
-      const ports = [
-        8081, 8082,
-        8083, 8084,
-        8085, 8086
-      ];
+    ctx.nodes = [];
+    let states = {};
 
-      let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
-      let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
+    const nodePath = path.join(__dirname, '../node/node.js');
 
-      let tasks = _.chain(new Array(1000)).fill(0).map((item, index) => [100 - index]).value();
+    const ports = [
+      8081, 8082,
+      8083, 8084,
+      8085, 8086
+    ];
 
-      let chunks = [Math.round(tasks.length * 0.3), Math.round(tasks.length * 0.6), tasks.length];
+    let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
+    let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
-      const nodes = [];
+    for (let index = 0; index < ports.length; index++) {
 
-      for (let index = 0; index < ports.length; index++) {
+      let uris = [];
 
-        const raft = new TCPMokka({
-          address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
-          election_min: 200,
-          election_max: 500,
-          heartbeat: 100,
-          Log: Log,
-          privateKey: privKeys[index],
-          peers: pubKeys
-        });
-
-        raft.index = index + 1;
-
-        raft.on('heartbeat timeout', function () {
-          console.log(`heart beat timeout, starting election[${this.index}]`);
-        });
-
-        raft.on('error', function (err) {
-          console.log(err);
-        });
-
-
-        nodes.push(raft);
-
-        for (let i = 0; i < ports.length; i++) {
-          if (ports[index] === ports[i])
-            continue;
-
-          raft.actions.node.join(`/ip4/127.0.0.1/tcp/${ports[i]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[i])}`);
-        }
+      for (let index1 = 0; index1 < ports.length; index1++) {
+        if (index === index1)
+          continue;
+        uris.push(`/ip4/127.0.0.1/tcp/${ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
       }
 
+      let amount = 100;
 
-      await Promise.delay(1000);
+      const nodePid = spawn('node', [nodePath], {
+        env: _.merge({}, process.env, {
+          PRIVATE_KEY: privKeys[index],
+          PORT: ports[index],
+          PEERS: uris.join(';'),
+          CHUNKS: [amount * index + 1, amount * (index + 1)].join(':')
+        })
+        //  stdio: 'inherit'
+      });
 
-      await Promise.mapSeries(_.take(nodes, 3), async (node, index) => {
-        for (let i = index === 0 ? 0 : chunks[index - 1]; i < chunks[index === 0 ? 0 : index]; i++) {
-          try {
-            let entry = await Promise.resolve(node.api.propose(tasks[i])).timeout(node.election.max);
-            console.log(1, entry.index, entry.hash, i);
-          } catch (e) {
+      ctx.nodes.push(nodePid);
 
-            if (e instanceof Promise.TimeoutError) {
-              console.log('task has been reverted by timeout:', i);
-
-              const index1 = await nodes[0].log.getLastInfo();
-              const index2 = await nodes[1].log.getLastInfo();
-              const index3 = await nodes[2].log.getLastInfo();
-
-              console.log(index1, index2, index3);
-
-              await Promise.delay(5000);
-              continue;
-            }
-
-            console.log(e)
-          }
-
+      nodePid.stdout.on('data', (data) => {
+        data = data.toString();
+        console.log(data);
+        try {
+          data = JSON.parse(data);
+          if (_.isNumber(data.node))
+            states[index] = data;
+        } catch (e) {
         }
-        console.log('accomplished! 1');
-
       });
 
-
-      await new Promise(res => {
-
-        let intervalId = setInterval(async () => {
-
-          const info1 = await nodes[0].log.getLastInfo();
-          const info2 = await nodes[1].log.getLastInfo();
-          const info3 = await nodes[2].log.getLastInfo();
-          const info4 = await nodes[3].log.getLastInfo();
-          const info5 = await nodes[4].log.getLastInfo();
-          const info6 = await nodes[5].log.getLastInfo();
-
-          if (_.uniq([info1.index, info2.index, info3.index, info4.index, info5.index, info6.index, tasks.length]).length === 1) {
-            clearInterval(intervalId);
-            res();
-          }
-        }, 3000);
-
-      });
-
-
-      for (let node of nodes) {
-        node.actions.node.end();
-        node.socket.close();
-
-      }
-
-      // process.exit(0)
     }
+
+    await new Promise(res=>{
+
+      let intervalId = setInterval(() => {
+        let records = Object.values(states);
+        if (records.length === 6) {
+
+          expect(_.uniq(records.map(rec=>rec.hash)).length).to.eq(1);
+          expect(_.uniq(records.map(rec=>rec.index)).length).to.eq(1);
+          expect(_.uniq(records.map(rec=>rec.term)).length).to.eq(1);
+
+          clearInterval(intervalId);
+          res();
+        }
+      }, 3000);
+
+    });
+
+
+    for(let node of ctx.nodes)
+      node.kill();
+
+
+
+      }
   });
 
 

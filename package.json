@@ -4,7 +4,7 @@
   "description": "mokka consensus",
   "main": "index.js",
   "scripts": {
-    "test": "node ./node_modules/mocha/bin/mocha -t 900000 tests/index.js"
+    "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 1800000 -gc tests/index.js"
   },
   "keywords": [
     "mokka"
@@ -24,6 +24,7 @@
     "merkle-tools": "^1.4.0",
     "modification": "^1.0.0",
     "multiaddr": "^5.0.0",
+    "node-cache": "^4.2.0",
     "secrets.js-grempe": "^1.1.0",
     "semaphore": "^1.1.0",
     "speakeasy": "^2.0.0",

@@ -21,10 +21,10 @@ describe('mokka tests', function () {
 
     //describe('block', () => blockTests(ctx));
 
-    describe('fuzz', () => fuzzTests(ctx));
+ //   describe('fuzz', () => fuzzTests(ctx));
 
     //describe('performance', () => performanceTests(ctx));
 
-  //describe('features', () => featuresTests(ctx));
+  describe('features', () => featuresTests(ctx));
 
 });

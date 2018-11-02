@@ -178,7 +178,7 @@ class Log {
           term: this.node.term
         };
 
-      return headEntry;
+      return await this.db.get(headEntry.index - 1);
 
     } catch (err) {
       return {

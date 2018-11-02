@@ -7,6 +7,7 @@ const EventEmitter = require('events'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUils = require('../utils/hashes'),
+  NodeCache = require('node-cache'),
   VoteActions = require('./actions/voteActions'),
   validateSecretUtil = require('../utils/validateSecret'),
   NodeActions = require('./actions/nodeActions'),
@@ -53,6 +54,7 @@ class Mokka extends EventEmitter {
     this.latency = 0;
     this.log = null;
     this.nodes = [];
+    this.cache = new NodeCache({checkperiod: this.election.max / 1000});
     this.privateKey = options.privateKey;
     this.publicKey = options.privateKey ? Wallet.fromPrivateKey(Buffer.from(options.privateKey, 'hex')).getPublicKey().toString('hex') : options.publicKey;
     this.peers = options.peers;
@@ -109,7 +111,7 @@ class Mokka extends EventEmitter {
     }) => {
 
 
-      log.info(`[${Date.now()}]incoming packet type: ${packet.type}`);
+      //log.info(`[${Date.now()}]incoming packet type: ${packet.type}`);
 
       let reply;
 
@@ -123,7 +125,7 @@ class Mokka extends EventEmitter {
       if (states.LEADER === packet.state && packet.type === messageTypes.APPEND) {
 
 
-        if(!_.has(packet, 'proof.index') && !_.has(packet, 'proof.shares')){
+        if (!_.has(packet, 'proof.index') && !_.has(packet, 'proof.shares')) {
           log.info('proof is not provided!');
           let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
           return write(reply);
@@ -133,7 +135,7 @@ class Mokka extends EventEmitter {
         let pubKeys = this.nodes.map(node => node.publicKey);
         pubKeys.push(this.publicKey);
 
-        if(packet.proof.index && _.has(packet, 'proof.shares')){
+        if (packet.proof.index && _.has(packet, 'proof.shares')) {
 
           let proofEntry = await this.log.get(packet.proof.index);
 
@@ -145,7 +147,7 @@ class Mokka extends EventEmitter {
             _.get(proofEntry, 'createdAt', Date.now()),
             packet.proof.shares);
 
-          if(!validated){
+          if (!validated) {
             log.error('the initial proof validation failed');
             let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
             return write(reply);
@@ -155,12 +157,12 @@ class Mokka extends EventEmitter {
         }
 
 
-        if(packet.proof.index && !_.has(packet, 'proof.shares')){
+        if (packet.proof.index && !_.has(packet, 'proof.shares')) {
 
           let proofEntryShare = await this.log.getProof(packet.term);
 
-          if(!proofEntryShare){
-         // if(!proofEntryShare || proofEntryShare.hash !== packet.proof.hash){
+          if (!proofEntryShare) {
+            // if(!proofEntryShare || proofEntryShare.hash !== packet.proof.hash){
             log.error('the secondary proof validation failed');
             let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
             return write(reply);
@@ -176,8 +178,8 @@ class Mokka extends EventEmitter {
       }
 
       // if (packet.type !== messageTypes.VOTED) {
-     // mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
-      log.info('append heartbeat from master');
+      // mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
+      // log.info('append heartbeat from master');
       mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
       // }
 

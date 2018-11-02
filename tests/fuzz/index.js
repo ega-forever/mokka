@@ -18,6 +18,7 @@ module.exports = (ctx) => {
   });
 
 
+/*
   it('run 100 tasks serially (10 times)', async () => {
 
 
@@ -346,6 +347,7 @@ module.exports = (ctx) => {
     }
 
   });
+*/
 
 
   it('run 10000 tasks concurrently', async () => {
