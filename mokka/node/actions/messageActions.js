@@ -1,16 +1,10 @@
 const _ = require('lodash'),
   Promise = require('bluebird'),
-  semaphore = require('semaphore'),
   states = require('../factories/stateFactory'),
   bunyan = require('bunyan'),
   log = bunyan.createLogger({name: 'node.actions.message'}),
   messageTypes = require('../factories/messageTypesFactory');
 
-const sems = _.chain(messageTypes)
-  .values()
-  .map(key => [key, semaphore(1)])
-  .fromPairs()
-  .value();
 
 const _timing = function (latency = []) {
 
@@ -57,12 +51,13 @@ const message = async function (who, what, options = {}) {
 
     default:
       for (let node of mokka.nodes)
-        if (who === node.publicKey) {
+        if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey) {
           nodes.push(node);
         }
   }
 
-  let op = Promise.some(nodes.map(async client => {
+
+  await Promise.some(nodes.map(async client => {
 
     let start = Date.now();
     let output = {
@@ -71,52 +66,21 @@ const message = async function (who, what, options = {}) {
       data: null
     };
 
+    let item = new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))); //todo ack on each action
 
-    try {
-      let item = new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))); //todo ack on each action
+    item = options.timeout ?
+      await item.timeout(options.timeout) : await item;
+    output.data = item;
+    mokka.emit('data', item);
 
-      item = options.timeout ?
-        await item.timeout(options.timeout) : await item;
-      output.data = item;
-      mokka.emit('data', item);
-
-    } catch (err) {
-
-      if (err instanceof Promise.TimeoutError) {
-        log.error(`timeout error on waiting for record confirmation. Type - ${what.type}`);
-      }
-
-      output.error = err;
-      mokka.emit('error', err);
-    }
 
     latency.push(Date.now() - start);
 
     return output;
   }), options.minConfirmations);
 
-  let sem = sems[what.type];
 
-  let op2 = new Promise(res => {
-
-    sem.take(async function () {
-
-      if (!options.serial)
-        sem.leave();
-
-      await op;
-      _timing.call(mokka, latency);
-
-      if (options.serial)
-        sem.leave();
-      res();
-    });
-
-  });
-
-
-  if (options.ensure)
-    await op2;
+  _timing.call(mokka, latency);
 
 };
 
@@ -147,16 +111,16 @@ const appendPacket = async function (entry) {
 
   entry = _.isArray(entry) ? entry : [entry];
 
- let includesStartLog = _.find(entry, {index: proofEntry.index});
+  let includesStartLog = _.find(entry, {index: proofEntry.index});
 
 
- let proof = {
-   index: proofEntry.index,
-   hash: proofEntry.hash
- };
+  let proof = {
+    index: proofEntry.index,
+    hash: proofEntry.hash
+  };
 
- if(includesStartLog)
-   _.merge(proof, proofEntry);
+  if (includesStartLog)
+    _.merge(proof, proofEntry);
 
   return {
     state: mokka.state,

@@ -39,9 +39,9 @@ const init = async () => {
 
   const mokka = new TCPMokka({
     address: `/ip4/127.0.0.1/tcp/${port}/ipfs/${hashUtils.getIpfsHashFromHex(pubKey)}`,
-    election_min: 2000,
-    election_max: 3000,
-    heartbeat: 1000,
+    election_min: 200,
+    election_max: 500,
+    heartbeat: 100,
     Log: Log,
     privateKey: privKey,
     peers: peers.map(peer => peer.pubKey)
@@ -62,11 +62,18 @@ const init = async () => {
     mokka.actions.node.join(peer.uri);
 
 
-  for(let task of tasks){
-    let entry = await Promise.resolve(mokka.api.propose(task));
-    console.log(1, entry.index, entry.hash);
-    await Promise.delay(_.random(50, 100));
+  try {
+    for(let task of tasks){
+      let entry = await mokka.processor.push(task);
+      console.log(1, entry.index, entry.hash);
+      //await Promise.delay(_.random(50, 100));
+    }
+
+  }catch (e) {
+    console.log(e)
+    process.exit(0)
   }
+
 
   const ports = [
     8081, 8082,

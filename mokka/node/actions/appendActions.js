@@ -4,12 +4,16 @@ const _ = require('lodash'),
   log = bunyan.createLogger({name: 'node.actions.append'}),
   states = require('../factories/stateFactory');
 
-const append = async function (packet, write) { //todo move write to index.js
+const append = async function (packet) { //todo move write to index.js
 
   if (packet.leader !== this.leader) {
     log.error(`can't append logs not from leader`);
     let reply = await this.actions.message.packet(messageTypes.ACK);
-    return write(reply);
+
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   const {index, hash} = await this.log.getLastInfo();
@@ -20,13 +24,20 @@ const append = async function (packet, write) { //todo move write to index.js
     await this.log.removeEntriesAfter(prevTerm.index);
 
     let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: prevTerm.index + 1});
-    return this.actions.message.message(states.LEADER, reply);
+    return {
+      reply: reply,
+      who: states.LEADER
+    };
+
   }
 
   if (!packet.data && packet.last.index > index) {
     log.error(`the leader node has more recent history - send request for missed logs`);
     let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: index + 1, recursive: true});
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
 
@@ -58,7 +69,11 @@ const append = async function (packet, write) { //todo move write to index.js
           log.info(`rollback to previous term: ${term} -> ${prevTermEntry.term}`);
           await this.log.removeEntriesAfter(prevTermEntry.index);
           reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: prevTermEntry.index + 1});
-          return this.actions.message.message(states.LEADER, reply);
+          return {
+            reply: reply,
+              who: states.LEADER
+          };
+
         }
 
         if (err.code === 3) {
@@ -67,22 +82,34 @@ const append = async function (packet, write) { //todo move write to index.js
             recursive: true,
             lastIndex: entry.index
           });
-          return this.actions.message.message(states.LEADER, reply);
+          return {
+            reply: reply,
+            who: states.LEADER
+          };
         }
 
         reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex});
-        return this.actions.message.message(states.LEADER, reply);
+        return {
+          reply: reply,
+          who: states.LEADER
+        };
       }
 
 
       log.info(`the ${entry.index} has been saved`);
 
-      write(reply);
+      return {
+        reply: reply,
+        who: packet.publicKey
+      };
     }
   }
 
   let reply = await this.actions.message.packet(messageTypes.ACK);
-  write(reply);
+  return {
+    reply: reply,
+    who: packet.publicKey
+  };
 
 };
 
@@ -98,13 +125,16 @@ const appendAck = async function (packet) {
   this.emit(states.APPEND_ACK, entry.index);
 };
 
-const appendFail = async function (packet, write) {
+const appendFail = async function (packet) {
 
   let {index} = await this.log.getLastInfo();
 
   if (packet.data.index > index) {
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'wrong index!');
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
 
@@ -116,7 +146,10 @@ const appendFail = async function (packet, write) {
   log.info(`received append fail request: requested - ${packet.data.index}, current: ${packet.last.index}, recursive: ${!!packet.data.recursive}, will send ${entity.length} items`);
 
   let reply = await this.actions.message.appendPacket(entity);
-  return write(reply);
+  return {
+    reply: reply,
+    who: packet.publicKey
+  };
 };
 
 module.exports = (instance) => {

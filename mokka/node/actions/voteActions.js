@@ -9,11 +9,9 @@ const messageTypes = require('../factories/messageTypesFactory'),
   web3 = new Web3();
 
 
-const vote = async function (packet, write) { //todo timeout leader on election
+const vote = async function (packet) { //todo timeout leader on election
 
   let blackListCount = this.cache.get(`blacklist.${packet.publicKey}`);
-
-  console.log('blaclist:', blackListCount)
 
   if (blackListCount === 3) {
     this.emit(messageTypes.VOTE, packet, false);
@@ -22,7 +20,11 @@ const vote = async function (packet, write) { //todo timeout leader on election
       signed: null,
       reason: 'blacklisted'
     });
-    return write(reply);
+
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
 
@@ -40,28 +42,16 @@ const vote = async function (packet, write) { //todo timeout leader on election
       signed: null,
       reason: 'share is not provided'
     });
-    return write(reply);
+
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   const signedShare = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
 
-  //let timeout = Date.now() - this.votes.started > this.election.max;
 
-  /*
-    if (packet.data.priority === 2)
-      timeout = this.votes.priority === 1 ? false : Date.now() - this.votes.started > this.election.min;
-  */
-
-  /* if (timeout) {
-     this.emit(messageTypes.VOTE, packet, false);
-     let reply = await this.actions.message.packet(messageTypes.VOTED, {
-       granted: false,
-       signed: signedShare,
-       reason: 'already voted for this time delay',
-       code: 0
-     });
-     return write(reply);
-   }*/
 
   if (index !== 0 && Date.now() - createdAt < this.beat) {
     this.emit(messageTypes.VOTE, packet, false);
@@ -76,7 +66,10 @@ const vote = async function (packet, write) { //todo timeout leader on election
       reason: `the voting window hasn't been closed yet`,
       code: 0
     });
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   if (index !== 0 && Date.now() - createdAt < this.election.max) {
@@ -92,7 +85,10 @@ const vote = async function (packet, write) { //todo timeout leader on election
       reason: 'it seems that master is still committing',
       code: 1
     });
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   if (this.votes.for && this.votes.for !== this.publicKey && (this.votes.priority >= packet.data.priority || ((this.votes.started && Date.now() - this.votes.started < this.election.max) || !this.votes.started))) {
@@ -108,7 +104,10 @@ const vote = async function (packet, write) { //todo timeout leader on election
       reason: 'already voted for another candidate',
       code: 2
     });
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
 
@@ -129,7 +128,10 @@ const vote = async function (packet, write) { //todo timeout leader on election
       reason: 'the candidate is outdated',
       code: 3
     });
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
 
@@ -140,45 +142,34 @@ const vote = async function (packet, write) { //todo timeout leader on election
     this.votes.for = packet.publicKey;
     this.emit(messageTypes.VOTE, packet, true);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   if (packet.last.index === index && packet.last.hash !== hash) { //todo validation by proof supplied in first commit for entry
     this.votes.for = packet.publicKey;
     this.emit(messageTypes.VOTE, packet, true);
-    //this.change({leader: packet.publicKey, term: packet.term});
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
-
-  // let {hash: prevTermHash, term: superTerm} = await this.log.getFirstEntryByTerm(packet.term - 2);
-
-
-  /*  if(packet.data.prevTermHash !== prevTermHash){
-      this.emit(messageTypes.VOTE, packet, false);
-      //console.log('we have different history')
-
-      console.log(`[${Date.now()}]wrong history provided[${this.index}]: ${prevTermHash} vs ${packet.data.prevTermHash}, ${packet.term - 2} vs ${superTerm}`)
-
-      let reply = await this.actions.message.packet(messageTypes.VOTED, {
-        granted: false,
-        signed: signedShare,
-        reason: 'wrong history provided',
-        code: 4
-      });
-      return write(reply);
-    }*/
 
 
   this.votes.for = packet.publicKey;
   this.emit(messageTypes.VOTE, packet, true);
-  //this.change({leader: packet.publicKey, term: packet.term});
   this.heartbeat(this.timeout());
   let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
-  return write(reply);
+  return {
+    reply: reply,
+    who: packet.publicKey
+  };
 };
 
-const voted = async function (packet, write) {
+const voted = async function (packet) {
 
 
   log.info(`received new vote for term[${this.term}]`);
@@ -186,12 +177,18 @@ const voted = async function (packet, write) {
   if (states.CANDIDATE !== this.state) {
     log.info('no longer a candidate');
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'No longer a candidate, ignoring vote');
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   if (!packet.data.signed) {
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'the vote hasn\'t been singed, ignoring vote');
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   const restoredPublicKey = EthUtil.ecrecover(
@@ -209,13 +206,19 @@ const voted = async function (packet, write) {
   if (!localShare) {
     log.info(`the share hasnt\'t been found on term [${this.term}]`);
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'wrong share for vote provided!');
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   if (localShare.voted) {
     log.info(`you have already voted for me on term [${this.term}]`);
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'already voted for this candidate!');
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   localShare.voted = true;
@@ -224,6 +227,7 @@ const voted = async function (packet, write) {
   localShare.last = packet.last;
   localShare.signed = packet.data.signed;
   localShare.code = packet.data.code;
+  localShare.reason = packet.data.reason;
 
   if (!packet.data.granted) {
     log.error(`vote fail due to reason: ${packet.data.reason}`);
@@ -236,20 +240,7 @@ const voted = async function (packet, write) {
     return;
 
   let badVotes = _.filter(this.votes.shares, {granted: false});
-  let leader = _.chain(this.votes.shares)
-    .transform((result, item) => {
-      if (item.leader)
-        result[item.leader] = (result[item.leader] || 0) + 1;
-    }, {})
-    .toPairs()
-    .map(pair => ({
-      total: pair[1],
-      leader: pair[0]
-    }))
-    .sortBy('total')
-    .last()
-    .get('leader')
-    .value();
+
 
 
   //in case index < packet.last.index - then we compare the merke root, in case the root is bad - we drop to previous term,
@@ -270,10 +261,24 @@ const voted = async function (packet, write) {
       secret: null
     };
 
+    let dominatedReason = _.chain(badVotes)
+      .transform((result, vote)=>{
+          result[vote.reason] = (result[vote.reason] || 0) + 1;
+      }, {})
+      .toPairs()
+      .sortBy(item=>item[1])
+      .last()
+      .nth(0)
+      .value();
+
+    console.log('dominated error', dominatedReason);
 
     this.change({term: this.term - 1, state: states.FOLLOWER});
     let reply = await this.actions.message.packet(messageTypes.ACK);
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
 
@@ -290,7 +295,10 @@ const voted = async function (packet, write) {
     };
 
     let reply = await this.actions.message.packet(messageTypes.ACK);
-    return write(reply);
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
   }
 
   this.change({leader: this.publicKey, state: states.LEADER});
@@ -304,7 +312,11 @@ const voted = async function (packet, write) {
   let reply = await this.actions.message.packet(messageTypes.APPEND);
   reply.proof = proof;
 
-  this.actions.message.message(states.FOLLOWER, reply);
+  return {
+    reply: reply,
+    who: states.FOLLOWER
+  };
+
 
 };
 

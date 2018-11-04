@@ -9,11 +9,13 @@ const EventEmitter = require('events'),
   hashUils = require('../utils/hashes'),
   NodeCache = require('node-cache'),
   VoteActions = require('./actions/voteActions'),
-  validateSecretUtil = require('../utils/validateSecret'),
   NodeActions = require('./actions/nodeActions'),
+  semaphore = require('semaphore')(1),
   AppendActions = require('./actions/appendActions'),
   MessageActions = require('./actions/messageActions'),
+  RequestProcessor = require('./services/requestProcessorService'),
   bunyan = require('bunyan'),
+  TaskProcessor = require('./api/taskProcessor'),
   log = bunyan.createLogger({name: 'node'}),
   Api = require('./api');
 
@@ -55,6 +57,7 @@ class Mokka extends EventEmitter {
     this.log = null;
     this.nodes = [];
     this.cache = new NodeCache({checkperiod: this.election.max / 1000});
+    this.processor = new TaskProcessor(this);
     this.privateKey = options.privateKey;
     this.publicKey = options.privateKey ? Wallet.fromPrivateKey(Buffer.from(options.privateKey, 'hex')).getPublicKey().toString('hex') : options.publicKey;
     this.peers = options.peers;
@@ -74,6 +77,7 @@ class Mokka extends EventEmitter {
     this.state = options.state || states.FOLLOWER;    // Our current state.
     this.leader = '';                               // Leader in our cluster.
     this.term = 0;                                  // Our current term.
+    this.requestProcessor = new RequestProcessor(this);
 
     this._initialize(options);
   }
@@ -107,117 +111,23 @@ class Mokka extends EventEmitter {
       }
     });
 
-    mokka.on('data', async (packet, write = () => {
-    }) => {
+    mokka.on('data', async (packet, write) => {
+      //todo processor
 
+      semaphore.take(async () => {
 
-      //log.info(`[${Date.now()}]incoming packet type: ${packet.type}`);
+        let data = await this.requestProcessor.process(packet);
 
-      let reply;
-
-      if (!_.isObject(packet)) {
-        let reason = 'Invalid packet received';
-        mokka.emit(messageTypes.ERROR, new Error(reason));
-        let reply = await mokka.actions.message.packet(messageTypes.ERROR, reason);
-        return write(reply);
-      }
-
-      if (states.LEADER === packet.state && packet.type === messageTypes.APPEND) {
-
-
-        if (!_.has(packet, 'proof.index') && !_.has(packet, 'proof.shares')) {
-          log.info('proof is not provided!');
-          let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
-          return write(reply);
+        if (data.who === packet.publicKey && write) {
+          write(data.reply);
+          semaphore.leave();
+          return;
         }
 
+        this.actions.message.message(data.who, data.reply);
+        semaphore.leave();
+      });
 
-        let pubKeys = this.nodes.map(node => node.publicKey);
-        pubKeys.push(this.publicKey);
-
-        if (packet.proof.index && _.has(packet, 'proof.shares')) {
-
-          let proofEntry = await this.log.get(packet.proof.index);
-
-          let validated = validateSecretUtil(
-            this.networkSecret,
-            this.election.max,
-            pubKeys,
-            packet.proof.secret,
-            _.get(proofEntry, 'createdAt', Date.now()),
-            packet.proof.shares);
-
-          if (!validated) {
-            log.error('the initial proof validation failed');
-            let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
-            return write(reply);
-          }
-
-          await this.log.addProof(packet.term, packet.proof)
-        }
-
-
-        if (packet.proof.index && !_.has(packet, 'proof.shares')) {
-
-          let proofEntryShare = await this.log.getProof(packet.term);
-
-          if (!proofEntryShare) {
-            // if(!proofEntryShare || proofEntryShare.hash !== packet.proof.hash){
-            log.error('the secondary proof validation failed');
-            let reply = await mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
-            return write(reply);
-          }
-        }
-
-        mokka.change({
-          leader: states.LEADER === packet.state ? packet.publicKey : packet.leader || mokka.leader,
-          state: states.FOLLOWER,
-          term: packet.term
-        });
-
-      }
-
-      // if (packet.type !== messageTypes.VOTED) {
-      // mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
-      // log.info('append heartbeat from master');
-      mokka.heartbeat(states.LEADER === mokka.state ? mokka.beat : mokka.timeout());
-      // }
-
-      if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)
-        await this.actions.vote.vote(packet, write);
-      }
-
-      if (packet.type === messageTypes.VOTED) {
-        return await this.actions.vote.voted(packet, write);
-      }
-
-      if (packet.type === messageTypes.ERROR) {
-        mokka.emit(messageTypes.ERROR, new Error(packet.data));
-      }
-
-
-      if (packet.type === messageTypes.APPEND) {
-        return await this.actions.append.append(packet, write); //move write
-      }
-
-      if (packet.type === messageTypes.APPEND_ACK) {
-        await this.actions.append.appendAck(packet);
-      }
-
-      if (packet.type === messageTypes.APPEND_FAIL) {
-        return await this.actions.append.appendFail(packet, write);
-      }
-
-      if (mokka.listeners('rpc').length) {
-        mokka.emit('rpc', packet, write);
-      } else {
-        let reply = await mokka.actions.message.packet('error', 'Unknown message type: ' + packet.type);
-      }
-
-      if (!reply)
-        reply = await mokka.actions.message.packet(messageTypes.ACK);
-
-      write(reply);
 
     });
 
