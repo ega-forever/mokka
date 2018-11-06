@@ -65,6 +65,7 @@ module.exports = (ctx) => {
 
     for (let tries = 1; tries <= 10; tries++) {
 
+//      await Promise.delay(10000);
       console.log(`run simulation ${tries}`);
 
       ctx.nodes = [];

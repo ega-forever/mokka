@@ -39,9 +39,9 @@ const init = async () => {
 
   const mokka = new TCPMokka({
     address: `/ip4/127.0.0.1/tcp/${port}/ipfs/${hashUtils.getIpfsHashFromHex(pubKey)}`,
-    election_min: 200,
-    election_max: 500,
-    heartbeat: 100,
+    election_min: 2000,
+    election_max: 5000,
+    heartbeat: 1000,
     Log: Log,
     privateKey: privKey,
     peers: peers.map(peer => peer.pubKey)

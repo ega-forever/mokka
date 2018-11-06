@@ -135,6 +135,8 @@ class RequestProcessor {
     }
 
 
+    this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
+
     return reply;
 
   }

@@ -1,5 +1,5 @@
-const Kyoo = require('kyoo'),
-  Promise = require('bluebird'),
+const Promise = require('bluebird'),
+  semaphore = require('semaphore'),
   states = require('../factories/stateFactory'),
   eventTypes = require('../factories/eventFactory'),
   bunyan = require('bunyan'),
@@ -9,76 +9,27 @@ const Kyoo = require('kyoo'),
 class TaskProcessor {
 
   constructor (mokka) {
-
-    this.q = new Kyoo({autostart: true, concurrency: 1});
+    this.sem = semaphore(1);
     this.mokka = mokka;
-
   }
 
 
   async push (task) {
 
-    let createJob = async (cb) => {
+    return new Promise(res =>
+      this.sem.take(async () => {
 
-      try {
-        if (this.mokka.state !== states.LEADER) {
+        if (this.mokka.state !== states.LEADER)
           await this._lock();
-        }
 
         let entry = await this._save(task);
-        cb(null, entry);
-      } catch (e) {
-        cb(e);
-      }
-    };
+        await this._broadcast(entry.index);
 
-    let entry = await this._createJob(createJob);
+        this.sem.leave();
+        res(entry);
+      })
+    );
 
-    let broadcastJob = async (cb) => {
-      try {
-        await this._broadcastTask(entry.index);
-        cb(null, entry);
-      } catch (e) {
-        cb(e);
-      }
-    };
-
-    await this._createJob(broadcastJob, true);
-    return entry;
-  }
-
-  async _createJob (job, next = false) {
-
-    next ?
-      this.q.unshift(job) :
-    this.q.push(job);
-
-    return await new Promise((res) => {
-
-      const successCallback = (result, executedJob) => {
-
-        if (job !== executedJob)
-          return;
-
-        this.q.removeListener('success', successCallback);
-        res(result);
-      };
-
-      const errorCallback = async (err, executedJob) => {
-
-        if (job !== executedJob)
-          return;
-
-        this.q.removeListener('error', errorCallback);
-
-   //     let result = await this._createJob(job, true);
-   //     res(result);
-        //todo appoint broadcast task
-      };
-
-      this.q.on('success', successCallback);
-      this.q.on('error', errorCallback);
-    });
   }
 
 
@@ -116,37 +67,45 @@ class TaskProcessor {
     return await this.mokka.log.saveCommand({task: task}, this.mokka.term);
   }
 
-  async _broadcastTask (index) {
+  async _broadcast (index) {
 
+    log.info(`broadcasting ${index}`);
     let entry = await this.mokka.log.get(index);
 
-    if(_.find(this.mokka.nodes, {state: states.CHILD}))
-      throw Error('child detected');
+    //  if(_.find(this.mokka.nodes, {state: states.CHILD}))
+    //    throw Error('child detected');
 
+    if(!entry)
+      return;
 
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;
 
-    let followersAmount = _.chain(this.mokka.nodes)
-      .filter(node => node.state === states.FOLLOWER)
+    let followers = _.chain(this.mokka.nodes)
+    // .filter(node => node.state === states.FOLLOWER) //todo add event when all nodes move from child->follower
       .reject(node => _.find(entry.responses, {publicKey: node.publicKey}))
-      .size().value();
+      .value();
 
-    if (followersAmount === 0) {
-     console.log('no followers!');
-     console.log(entry);
-     console.log(this.mokka.nodes.map(node=>node.state))
-     process.exit(0);
+    if (followers.length === 0)
       return entry;
-    }
 
     let options = {
       timeout: this.mokka.beat,
-      minConfirmations: followersAmount === 1 ? 1 : Math.ceil(followersAmount / 2) + 1
+      minConfirmations: followers.length
     };
 
     const appendPacket = await this.mokka.actions.message.appendPacket(entry);
-    await this.mokka.actions.message.message(states.FOLLOWER, appendPacket, options);
+
+    let pubKeys = followers.map(node=>node.publicKey);
+
+    try {
+      await this.mokka.actions.message.message(pubKeys, appendPacket, options);
+    } catch (e) {
+      console.log(e);
+      console.log(entry.responses.length, pubKeys.length);
+      return await this._broadcast(index);
+    }
+
   }
 
 }

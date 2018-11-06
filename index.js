@@ -33,9 +33,9 @@ const init = async () => {
 
     const raft = new TCPMokka({
       address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
-      election_min: 2000,
-      election_max: 5000,
-      heartbeat: 1000,
+      election_min: 1000,
+      election_max: 3000,
+      heartbeat: 500,
       Log: Log,
       privateKey: privKeys[index],
       peers: pubKeys
@@ -99,7 +99,6 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.processor.push(tasks[i]));
           console.log(1, entry.index, entry.hash, i);
-         // await Promise.delay(_.random(50, 100));
         } catch (e) {
 
           if(e instanceof Promise.TimeoutError){
@@ -126,11 +125,8 @@ const init = async () => {
       let node = nodes[1];
       for (let i = chunks[0] + 1; i < chunks[1]; i++) {
         try {
-          let entry = await Promise.resolve(node.api.propose(tasks[i]));
+          let entry = await Promise.resolve(node.processor.push(tasks[i]));
           console.log(2, entry.index, entry.hash, i);
-       //   await Promise.delay(_.random(50, 100));
-
-          //await Promise.delay(100);
         } catch (e) {
 
           if(e instanceof Promise.TimeoutError){
@@ -156,11 +152,8 @@ const init = async () => {
       let node = nodes[2];
       for (let i = chunks[1] + 1; i < chunks[2]; i++) {
         try {
-          let entry = await Promise.resolve(node.api.propose(tasks[i]));
+          let entry = await Promise.resolve(node.processor.push(tasks[i]));
           console.log(3, entry.index, entry.hash, i);
-       //   await Promise.delay(_.random(50, 100));
-
-          //await Promise.delay(100);
         } catch (e) {
 
           if(e instanceof Promise.TimeoutError){
@@ -188,6 +181,7 @@ const init = async () => {
   let time = (Date.now() - start) / 1000;
   console.log('benchmark: ', time);
   console.log('process tx per second', tasks.length / time);
+  await Promise.delay(2000);
 
   const index1 = await nodes[0].log.getLastInfo();
   const index2 = await nodes[1].log.getLastInfo();
