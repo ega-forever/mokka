@@ -62,16 +62,14 @@ const init = async () => {
     mokka.actions.node.join(peer.uri);
 
 
-  try {
-    for(let task of tasks){
-      let entry = await mokka.processor.push(task);
-      console.log(1, entry.index, entry.hash);
-      //await Promise.delay(_.random(50, 100));
-    }
+  await new Promise(res => process.on('message', res));
 
-  }catch (e) {
-    console.log(e)
-    process.exit(0)
+
+  for (let task of tasks) {
+    console.log('running task at index: ', tasks.indexOf(task));
+    let entry = await mokka.processor.push(task);
+    console.log(1, entry.index, entry.hash);
+    //await Promise.delay(_.random(50, 100));
   }
 
 
@@ -81,10 +79,12 @@ const init = async () => {
     8085, 8086
   ];
 
-  let intervalId = setInterval(async () => {
-
+  setInterval(async ()=>{
     const info = await mokka.log.getLastInfo();
+
     console.log(JSON.stringify(_.merge({node: ports.indexOf(parseInt(port)) + 1}, info)));
+    process.send(JSON.stringify(_.merge({node: ports.indexOf(parseInt(port)) + 1}, info)));
+
 
   }, 3000);
 

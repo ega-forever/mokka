@@ -4,7 +4,7 @@
   "description": "mokka consensus",
   "main": "index.js",
   "scripts": {
-    "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 1800000 -gc tests/index.js"
+    "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js"
   },
   "keywords": [
     "mokka"

@@ -16,7 +16,7 @@ class TaskProcessor {
 
   async push (task) {
 
-    return new Promise(res =>
+    return await new Promise(res =>
       this.sem.take(async () => {
 
         if (this.mokka.state !== states.LEADER)
@@ -95,14 +95,13 @@ class TaskProcessor {
     };
 
     const appendPacket = await this.mokka.actions.message.appendPacket(entry);
-
     let pubKeys = followers.map(node=>node.publicKey);
 
     try {
       await this.mokka.actions.message.message(pubKeys, appendPacket, options);
     } catch (e) {
       console.log(e);
-      console.log(entry.responses.length, pubKeys.length);
+      console.log('collected responses', entry.responses.length, pubKeys.length);
       return await this._broadcast(index);
     }
 

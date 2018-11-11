@@ -118,6 +118,9 @@ class Mokka extends EventEmitter {
 
         let data = await this.requestProcessor.process(packet);
 
+        if(!_.has(data, 'who'))
+          return semaphore.leave();
+
         if (data.who === packet.publicKey && write) {
           write(data.reply);
           semaphore.leave();

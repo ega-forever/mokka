@@ -6,25 +6,27 @@
 
 const
   fuzzTests = require('./fuzz'),
-/*  performanceTests = require('./performance'),
-  blockTests = require('./blocks'),*/
+  /*  performanceTests = require('./performance'),
+    blockTests = require('./blocks'),*/
   featuresTests = require('./features'),
   //fs = require('fs-extra'),
   ctx = {};
 
 describe('mokka tests', function () {
 
-  before(async () => {});
+  before(async () => {
+  });
 
-  after(async () => {});
+  after(async () => {
+  });
 
 
-    //describe('block', () => blockTests(ctx));
+  //describe('block', () => blockTests(ctx));
 
- //   describe('fuzz', () => fuzzTests(ctx));
+  describe('fuzz', () => fuzzTests(ctx));
 
-    //describe('performance', () => performanceTests(ctx));
+  //describe('performance', () => performanceTests(ctx));
 
-  describe('features', () => featuresTests(ctx));
+  //describe('features', () => featuresTests(ctx));
 
 });

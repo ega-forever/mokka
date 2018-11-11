@@ -126,6 +126,14 @@ class RequestProcessor {
       }
     }
 
+
+    this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
+
+
+    if(!reply && this.mokka.state === states.LEADER)
+      return;
+
+
     if (!reply) {
       let response = await this.mokka.actions.message.packet(messageTypes.ACK);
       reply = {
@@ -133,9 +141,6 @@ class RequestProcessor {
         who: packet.publicKey
       };
     }
-
-
-    this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
 
     return reply;
 
