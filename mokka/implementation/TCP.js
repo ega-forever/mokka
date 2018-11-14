@@ -7,7 +7,7 @@ const Mokka = require('../node'),
 class TCPMokka extends Mokka {
 
 
-  initialize (options) {
+  initialize () {
     log.info('initializing reply socket on port %s', this.address);
 
     this.socket = msg.socket('rep');
@@ -35,7 +35,7 @@ class TCPMokka extends Mokka {
 
       this.socket.connect(this.address);
       this.socket.on('error', function err () {
-        console.error('failed to write to: ', this.address);
+        log.error('failed to write to: ', this.address);
       });
     }
 

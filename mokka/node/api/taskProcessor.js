@@ -100,8 +100,6 @@ class TaskProcessor {
     try {
       await this.mokka.actions.message.message(pubKeys, appendPacket, options);
     } catch (e) {
-      console.log(e);
-      console.log('collected responses', entry.responses.length, pubKeys.length);
       return await this._broadcast(index);
     }
 

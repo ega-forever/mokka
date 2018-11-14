@@ -1,8 +1,6 @@
 const _ = require('lodash'),
   Promise = require('bluebird'),
   states = require('../factories/stateFactory'),
-  bunyan = require('bunyan'),
-  log = bunyan.createLogger({name: 'node.actions.message'}),
   messageTypes = require('../factories/messageTypesFactory');
 
 
@@ -13,9 +11,9 @@ const _timing = function (latency = []) {
 
   this.latency = Math.floor(_.sum(latency) / latency.length);
 
-  if (this.latency > this.election.min * this.threshold) {
+  if (this.latency > this.election.min * this.threshold) 
     this.emit('threshold');
-  }
+  
 
 
   return true;
@@ -33,16 +31,16 @@ const message = async function (who, what, options = {}) {
   switch (who) {
     case states.LEADER:
       for (let node of mokka.nodes)
-        if (mokka.leader === node.publicKey) {
+        if (mokka.leader === node.publicKey) 
           nodes.push(node);
-        }
+      
       break;
 
     case states.FOLLOWER:
       for (let node of mokka.nodes)
-        if (mokka.leader !== node.publicKey) {
+        if (mokka.leader !== node.publicKey) 
           nodes.push(node);
-        }
+      
       break;
 
     case states.CHILD:
@@ -51,9 +49,9 @@ const message = async function (who, what, options = {}) {
 
     default:
       for (let node of mokka.nodes)
-        if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey) {
+        if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey) 
           nodes.push(node);
-        }
+      
   }
 
 

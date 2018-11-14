@@ -4,7 +4,8 @@
   "description": "mokka consensus",
   "main": "index.js",
   "scripts": {
-    "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js"
+    "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js",
+    "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore ."
   },
   "keywords": [
     "mokka"
@@ -17,7 +18,6 @@
     "bunyan": "^1.8.12",
     "encoding-down": "^3.0.1",
     "ethereumjs-wallet": "^0.6.2",
-    "kyoo": "^5.0.1",
     "leveldown": "^4.0.1",
     "levelup": "^3.1.1",
     "lodash": "^4.17.11",
@@ -35,7 +35,8 @@
   },
   "devDependencies": {
     "chai": "^4.2.0",
-    "eslint": "^5.8.0",
+    "eslint": "^5.9.0",
+    "eslint-plugin-async-await": "0.0.0",
     "mocha": "^5.2.0"
   }
 }

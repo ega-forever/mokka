@@ -37,13 +37,13 @@ const leave = function (publicKey) {
   let index = -1,
     node;
 
-  for (let i = 0; i < this.nodes.length; i++) {
+  for (let i = 0; i < this.nodes.length; i++) 
     if (this.nodes[i] === publicKey || this.nodes[i].publicKey === publicKey) {
       node = this.nodes[i];
       index = i;
       break; //todo refactor
     }
-  }
+  
 
   if (~index && node) {
     this.nodes.splice(index, 1);

@@ -63,7 +63,7 @@ const vote = async function (packet) { //todo timeout leader on election
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
       signed: signedShare,
-      reason: `the voting window hasn't been closed yet`,
+      reason: 'the voting window hasn\'t been closed yet',
       code: 0
     });
     return {
@@ -204,7 +204,7 @@ const voted = async function (packet) {
   });
 
   if (!localShare) {
-    log.info(`the share hasnt\'t been found on term [${this.term}]`);
+    log.info(`the share hasnt't been found on term [${this.term}]`);
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'wrong share for vote provided!');
     return {
       reply: reply,
@@ -229,9 +229,9 @@ const voted = async function (packet) {
   localShare.code = packet.data.code;
   localShare.reason = packet.data.reason;
 
-  if (!packet.data.granted) {
+  if (!packet.data.granted) 
     log.error(`vote fail due to reason: ${packet.data.reason}`);
-  }
+  
 
 
   let votedAmount = _.chain(this.votes.shares).filter({voted: true}).size().value();
@@ -263,7 +263,7 @@ const voted = async function (packet) {
 
     let dominatedReason = _.chain(badVotes)
       .transform((result, vote)=>{
-          result[vote.reason] = (result[vote.reason] || 0) + 1;
+        result[vote.reason] = (result[vote.reason] || 0) + 1;
       }, {})
       .toPairs()
       .sortBy(item=>item[1])
@@ -271,7 +271,7 @@ const voted = async function (packet) {
       .nth(0)
       .value();
 
-    console.log('dominated error', dominatedReason);
+    log.error(`vote result error: ${dominatedReason}`);
 
     this.change({term: this.term - 1, state: states.FOLLOWER});
     let reply = await this.actions.message.packet(messageTypes.ACK);

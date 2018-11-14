@@ -7,7 +7,7 @@ const _ = require('lodash'),
 const append = async function (packet) { //todo move write to index.js
 
   if (packet.leader !== this.leader) {
-    log.error(`can't append logs not from leader`);
+    log.error('can\'t append logs not from leader');
     let reply = await this.actions.message.packet(messageTypes.ACK);
 
     return {
@@ -32,14 +32,13 @@ const append = async function (packet) { //todo move write to index.js
   }
 
   if (!packet.data && packet.last.index > index) {
-    log.error(`the leader node has more recent history - send request for missed logs`);
+    log.error('the leader node has more recent history - send request for missed logs');
     let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: index + 1, recursive: true});
     return {
       reply: reply,
       who: packet.publicKey
     };
   }
-
 
 
   if (packet.data) {
@@ -61,32 +60,23 @@ const append = async function (packet) { //todo move write to index.js
         let {index: lastIndex, term} = await this.log.getLastInfo();
         log.error(`error during save log: ${err.toString()}`);
 
+        let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex});
+
         if (err.code === 2) {
           let prevTermEntry = await this.log.getLastEntryByTerm(term - 1);
           log.info(`rollback to previous term: ${term} -> ${prevTermEntry.term}`);
           await this.log.removeEntriesAfter(prevTermEntry.index);
-          let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: prevTermEntry.index + 1});
-          return {
-            reply: reply,
-            who: states.LEADER
-          };
-
+          reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: prevTermEntry.index + 1});
         }
 
-        if (err.code === 3) {
-          let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {
+        if (err.code === 3) 
+          reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {
             index: lastIndex + 1,
             recursive: true,
             lastIndex: entry.index
           });
+        
 
-          return {
-            reply: reply,
-            who: states.LEADER
-          };
-        }
-
-        let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex});
         return {
           reply: reply,
           who: states.LEADER
@@ -123,13 +113,11 @@ const append = async function (packet) { //todo move write to index.js
 
 const appendAck = async function (packet) {
 
-  console.log(packet.data)
-
   for(let item of packet.data){
 
     const entry = await this.log.commandAck(item.index, packet.publicKey);
 
-    console.log('append ack', item.index, entry.responses.length)
+    log.info(`append ack: ${item.index} / ${entry.responses.length}`);
 
     if (this.quorum(entry.responses.length) && !entry.committed) {
       const entries = await this.log.getUncommittedEntriesUpToIndex(entry.index, entry.term);

@@ -7,28 +7,17 @@ const encode = require('encoding-down'),
 
 class Log {
 
-  constructor (node, {adapter = require('memdown')}, schedulerTimeout = 10000) {
+  constructor (node, options = {}) {
+
+    let _options = _.cloneDeep(options);
+
+    if(!_options.adapter)
+      _options.adapter = require('memdown');
+
+
     this.node = node;
-    this.db = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
-    this.termDb = levelup(encode(adapter(), {valueEncoding: 'json', keyEncoding: 'binary'}));
-    /*    this.scheduler = setInterval(async () => {
-
-          let {index} = await this.getLastInfo();//todo check quorum (replicated factor)
-          let metas = await this.getMetaEntriesAfter();
-
-          for (let meta of metas) {
-            if (meta.committedExecuted && meta.executed + 10 < index && meta.committedReserve && meta.committedTask) {
-              await this.db.del(meta.executed);
-              await this.db.del(meta.reserved);
-              await this.db.del(meta.task);
-              continue;
-            }
-
-            if (!meta.executed && meta.reserved && meta.committedReserve && meta.committedTask && meta.reserved + 10 < index && Date.now() - meta.timeout > meta.created)
-              await this.db.del(meta.reserved);
-          }
-
-        }, schedulerTimeout)*/
+    this.db = levelup(encode(_options.adapter(`${options.path}_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
+    this.termDb = levelup(encode(_options.adapter(`${options.path}_term_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
   }
 
 
@@ -72,7 +61,7 @@ class Log {
 
         if (checkHash && generatedHash !== checkHash) {
           semaphore.leave();
-          return rej({code: 2, message: `can't save wrong hash!`});
+          return rej({code: 2, message: 'can\'t save wrong hash!'});
         }
 
 
@@ -102,7 +91,7 @@ class Log {
         res(entry);
         semaphore.leave();
 
-      })
+      });
     });
   }
 
@@ -147,7 +136,7 @@ class Log {
     try {
       return await this.termDb.get(term);
     } catch (e) {
-      return null
+      return null;
     }
 
   }
@@ -200,11 +189,11 @@ class Log {
             reserved = true;
         })
         .on('error', err => {
-          reject(err)
+          reject(err);
         })
         .on('end', () => {
           resolve(reserved);
-        })
+        });
     });
 
   }
@@ -231,11 +220,11 @@ class Log {
           entries.push(data.value);
         })
         .on('error', err => {
-          reject(err)
+          reject(err);
         })
         .on('end', () => {
           resolve(entries);
-        })
+        });
     });
 
   }
@@ -267,7 +256,7 @@ class Log {
           _.set(entries, `${data.value.command.executed}.committedExecuted`, data.value.committed);
         })
         .on('error', err => {
-          reject(err)
+          reject(err);
         })
         .on('end', () => {
           entries = _.chain(entries)
@@ -276,7 +265,7 @@ class Log {
             .value();
 
           resolve(entries);
-        })
+        });
     });
 
   }
@@ -300,23 +289,6 @@ class Log {
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
     this.node.term = lastIndex === 0 ? 0 : lastTerm;
 
-  }
-
-  /**
-   * has - Checks if entry exists at index
-   *
-   * @async
-   * @param {number} index Index position to check if entry exists
-   * @return {boolean} Boolean on whether entry exists at index
-   * @public
-   */
-  async has (index) {
-    try {
-      const entry = await this.db.get(index);
-      return true
-    } catch (err) {
-      return false;
-    }
   }
 
   /**
@@ -373,11 +345,11 @@ class Log {
           entry = data.value;
         })
         .on('error', err => {
-          reject(err)
+          reject(err);
         })
         .on('end', () => {
           resolve(entry);
-        })
+        });
     });
   }
 
@@ -417,9 +389,9 @@ class Log {
       hash: _.fill(new Array(32), 0).join('')
     };
     // We know it is the first entry, so save the query time
-    if (entry.index === 1) {
+    if (entry.index === 1) 
       return Promise.resolve(defaultInfo);
-    }
+    
 
     return new Promise((resolve, reject) => {
       let hasResolved = false;
@@ -438,9 +410,9 @@ class Log {
           reject(err);
         })
         .on('end', () => {
-          if (!hasResolved) {
+          if (!hasResolved) 
             resolve(defaultInfo);
-          }
+          
         });
     });
   }
@@ -448,9 +420,9 @@ class Log {
   getEntriesAfterIndex (index, limit = 1) {
     const items = [];
     // We know it is the first entry, so save the query time
-    if (index === 0) {
+    if (index === 0) 
       return Promise.resolve(items);
-    }
+    
 
     return new Promise((resolve, reject) => {
 
@@ -480,12 +452,12 @@ class Log {
 
     const entryIndex = await entry.responses.findIndex(resp => resp.publicKey === publicKey);
     // node hasn't voted yet. Add response
-    if (entryIndex === -1) {
+    if (entryIndex === -1) 
       entry.responses.push({
         publicKey,
         ack: true
       });
-    }
+    
 
     await this.put(entry);
 
@@ -526,12 +498,12 @@ class Log {
         lte: index
       })
         .on('data', data => {
-          if (!data.value.committed) {
+          if (!data.value.committed) 
             entries.push(data.value);
-          }
+          
         })
         .on('error', err => {
-          reject(err)
+          reject(err);
         })
         .on('end', () => {
           resolve(entries);

@@ -10,19 +10,8 @@ const getIpfsHashFromHex = (hash) => {
   return bs58.encode(hashBytes);
 };
 
-const isBase58 = (hash)=>{
-
-  try {
-    bs58.decode(hash);
-    return true;
-  }catch (e) {
-    return false;
-  }
-
-};
 
 module.exports = {
   getHexFromIpfsHash,
-  getIpfsHashFromHex,
-  isBase58
+  getIpfsHashFromHex
 };

@@ -9,63 +9,29 @@ const Promise = require('bluebird'),
   _ = require('lodash'),
   expect = require('chai').expect,
   hashUtils = require('../../mokka/utils/hashes'),
-  spawn = require('child_process').spawn,
+  cp = require('child_process'),
   path = require('path');
 
 module.exports = (ctx) => {
 
   before(async () => {
 
-    /*    ctx.nodes = [];
+    ctx.ports = [];
 
-        const nodePath = path.join(__dirname, '../node/node.js');
+    let nodesCount = _.random(3, 7);
 
-        const ports = [
-          8081, 8082,
-          8083, 8084,
-          8085, 8086
-        ];
+    for (let index = 0; index < nodesCount; index++)
+      ctx.ports.push(2000 + index);
 
-        let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
-        let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
-
-        for (let index = 0; index < ports.length; index++) {
-
-          let uris = [];
-
-          for (let index1 = 0; index1 < ports.length; index1++) {
-            if (index === index1)
-              continue;
-            uris.push(`/ip4/127.0.0.1/tcp/${ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
-          }
-
-          let amount = 100;
-
-          const nodePid = spawn('node', [nodePath], {
-            env: _.merge({}, process.env, {
-              PRIVATE_KEY: privKeys[index],
-              PORT: ports[index],
-              PEERS: uris.join(';'),
-              CHUNKS: [amount * index + 1, amount * (index + 1)].join(':')
-            }),
-            stdio: 'inherit'
-          });
-
-          ctx.nodes.push(nodePid)
-
-        }*/
-
-    //  await Promise.delay(120000);
 
   });
 
 
-  it('run 1000 tasks serially (10 times)', async () => {
+  it('run tasks concurrently (10 times, 100 tasks per each node)', async () => {
 
 
     for (let tries = 1; tries <= 10; tries++) {
 
-//      await Promise.delay(10000);
       console.log(`run simulation ${tries}`);
 
       ctx.nodes = [];
@@ -73,13 +39,7 @@ module.exports = (ctx) => {
 
       const nodePath = path.join(__dirname, '../node/node.js');
 
-      const ports = [
-        8081, 8082,
-        8083, 8084,
-        8085, 8086
-      ];
-
-      let privKeys = _.chain(new Array(ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
+      let privKeys = _.chain(new Array(ctx.ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
       let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
       const killCb = () => {
@@ -87,50 +47,57 @@ module.exports = (ctx) => {
         process.exit(0);
       };
 
-      for (let index = 0; index < ports.length; index++) {
+      for (let index = 0; index < ctx.ports.length; index++) {
 
         let uris = [];
 
-        for (let index1 = 0; index1 < ports.length; index1++) {
+        for (let index1 = 0; index1 < ctx.ports.length; index1++) {
           if (index === index1)
             continue;
-          uris.push(`/ip4/127.0.0.1/tcp/${ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
+          uris.push(`/ip4/127.0.0.1/tcp/${ctx.ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
         }
 
         let amount = 100;
 
-        const nodePid = spawn('node', [nodePath], {
+        const nodePid = cp.fork(nodePath, {
           env: _.merge({}, process.env, {
             PRIVATE_KEY: privKeys[index],
-            PORT: ports[index],
+            PORT: ctx.ports[index],
             PEERS: uris.join(';'),
             CHUNKS: [amount * index + 1, amount * (index + 1)].join(':')
           })
-          //  stdio: 'inherit'
         });
 
         ctx.nodes.push(nodePid);
 
-        nodePid.stdout.on('data', (data) => {
+
+        // nodePid.stdout.on('data', (data) => {
+        nodePid.on('message', (data) => {
           data = data.toString();
           console.log(data);
           try {
             data = JSON.parse(data);
-            if (_.isNumber(data.node))
+            if (_.isNumber(data.node)) {
               states[index] = data;
+            }
           } catch (e) {
           }
         });
 
         nodePid.on('exit', killCb);
-
       }
+
+
+      await Promise.delay(10000);
+
+      for (let node of ctx.nodes)
+        node.send({start: true});
 
       await new Promise(res => {
 
         let intervalId = setInterval(() => {
           let records = Object.values(states);
-          if (records.length === 6) {
+          if (records.length === ctx.nodes.length) {
 
             expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
             expect(_.uniq(records.map(rec => rec.index)).length).to.eq(1);
@@ -143,15 +110,104 @@ module.exports = (ctx) => {
 
       });
 
+      for (let node of ctx.nodes) {
+        node.removeListener('exit', killCb);
+        node.kill();
+      }
+    }
+  });
+
+  it('run tasks concurrently (random timing, 10 times, 10 tasks per each node)', async () => {
+
+
+    for (let tries = 1; tries <= 10; tries++) {
+
+      console.log(`run simulation ${tries}`);
+
+      ctx.nodes = [];
+      let states = {};
+
+      const nodePath = path.join(__dirname, '../node/node.js');
+
+      let privKeys = _.chain(new Array(ctx.ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
+      let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
+
+      const killCb = () => {
+        console.log('killed by child!')
+        process.exit(0);
+      };
+
+      for (let index = 0; index < ctx.ports.length; index++) {
+
+        let uris = [];
+
+        for (let index1 = 0; index1 < ctx.ports.length; index1++) {
+          if (index === index1)
+            continue;
+          uris.push(`/ip4/127.0.0.1/tcp/${ctx.ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
+        }
+
+        let amount = 10;
+
+        const nodePid = cp.fork(nodePath, {
+          env: _.merge({}, process.env, {
+            PRIVATE_KEY: privKeys[index],
+            PORT: ctx.ports[index],
+            PEERS: uris.join(';'),
+            CHUNKS: [amount * index + 1, amount * (index + 1)].join(':'),
+            RANDOM_DELAY: 1
+          })
+        });
+
+        ctx.nodes.push(nodePid);
+
+
+        // nodePid.stdout.on('data', (data) => {
+        nodePid.on('message', (data) => {
+          data = data.toString();
+          console.log(data);
+          try {
+            data = JSON.parse(data);
+            if (_.isNumber(data.node)) {
+              states[index] = data;
+            }
+          } catch (e) {
+          }
+        });
+
+        nodePid.on('exit', killCb);
+      }
+
+
+      await Promise.delay(10000);
+
+      for (let node of ctx.nodes)
+        node.send({start: true});
+
+      await new Promise(res => {
+
+        let intervalId = setInterval(() => {
+          let records = Object.values(states);
+          if (records.length === ctx.nodes.length) {
+
+            expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
+            expect(_.uniq(records.map(rec => rec.index)).length).to.eq(1);
+            expect(_.uniq(records.map(rec => rec.term)).length).to.eq(1);
+
+            clearInterval(intervalId);
+            res();
+          }
+        }, 3000);
+
+      });
 
       for (let node of ctx.nodes) {
         node.removeListener('exit', killCb);
         node.kill();
       }
-
-
     }
   });
+
 
 
   after('kill environment', async () => {

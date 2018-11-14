@@ -5,10 +5,9 @@ const _ = require('lodash'),
 
 module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
 
-  if(!secret) {
-   console.log('no secret')
+  if(!secret) 
     return false;
-  }
+  
 
   let token = secrets.hex2str(secret);
 
@@ -21,18 +20,9 @@ module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
     window: 2
   });
 
-  if(!verified) {
-   console.log('wrong token');
-   console.log({
-     secret: networkSecret,
-     token: token,
-     //step: window / 1000,
-     step: 30,
-     time: parseInt(time / 1000),
-     window: 2
-   })
+  if(!verified) 
     return false;
-  }
+  
 
   let notFoundKeys = _.chain(shares)
     .reject(item => {
@@ -52,10 +42,9 @@ module.exports = (networkSecret, window, pubKeys, secret, time, shares) => {
 
   let majority = Math.ceil(pubKeys.length / 2) + 1;
 
-  if (pubKeys.length - notFoundKeys < majority) {
-   console.log('voted witnout enough votes')
+  if (pubKeys.length - notFoundKeys < majority) 
     return false;
-  }
+  
 
 
   let validatedShares = _.chain(shares).filter(share => _.has(share, 'signed'))

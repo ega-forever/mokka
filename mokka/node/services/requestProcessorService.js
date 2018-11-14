@@ -64,7 +64,7 @@ class RequestProcessor {
           };
         }
 
-        await this.mokka.log.addProof(packet.term, packet.proof)
+        await this.mokka.log.addProof(packet.term, packet.proof);
       }
 
 
@@ -93,37 +93,37 @@ class RequestProcessor {
     this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
 
 
-    if (packet.type === messageTypes.VOTE) { //add rule - don't vote for node, until this node receive the right history (full history)
+    if (packet.type === messageTypes.VOTE)  //add rule - don't vote for node, until this node receive the right history (full history)
       reply = await this.mokka.actions.vote.vote(packet);
-    }
+    
 
-    if (packet.type === messageTypes.VOTED) {
+    if (packet.type === messageTypes.VOTED) 
       reply = await this.mokka.actions.vote.voted(packet);
-    }
+    
 
-    if (packet.type === messageTypes.ERROR) {
+    if (packet.type === messageTypes.ERROR) 
       this.mokka.emit(messageTypes.ERROR, new Error(packet.data));
-    }
+    
 
 
-    if (packet.type === messageTypes.APPEND) {
+    if (packet.type === messageTypes.APPEND) 
       reply = await this.mokka.actions.append.append(packet);
-    }
+    
 
-    if (packet.type === messageTypes.APPEND_ACK) {
+    if (packet.type === messageTypes.APPEND_ACK) 
       reply = await this.mokka.actions.append.appendAck(packet);
-    }
+    
 
-    if (packet.type === messageTypes.APPEND_FAIL) {
+    if (packet.type === messageTypes.APPEND_FAIL) 
       reply = await this.mokka.actions.append.appendFail(packet);
-    }
+    
 
     if (!Object.values(messageTypes).includes(packet.type)) {
       let response = await this.mokka.actions.message.packet('error', 'Unknown message type: ' + packet.type);
       reply = {
         reply: response,
         who: packet.publicKey
-      }
+      };
     }
 
 

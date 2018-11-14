@@ -30,6 +30,8 @@ const tasks = _.chain(process.env.CHUNKS).split(':').thru(items => {
 })
   .value();
 
+const randomDelay = process.env.RANDOM_DELAY ? parseInt(process.env.RANDOM_DELAY) : false;
+const startDelay = process.env.START_DELAY ? parseInt(process.env.START_DELAY) : 0;
 
 const privKey = process.env.PRIVATE_KEY;
 const port = process.env.PORT;
@@ -37,11 +39,14 @@ const pubKey = Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey()
 
 const init = async () => {
 
+  if(startDelay)
+    await Promise.delay(startDelay);
+
   const mokka = new TCPMokka({
     address: `/ip4/127.0.0.1/tcp/${port}/ipfs/${hashUtils.getIpfsHashFromHex(pubKey)}`,
-    election_min: 2000,
-    election_max: 5000,
-    heartbeat: 1000,
+    election_min: process.env.ELECTION_MIN ? parseInt(process.env.ELECTION_MIN) : 2000,
+    election_max: process.env.ELECTION_MAX ? parseInt(process.env.ELECTION_MAX) : 5000,
+    heartbeat: process.env.HEARTBEAT ? parseInt(process.env.HEARTBEAT) : 1000,
     Log: Log,
     privateKey: privKey,
     peers: peers.map(peer => peer.pubKey)
@@ -50,7 +55,7 @@ const init = async () => {
   await Promise.delay(_.random(0, 100));
 
   mokka.on('heartbeat timeout', function () {
-    console.log(`heart beat timeout, starting election[${this.index}]`);
+    console.log(`heart beat timeout, starting election[${process.env.NODE_INDEX || 0}]`);
   });
 
   mokka.on('error', function (err) {
@@ -66,9 +71,13 @@ const init = async () => {
 
 
   for (let task of tasks) {
+
+    if(randomDelay)
+      await Promise.delay(_.random(this.election_min, this.election_max * 2));
+
     console.log('running task at index: ', tasks.indexOf(task));
     let entry = await mokka.processor.push(task);
-    console.log(1, entry.index, entry.hash);
+    console.log(process.env.NODE_INDEX || 0, entry.index, entry.hash);
     //await Promise.delay(_.random(50, 100));
   }
 
