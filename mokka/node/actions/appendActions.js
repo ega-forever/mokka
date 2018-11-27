@@ -113,6 +113,8 @@ const append = async function (packet) { //todo move write to index.js
 
 const appendAck = async function (packet) {
 
+  let replies = [];
+
   for(let item of packet.data){
 
     const entry = await this.log.commandAck(item.index, packet.publicKey);
@@ -126,9 +128,31 @@ const appendAck = async function (packet) {
 
     this.emit(states.APPEND_ACK, entry.index);
 
+    if(this.state !== states.LEADER)
+      continue;
+
+    let peers = _.chain(entry.responses).map(item=>item.publicKey).pullAll([packet.publicKey, this.publicKey]).value();
+    console.log(peers);
+  //  process.exit(0)
+
+    replies.push({
+      reply: packet,
+      who: peers
+    })
+
   }
 
+  if(this.state !== states.LEADER)
+    return replies;
 
+  let response = await this.actions.message.packet(messageTypes.ACK);
+
+  replies.push({
+    reply: response,
+    who: packet.publicKey
+  });
+
+  return replies;
 };
 
 const appendFail = async function (packet) {

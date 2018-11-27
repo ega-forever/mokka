@@ -11,13 +11,16 @@ class Log {
 
     let _options = _.cloneDeep(options);
 
-    if(!_options.adapter)
+    if (!_options.adapter)
       _options.adapter = require('memdown');
 
+    this.prefixes = {
+      logs: 1,
+      term: 2
+    };
 
     this.node = node;
     this.db = levelup(encode(_options.adapter(`${options.path}_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
-    this.termDb = levelup(encode(_options.adapter(`${options.path}_term_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
   }
 
 
@@ -34,6 +37,7 @@ class Log {
 
         const {index: lastIndex, hash: lastHash} = await this.getLastInfo();
 
+
         if (_.isNumber(index) && index !== 0 && index <= lastIndex) {
           semaphore.leave();
           return rej({code: 1, message: `can't rewrite chain (received ${index} while current is ${lastIndex})!`});
@@ -49,7 +53,6 @@ class Log {
 
         if (!_.isNumber(index))
           index = lastIndex + 1;
-
 
         const merkleTools = new MerkleTools();
         merkleTools.addLeaf(lastHash);
@@ -95,6 +98,11 @@ class Log {
     });
   }
 
+  _getBnNumber (num = 0) {
+    num = num.toString(2);
+    return new Array(64 - num.length).fill('0').join('') + num;
+  }
+
   /**
    * put - Save entry to database using the index as the key
    *
@@ -113,10 +121,11 @@ class Log {
       firstEntryByTerm.hash = entry.hash;
       firstEntryByTerm.index = entry.index;
 
-      await this.termDb.put(entry.term, firstEntryByTerm);
+
+      await this.db.put(`${this.prefixes.term}:${this._getBnNumber(entry.term)}`, firstEntryByTerm);
     }
 
-    return await this.db.put(entry.index, entry);
+    return await this.db.put(`${this.prefixes.logs}:${this._getBnNumber(entry.index)}`, entry);
   }
 
 
@@ -128,13 +137,13 @@ class Log {
       return;
 
 
-    return await this.termDb.put(term, proof);
+    return await this.db.put(`${this.prefixes.term}:${this._getBnNumber(term)}`, proof);
   }
 
   async getProof (term) {
 
     try {
-      return await this.termDb.get(term);
+      return await this.db.get(`${this.prefixes.term}:${this._getBnNumber(term)}`);
     } catch (e) {
       return null;
     }
@@ -143,7 +152,7 @@ class Log {
 
   async getFirstEntryByTerm (term) {
     try {
-      return await this.termDb.get(term);
+      return await this.db.get(`${this.prefixes.term}:${this._getBnNumber(term)}`);
     } catch (err) {
       return {
         index: 0,
@@ -167,7 +176,7 @@ class Log {
           term: this.node.term
         };
 
-      return await this.db.get(headEntry.index - 1);
+      return await this.db.get(`${this.prefixes.logs}:${this._getBnNumber(headEntry.index - 1)}`);
 
     } catch (err) {
       return {
@@ -177,27 +186,6 @@ class Log {
       };
     }
   }
-
-  async isReserved (index) {
-
-    let reserved = false;
-
-    return await new Promise((resolve, reject) => {
-      this.db.createReadStream({gt: index})
-        .on('data', data => {
-          if (data.value.command.reserve === index)
-            reserved = true;
-        })
-        .on('error', err => {
-          reject(err);
-        })
-        .on('end', () => {
-          resolve(reserved);
-        });
-    });
-
-  }
-
 
   /**
    * getEntriesAfter - Get all the entries after a specific index
@@ -209,7 +197,7 @@ class Log {
   async getEntriesAfter (index, limit) {
     const entries = [];
 
-    let query = {gt: index};
+    let query = {gt: `${this.prefixes.logs}:${this._getBnNumber(index)}`, lt: `${this.prefixes.logs + 1}:${this._getBnNumber(0)}`};
 
     if (limit)
       query.limit = limit;
@@ -229,47 +217,6 @@ class Log {
 
   }
 
-
-  async getMetaEntriesAfter (index, limit) {
-    let entries = {};
-    return await new Promise((resolve, reject) => {
-      this.db.createReadStream({gt: index, limit: limit})
-        .on('data', data => {
-
-          if (data.value.command.task) {
-            _.set(entries, `${data.value.index}.task`, data.value.index);
-            _.set(entries, `${data.value.index}.created`, data.value.command.created);
-            _.set(entries, `${data.value.index}.committedTask`, data.value.committed);
-
-          }
-
-          if (_.isNumber(data.value.command.reserve)) {
-
-            _.set(entries, `${data.value.command.reserve}.reserved`, data.value.index);
-            _.set(entries, `${data.value.command.reserve}.timeout`, data.value.command.timeout);
-            _.set(entries, `${data.value.command.reserve}.committedReserve`, data.value.committed);
-
-          }
-
-          if (_.isNumber(data.value.command.executed))
-            _.set(entries, `${data.value.command.executed}.executed`, data.value.index);
-          _.set(entries, `${data.value.command.executed}.committedExecuted`, data.value.committed);
-        })
-        .on('error', err => {
-          reject(err);
-        })
-        .on('end', () => {
-          entries = _.chain(entries)
-            .values()
-            .filter(entity => _.isNumber(entity.task))
-            .value();
-
-          resolve(entries);
-        });
-    });
-
-  }
-
   /**
    * removeEntriesAfter - Removes all entries after a given index
    *
@@ -282,8 +229,8 @@ class Log {
     const entries = await this.getEntriesAfter(index);
 
     for (let entry of entries) {
-      await this.termDb.del(entry.term);
-      await this.db.del(entry.index);
+      await this.db.del(`${this.prefixes.term}:${this._getBnNumber(entry.term)}`);
+      await this.db.del(`${this.prefixes.logs}:${this._getBnNumber(entry.index)}`);
     }
 
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
@@ -300,7 +247,7 @@ class Log {
    */
   async get (index) {
     try {
-      return await this.db.get(index);
+      return await this.db.get(`${this.prefixes.logs}:${this._getBnNumber(index)}`);
     } catch (err) {
       return null;
     }
@@ -340,7 +287,13 @@ class Log {
         createdAt: Date.now()
       };
 
-      this.db.createReadStream({reverse: true, limit: 1})
+
+      this.db.createReadStream({
+        reverse: true,
+        limit: 1,
+        lt: `${this.prefixes.logs + 1}:${this._getBnNumber(0)}`,
+        gte: `${this.prefixes.logs}:${this._getBnNumber(0)}`
+      })
         .on('data', data => {
           entry = data.value;
         })
@@ -389,9 +342,9 @@ class Log {
       hash: _.fill(new Array(32), 0).join('')
     };
     // We know it is the first entry, so save the query time
-    if (entry.index === 1) 
+    if (entry.index === 1)
       return Promise.resolve(defaultInfo);
-    
+
 
     return new Promise((resolve, reject) => {
       let hasResolved = false;
@@ -399,7 +352,8 @@ class Log {
       this.db.createReadStream({
         reverse: true,
         limit: 1,
-        lt: entry.index
+        lt: `${this.prefixes.logs}:${this._getBnNumber(entry.index)}`,
+        gt: `${this.prefixes.logs}:${this._getBnNumber(0)}`
       })
         .on('data', (data) => {
           hasResolved = true;
@@ -410,34 +364,9 @@ class Log {
           reject(err);
         })
         .on('end', () => {
-          if (!hasResolved) 
+          if (!hasResolved)
             resolve(defaultInfo);
-          
-        });
-    });
-  }
 
-  getEntriesAfterIndex (index, limit = 1) {
-    const items = [];
-    // We know it is the first entry, so save the query time
-    if (index === 0) 
-      return Promise.resolve(items);
-    
-
-    return new Promise((resolve, reject) => {
-
-      this.db.createReadStream({
-        limit: limit,
-        gt: index
-      })
-        .on('data', (data) => {
-          items.push(data.value);
-        })
-        .on('error', (err) => {
-          reject(err);
-        })
-        .on('end', () => {
-          resolve(items);
         });
     });
   }
@@ -452,12 +381,12 @@ class Log {
 
     const entryIndex = await entry.responses.findIndex(resp => resp.publicKey === publicKey);
     // node hasn't voted yet. Add response
-    if (entryIndex === -1) 
+    if (entryIndex === -1)
       entry.responses.push({
         publicKey,
         ack: true
       });
-    
+
 
     await this.put(entry);
 
@@ -474,7 +403,7 @@ class Log {
    */
   async commit (index) {
 
-    const entry = await this.db.get(index);
+    const entry = await this.db.get(`${this.prefixes.logs}:${this._getBnNumber(index)}`);
 
     entry.committed = true;
     this.committedIndex = entry.index;
@@ -494,13 +423,13 @@ class Log {
       const entries = [];
 
       this.db.createReadStream({
-        gt: this.committedIndex,
-        lte: index
+        gt: `${this.prefixes.logs}:${this._getBnNumber(this.committedIndex)}`,
+        lte: `${this.prefixes.logs}:${this._getBnNumber(index)}`
       })
         .on('data', data => {
-          if (!data.value.committed) 
+          if (!data.value.committed)
             entries.push(data.value);
-          
+
         })
         .on('error', err => {
           reject(err);
@@ -519,7 +448,6 @@ class Log {
    * @private
    */
   end () {
-    this.termDb.close();
     return this.db.close();
   }
 }

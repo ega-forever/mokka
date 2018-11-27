@@ -113,13 +113,23 @@ class Mokka extends EventEmitter {
 
         let data = await this.requestProcessor.process(packet)
 
-        if(!_.has(data, 'who'))
-        {return semaphore.leave()}
+        if (!_.has(data, 'who') && !_.has(data, '0.who'))
+          return semaphore.leave();
+
+        if (_.isArray(data)) {
+          for (let item of data) {
+            item.who === packet.publicKey && write ?
+              write(item.reply) :
+              this.actions.message.message(item.who, item.reply);
+          }
+
+          return semaphore.leave();
+        }
+
 
         if (data.who === packet.publicKey && write) {
           write(data.reply)
-          semaphore.leave()
-          return
+          return semaphore.leave();
         }
 
         this.actions.message.message(data.who, data.reply)
@@ -130,8 +140,9 @@ class Mokka extends EventEmitter {
     })
 
 
-    if (states.CHILD === mokka.state)
-    {return mokka.emit('initialize')}
+    if (states.CHILD === mokka.state) {
+      return mokka.emit('initialize')
+    }
 
     if (_.isFunction(mokka.Log)) {
       mokka.log = new mokka.Log(mokka, options.log_options)
@@ -146,8 +157,9 @@ class Mokka extends EventEmitter {
     }
 
     if (_.isFunction(mokka.initialize)) {
-      if (mokka.initialize.length === 2)
-      {return mokka.initialize(options, initialize)}
+      if (mokka.initialize.length === 2) {
+        return mokka.initialize(options, initialize)
+      }
       mokka.initialize(options)
     }
 
