@@ -130,9 +130,16 @@ class RequestProcessor {
     this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
 
 
+    let {index} = await this.mokka.log.getLastInfo();
+    let entry = await this.mokka.log.getLastEntry();
+
+    if(this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat){ //todo rebroadcast for this peer
+      reply = await this.mokka.actions.append.obtain(packet);
+    }
+
+
     if(!reply && this.mokka.state === states.LEADER)
       return;
-
 
     if (!reply) {
       let response = await this.mokka.actions.message.packet(messageTypes.ACK);

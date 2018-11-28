@@ -16,25 +16,25 @@ const EventEmitter = require('events'),
   RequestProcessor = require('./services/requestProcessorService'),
   bunyan = require('bunyan'),
   TaskProcessor = require('./api/taskProcessor'),
-  log = bunyan.createLogger({name: 'node'})
+  log = bunyan.createLogger({name: 'node'});
 
-const change = require('modification')(' change')
+const change = require('modification')(' change');
 
 class Mokka extends EventEmitter {
   constructor (options = {}) {
-    super()
+    super();
 
-    AppendActions(this)
-    VoteActions(this)
-    NodeActions(this)
-    MessageActions(this)
+    AppendActions(this);
+    VoteActions(this);
+    NodeActions(this);
+    MessageActions(this);
 
     this.election = {
       min: options.election_min || 150,
       max: options.election_max || 300
-    }
+    };
 
-    this.beat = options.heartbeat || 50
+    this.beat = options.heartbeat || 50;
 
     this.votes = {
       for: null,
@@ -43,148 +43,147 @@ class Mokka extends EventEmitter {
       secret: null,
       started: null,
       priority: 1
-    }
+    };
 
-    this.threshold = options.threshold || 0.8
-    this.timers = new Tick(this)
-    this.Log = options.Log
-    this.change = change
-    this.networkSecret = options.networkSecret || '1234567'
-    this.latency = 0
-    this.log = null
-    this.nodes = []
-    this.cache = new NodeCache({checkperiod: this.election.max / 1000})
-    this.processor = new TaskProcessor(this)
-    this.privateKey = options.privateKey
-    this.publicKey = options.privateKey ? Wallet.fromPrivateKey(Buffer.from(options.privateKey, 'hex')).getPublicKey().toString('hex') : options.publicKey
-    this.peers = options.peers
+    this.threshold = options.threshold || 0.8;
+    this.timers = new Tick(this);
+    this.Log = options.Log;
+    this.change = change;
+    this.networkSecret = options.networkSecret || '1234567';
+    this.latency = 0;
+    this.log = null;
+    this.nodes = [];
+    this.cache = new NodeCache({checkperiod: this.election.max / 1000});
+    this.processor = new TaskProcessor(this);
+    this.privateKey = options.privateKey;
+    this.publicKey = options.privateKey ? Wallet.fromPrivateKey(Buffer.from(options.privateKey, 'hex')).getPublicKey().toString('hex') : options.publicKey;
+    this.peers = options.peers;
 
     try {
-      const multiaddr = Multiaddr(options.address)
-      const mOptions = multiaddr.toOptions()
-      this.address = `${mOptions.transport}://${mOptions.host}:${mOptions.port}`
-      this.id = multiaddr.getPeerId()
-      this.publicKey = hashUils.getHexFromIpfsHash(multiaddr.getPeerId())
+      const multiaddr = Multiaddr(options.address);
+      const mOptions = multiaddr.toOptions();
+      this.address = `${mOptions.transport}://${mOptions.host}:${mOptions.port}`;
+      this.id = multiaddr.getPeerId();
+      this.publicKey = hashUils.getHexFromIpfsHash(multiaddr.getPeerId());
     } catch (e) {
-      this.address = options.address
-      this.id = hashUils.getIpfsHashFromHex(this.publicKey)
+      this.address = options.address;
+      this.id = hashUils.getIpfsHashFromHex(this.publicKey);
     }
 
 
-    this.state = options.state || states.FOLLOWER    // Our current state.
-    this.leader = ''                               // Leader in our cluster.
-    this.term = 0                                  // Our current term.
-    this.requestProcessor = new RequestProcessor(this)
+    this.state = options.state || states.FOLLOWER;    // Our current state.
+    this.leader = '';                               // Leader in our cluster.
+    this.term = 0;                                  // Our current term.
+    this.requestProcessor = new RequestProcessor(this);
 
-    this._initialize(options)
+    this._initialize(options);
   }
 
   _initialize (options) {
-    let mokka = this
+    let mokka = this;
 
     mokka.on('term change', function change () {
-      log.info('clear vote by term change')
-      mokka.votes.for = null
-      mokka.votes.granted = 0
-      mokka.votes.shares = []
-      mokka.votes.secret = null
-      mokka.votes.started = null
-    })
+      log.info('clear vote by term change');
+      mokka.votes.for = null;
+      mokka.votes.granted = 0;
+      mokka.votes.shares = [];
+      mokka.votes.secret = null;
+      mokka.votes.started = null;
+    });
 
     mokka.on('state change', function change (state) {
-      log.info(`state changed[${this.index}]: ${_.invert(states)[state]}`)
-      mokka.heartbeat(mokka.beat)
-      mokka.emit(Object.keys(states)[state].toLowerCase())
-    })
+      log.info(`state changed[${this.index}]: ${_.invert(states)[state]}`);
+      mokka.heartbeat(mokka.beat);
+      mokka.emit(Object.keys(states)[state].toLowerCase());
+    });
 
     this.on('threshold', async () => {
       if (this.state === states.LEADER) {
-        log.info('restarting vote by threshold')
-        this.change({state: states.FOLLOWER, leader: ''})
-        this.timers.clear('heartbeat')
-        await Promise.delay(this.window())
-        mokka.actions.node.promote()
+        log.info('restarting vote by threshold');
+        this.change({state: states.FOLLOWER, leader: ''});
+        this.timers.clear('heartbeat');
+        await Promise.delay(this.window());
+        mokka.actions.node.promote();
       }
-    })
+    });
 
     mokka.on('data', async (packet, write) => {
 
       semaphore.take(async () => {
 
-        let data = await this.requestProcessor.process(packet)
+        let data = await this.requestProcessor.process(packet);
 
         if (!_.has(data, 'who') && !_.has(data, '0.who'))
           return semaphore.leave();
 
         if (_.isArray(data)) {
-          for (let item of data) {
+          for (let item of data)
             item.who === packet.publicKey && write ?
               write(item.reply) :
               this.actions.message.message(item.who, item.reply);
-          }
+
 
           return semaphore.leave();
         }
 
 
         if (data.who === packet.publicKey && write) {
-          write(data.reply)
+          write(data.reply);
           return semaphore.leave();
         }
 
-        this.actions.message.message(data.who, data.reply)
-        semaphore.leave()
-      })
+        this.actions.message.message(data.who, data.reply);
+        semaphore.leave();
+      });
 
 
-    })
+    });
 
 
-    if (states.CHILD === mokka.state) {
-      return mokka.emit('initialize')
-    }
+    if (states.CHILD === mokka.state)
+      return mokka.emit('initialize');
 
-    if (_.isFunction(mokka.Log)) {
-      mokka.log = new mokka.Log(mokka, options.log_options)
-    }
+
+    if (_.isFunction(mokka.Log))
+      mokka.log = new mokka.Log(mokka, options.log_options);
 
 
     function initialize (err) {
-      if (err) return mokka.emit(messageTypes.ERROR, err)
+      if (err) return mokka.emit(messageTypes.ERROR, err);
 
-      mokka.emit('initialize')
-      mokka.heartbeat(_.random(0, mokka.election.max))
+      mokka.emit('initialize');
+      mokka.heartbeat(_.random(0, mokka.election.max));
     }
 
     if (_.isFunction(mokka.initialize)) {
-      if (mokka.initialize.length === 2) {
-        return mokka.initialize(options, initialize)
-      }
-      mokka.initialize(options)
+      if (mokka.initialize.length === 2)
+        return mokka.initialize(options, initialize);
+
+      mokka.initialize(options);
     }
 
-    initialize()
+    initialize();
   }
 
   quorum (responses) {
-    if (!this.nodes.length || !responses) return false
+    if (!this.nodes.length || !responses) return false;
 
-    return responses >= this.majority()
+    return responses >= this.majority();
   }
 
   majority () {
-    return Math.ceil(this.nodes.length / 2) + 1
+    return Math.ceil(this.nodes.length / 2) + 1;
   }
 
   heartbeat (duration) {
-    let mokka = this
+    let mokka = this;
 
-    duration = duration || mokka.beat
+    duration = duration || mokka.beat;
 
     if (mokka.timers.active('heartbeat')) {
-      mokka.timers.adjust('heartbeat', duration)
+      mokka.timers.adjust('heartbeat', duration);
 
-      return mokka
+      return mokka;
     }
 
     mokka.timers.setTimeout('heartbeat', async () => {
@@ -193,22 +192,22 @@ class Mokka extends EventEmitter {
 
 
       if (states.LEADER !== mokka.state) {
-        mokka.emit('heartbeat timeout')
+        mokka.emit('heartbeat timeout');
 
-        log.info('promoting by timeout')
-        return mokka.actions.node.promote()
+        log.info('promoting by timeout');
+        return mokka.actions.node.promote();
       }
 
 
-      let packet = await mokka.actions.message.packet(messageTypes.ACK)
+      let packet = await mokka.actions.message.packet(messageTypes.ACK);
 
-      log.info('send append request by timeout')
-      mokka.emit(messageTypes.ACK, packet)
-      await mokka.actions.message.message(states.FOLLOWER, packet, {ensure: false, timeout: this.election.max})
-      mokka.heartbeat(mokka.beat)
-    }, duration)
+      log.info('send append request by timeout');
+      mokka.emit(messageTypes.ACK, packet);
+      await mokka.actions.message.message(states.FOLLOWER, packet, {ensure: false, timeout: this.election.max});
+      mokka.heartbeat(mokka.beat);
+    }, duration);
 
-    return mokka
+    return mokka;
   }
 
   /**
@@ -218,11 +217,11 @@ class Mokka extends EventEmitter {
    * @private
    */
   timeout () {
-    return _.random(this.beat, parseInt(this.beat * 1.5))
+    return _.random(this.beat, parseInt(this.beat * 1.5));
   }
 
   window () {
-    return Math.floor(Math.random() * (this.election.max - this.election.min + 1) + this.election.min)
+    return Math.floor(Math.random() * (this.election.max - this.election.min + 1) + this.election.min);
   }
 
   /**
@@ -235,7 +234,7 @@ class Mokka extends EventEmitter {
    * @public
    */
   clone (options) { //todo replace with lodash
-    options = options || {}
+    options = options || {};
 
     let mokka = this,
       node = {
@@ -244,15 +243,15 @@ class Mokka extends EventEmitter {
         election_min: mokka.election.min,
         heartbeat: mokka.beat,
         threshold: mokka.threshold
-      }, key
+      }, key;
 
     for (key in node) {
-      if (key in options || !node.hasOwnProperty(key)) continue
+      if (key in options || !node.hasOwnProperty(key)) continue;
 
-      options[key] = node[key]
+      options[key] = node[key];
     }
 
-    return new mokka.constructor(options)
+    return new mokka.constructor(options);
   }
 
 
@@ -264,11 +263,11 @@ class Mokka extends EventEmitter {
    */
   async commitEntries (entries) {
     entries.forEach(async (entry) => {
-      await this.log.commit(entry.index)
-      this.emit(messageTypes.COMMIT, entry.command)
-    })
+      await this.log.commit(entry.index);
+      this.emit(messageTypes.COMMIT, entry.command);
+    });
   }
 }
 
 
-module.exports = Mokka
+module.exports = Mokka;

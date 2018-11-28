@@ -94,7 +94,7 @@ class TaskProcessor {
       minConfirmations: Math.floor(followers.length / 2) + 1
     };
 
-    console.log('check', followers.length, Math.floor(followers.length / 2) + 1)
+    console.log('check', followers.length, Math.floor(followers.length / 2) + 1);
 
     const appendPacket = await this.mokka.actions.message.appendPacket(entry);
     let pubKeys = followers.map(node=>node.publicKey);

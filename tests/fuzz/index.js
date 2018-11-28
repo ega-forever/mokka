@@ -18,7 +18,8 @@ module.exports = (ctx) => {
 
     ctx.ports = [];
 
-    let nodesCount = _.random(3, 7);
+    //let nodesCount = _.random(3, 7);
+    let nodesCount = 6;
 
     for (let index = 0; index < nodesCount; index++)
       ctx.ports.push(2000 + index);

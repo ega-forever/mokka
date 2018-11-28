@@ -60,22 +60,14 @@ const append = async function (packet) { //todo move write to index.js
         let {index: lastIndex, term} = await this.log.getLastInfo();
         log.error(`error during save log: ${err.toString()}`);
 
-        let reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex});
+        reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex}); //todo think about err.code ===2 - how to handle?
 
         if (err.code === 2) {
           let prevTermEntry = await this.log.getLastEntryByTerm(term - 1);
           log.info(`rollback to previous term: ${term} -> ${prevTermEntry.term}`);
           await this.log.removeEntriesAfter(prevTermEntry.index);
-          reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: prevTermEntry.index + 1});
+         // reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: prevTermEntry.index + 1});
         }
-
-        if (err.code === 3) 
-          reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {
-            index: lastIndex + 1,
-            recursive: true,
-            lastIndex: entry.index
-          });
-        
 
         return {
           reply: reply,
@@ -132,13 +124,11 @@ const appendAck = async function (packet) {
       continue;
 
     let peers = _.chain(entry.responses).map(item=>item.publicKey).pullAll([packet.publicKey, this.publicKey]).value();
-    console.log(peers);
-  //  process.exit(0)
 
     replies.push({
       reply: packet,
       who: peers
-    })
+    });
 
   }
 
@@ -153,6 +143,18 @@ const appendAck = async function (packet) {
   });
 
   return replies;
+};
+
+const obtain = async function (packet){
+  let entry = await this.log.get(packet.last.index + 1);
+  const reply = await this.actions.message.appendPacket(entry);
+
+  return {
+    who: packet.publicKey,
+    reply: reply
+  }
+
+
 };
 
 const appendFail = async function (packet) {
@@ -187,7 +189,8 @@ module.exports = (instance) => {
   _.set(instance, 'actions.append', {
     append: append.bind(instance),
     appendAck: appendAck.bind(instance),
-    appendFail: appendFail.bind(instance)
+    appendFail: appendFail.bind(instance),
+    obtain: obtain.bind(instance)
   });
 
 };
