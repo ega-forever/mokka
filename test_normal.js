@@ -34,8 +34,8 @@ const init = async () => {
 
     const mokka = new TCPMokka({
       address: `/ip4/127.0.0.1/tcp/${ports[index]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
-      election_min: 200,
-      election_max: 300,
+      electionMin: 200,
+      electionMax: 300,
       heartbeat: 100,
       Log: Log,
       /*      log_options: {

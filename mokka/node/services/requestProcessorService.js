@@ -32,6 +32,7 @@ class RequestProcessor {
 
       if (!_.has(packet, 'proof.index') && !_.has(packet, 'proof.shares')) {
         log.info('proof is not provided!');
+
         let reply = await this.mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
         return {
           reply: reply,
@@ -103,7 +104,6 @@ class RequestProcessor {
 
     if (packet.type === messageTypes.ERROR) 
       this.mokka.emit(messageTypes.ERROR, new Error(packet.data));
-    
 
 
     if (packet.type === messageTypes.APPEND) 
@@ -133,9 +133,9 @@ class RequestProcessor {
     let {index} = await this.mokka.log.getLastInfo();
     let entry = await this.mokka.log.getLastEntry();
 
-    if(this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat){ //todo rebroadcast for this peer
+    if(this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat)
       reply = await this.mokka.actions.append.obtain(packet);
-    }
+    
 
 
     if(!reply && this.mokka.state === states.LEADER)

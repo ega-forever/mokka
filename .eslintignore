@@ -1,5 +1,5 @@
 node_modules
 test_scripts
 tests
-index.js
-index2.js
+test_fall_restore.js
+test_normal.js

@@ -55,9 +55,10 @@ class TaskProcessor {
 
     if (this.mokka.state !== states.LEADER) {
       log.info('trying to propose task again');
-      let timeout = this.mokka.timeout();
-      this.mokka.heartbeat(timeout * 2);
-      await Promise.delay(_.random(0, timeout));
+      let timeout = this.mokka.timeout();//todo test max skip rounds for voting
+      let randomFactor = this.mokka.voteTimeoutRandomFactor <= 1 ? 1 : _.random(1, this.mokka.voteTimeoutRandomFactor);
+      this.mokka.heartbeat(timeout * (randomFactor + 1));
+      await Promise.delay(_.random(0, timeout * randomFactor));
       return await this._lock();
     }
 
@@ -93,8 +94,6 @@ class TaskProcessor {
       timeout: this.mokka.beat,
       minConfirmations: Math.floor(followers.length / 2) + 1
     };
-
-    console.log('check', followers.length, Math.floor(followers.length / 2) + 1);
 
     const appendPacket = await this.mokka.actions.message.appendPacket(entry);
     let pubKeys = followers.map(node=>node.publicKey);

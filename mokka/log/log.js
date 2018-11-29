@@ -98,7 +98,7 @@ class Log {
     });
   }
 
-  _getBnNumber (num = 0) {
+  static _getBnNumber (num = 0) {
     num = num.toString(2);
     return new Array(64 - num.length).fill('0').join('') + num;
   }
@@ -122,10 +122,10 @@ class Log {
       firstEntryByTerm.index = entry.index;
 
 
-      await this.db.put(`${this.prefixes.term}:${this._getBnNumber(entry.term)}`, firstEntryByTerm);
+      await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(entry.term)}`, firstEntryByTerm);
     }
 
-    return await this.db.put(`${this.prefixes.logs}:${this._getBnNumber(entry.index)}`, entry);
+    return await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
   }
 
 
@@ -137,13 +137,13 @@ class Log {
       return;
 
 
-    return await this.db.put(`${this.prefixes.term}:${this._getBnNumber(term)}`, proof);
+    return await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(term)}`, proof);
   }
 
   async getProof (term) {
 
     try {
-      return await this.db.get(`${this.prefixes.term}:${this._getBnNumber(term)}`);
+      return await this.db.get(`${this.prefixes.term}:${Log._getBnNumber(term)}`);
     } catch (e) {
       return null;
     }
@@ -152,7 +152,7 @@ class Log {
 
   async getFirstEntryByTerm (term) {
     try {
-      return await this.db.get(`${this.prefixes.term}:${this._getBnNumber(term)}`);
+      return await this.db.get(`${this.prefixes.term}:${Log._getBnNumber(term)}`);
     } catch (err) {
       return {
         index: 0,
@@ -164,7 +164,7 @@ class Log {
 
   async getLastEntryByTerm (term) {
     try {
-      let headEntry = await this.getFirstEntryByTerm(term + 1);
+      let headEntry = await this.getFirstEntryByTerm(term);
 
       if (headEntry.index === 0)
         return headEntry;
@@ -176,7 +176,7 @@ class Log {
           term: this.node.term
         };
 
-      return await this.db.get(`${this.prefixes.logs}:${this._getBnNumber(headEntry.index - 1)}`);
+      return await this.db.get(`${this.prefixes.logs}:${Log._getBnNumber(headEntry.index - 1)}`);
 
     } catch (err) {
       return {
@@ -197,7 +197,7 @@ class Log {
   async getEntriesAfter (index, limit) {
     const entries = [];
 
-    let query = {gt: `${this.prefixes.logs}:${this._getBnNumber(index)}`, lt: `${this.prefixes.logs + 1}:${this._getBnNumber(0)}`};
+    let query = {gt: `${this.prefixes.logs}:${Log._getBnNumber(index)}`, lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`};
 
     if (limit)
       query.limit = limit;
@@ -229,8 +229,8 @@ class Log {
     const entries = await this.getEntriesAfter(index);
 
     for (let entry of entries) {
-      await this.db.del(`${this.prefixes.term}:${this._getBnNumber(entry.term)}`);
-      await this.db.del(`${this.prefixes.logs}:${this._getBnNumber(entry.index)}`);
+      await this.db.del(`${this.prefixes.term}:${Log._getBnNumber(entry.term)}`);
+      await this.db.del(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`);
     }
 
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
@@ -247,7 +247,7 @@ class Log {
    */
   async get (index) {
     try {
-      return await this.db.get(`${this.prefixes.logs}:${this._getBnNumber(index)}`);
+      return await this.db.get(`${this.prefixes.logs}:${Log._getBnNumber(index)}`);
     } catch (err) {
       return null;
     }
@@ -291,8 +291,8 @@ class Log {
       this.db.createReadStream({
         reverse: true,
         limit: 1,
-        lt: `${this.prefixes.logs + 1}:${this._getBnNumber(0)}`,
-        gte: `${this.prefixes.logs}:${this._getBnNumber(0)}`
+        lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`,
+        gte: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
       })
         .on('data', data => {
           entry = data.value;
@@ -352,8 +352,8 @@ class Log {
       this.db.createReadStream({
         reverse: true,
         limit: 1,
-        lt: `${this.prefixes.logs}:${this._getBnNumber(entry.index)}`,
-        gt: `${this.prefixes.logs}:${this._getBnNumber(0)}`
+        lt: `${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`,
+        gt: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
       })
         .on('data', (data) => {
           hasResolved = true;
@@ -403,7 +403,7 @@ class Log {
    */
   async commit (index) {
 
-    const entry = await this.db.get(`${this.prefixes.logs}:${this._getBnNumber(index)}`);
+    const entry = await this.db.get(`${this.prefixes.logs}:${Log._getBnNumber(index)}`);
 
     entry.committed = true;
     this.committedIndex = entry.index;
@@ -423,8 +423,8 @@ class Log {
       const entries = [];
 
       this.db.createReadStream({
-        gt: `${this.prefixes.logs}:${this._getBnNumber(this.committedIndex)}`,
-        lte: `${this.prefixes.logs}:${this._getBnNumber(index)}`
+        gt: `${this.prefixes.logs}:${Log._getBnNumber(this.committedIndex)}`,
+        lte: `${this.prefixes.logs}:${Log._getBnNumber(index)}`
       })
         .on('data', data => {
           if (!data.value.committed)

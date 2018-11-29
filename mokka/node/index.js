@@ -30,8 +30,8 @@ class Mokka extends EventEmitter {
     MessageActions(this);
 
     this.election = {
-      min: options.election_min || 150,
-      max: options.election_max || 300
+      min: options.electionMin || 150,
+      max: options.electionMax || 300
     };
 
     this.beat = options.heartbeat || 50;
@@ -51,6 +51,7 @@ class Mokka extends EventEmitter {
     this.change = change;
     this.networkSecret = options.networkSecret || '1234567';
     this.latency = 0;
+    this.voteTimeoutRandomFactor = options.voteTimeoutRandomFactor || 10;
     this.log = null;
     this.nodes = [];
     this.cache = new NodeCache({checkperiod: this.election.max / 1000});
@@ -117,6 +118,7 @@ class Mokka extends EventEmitter {
           return semaphore.leave();
 
         if (_.isArray(data)) {
+
           for (let item of data)
             item.who === packet.publicKey && write ?
               write(item.reply) :
@@ -188,9 +190,6 @@ class Mokka extends EventEmitter {
 
     mokka.timers.setTimeout('heartbeat', async () => {
 
-      //    return; //todo disabled heartbeat
-
-
       if (states.LEADER !== mokka.state) {
         mokka.emit('heartbeat timeout');
 
@@ -239,8 +238,8 @@ class Mokka extends EventEmitter {
     let mokka = this,
       node = {
         Log: mokka.Log,
-        election_max: mokka.election.max,
-        election_min: mokka.election.min,
+        electionMax: mokka.election.max,
+        electionMin: mokka.election.min,
         heartbeat: mokka.beat,
         threshold: mokka.threshold
       }, key;
@@ -262,10 +261,8 @@ class Mokka extends EventEmitter {
    * @return {Promise<void>}
    */
   async commitEntries (entries) {
-    entries.forEach(async (entry) => {
+    for(let entry of entries)
       await this.log.commit(entry.index);
-      this.emit(messageTypes.COMMIT, entry.command);
-    });
   }
 }
 

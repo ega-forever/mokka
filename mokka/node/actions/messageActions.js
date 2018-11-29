@@ -11,9 +11,8 @@ const _timing = function (latency = []) {
 
   this.latency = Math.floor(_.sum(latency) / latency.length);
 
-  if (this.latency > this.election.min * this.threshold) 
+  if (this.latency > this.election.min * this.threshold)
     this.emit('threshold');
-  
 
 
   return true;
@@ -31,16 +30,16 @@ const message = async function (who, what, options = {}) {
   switch (who) {
     case states.LEADER:
       for (let node of mokka.nodes)
-        if (mokka.leader === node.publicKey) 
+        if (mokka.leader === node.publicKey)
           nodes.push(node);
-      
+
       break;
 
     case states.FOLLOWER:
       for (let node of mokka.nodes)
-        if (mokka.leader !== node.publicKey) 
+        if (mokka.leader !== node.publicKey)
           nodes.push(node);
-      
+
       break;
 
     case states.CHILD:
@@ -49,9 +48,9 @@ const message = async function (who, what, options = {}) {
 
     default:
       for (let node of mokka.nodes)
-        if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey) 
+        if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey)
           nodes.push(node);
-      
+
   }
 
 
@@ -105,11 +104,7 @@ const packet = async function (type, data) {
 const appendPacket = async function (entry) {
   const mokka = this;
   const last = await mokka.log.getEntryInfoBefore(entry);
-  const proofEntry = await this.log.getFirstEntryByTerm(this.term);
-
-  entry = _.isArray(entry) ? entry : [entry];
-
-  let includesStartLog = _.find(entry, {index: proofEntry.index});
+  const proofEntry = await this.log.getFirstEntryByTerm(entry.term);
 
 
   let proof = {
@@ -117,7 +112,7 @@ const appendPacket = async function (entry) {
     hash: proofEntry.hash
   };
 
-  if (includesStartLog)
+  if (entry.index === proofEntry.index)
     _.merge(proof, proofEntry);
 
   return {

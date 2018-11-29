@@ -241,17 +241,6 @@ const voted = async function (packet) {
 
   let badVotes = _.filter(this.votes.shares, {granted: false});
 
-
-
-  //in case index < packet.last.index - then we compare the merke root, in case the root is bad - we drop to previous term,
-  //otherwise we just ask about the next log
-
-  //todo compare last index with leader's and wait until they will be the same
-
-
-  // console.log(`[${Date.now()}]bad votes[${this.index}]: ${badVotes.length}, leader: ${leader}`);
-  // console.log(`[${Date.now()}]good votes[${this.index}]:${_.filter(this.votes.shares, {granted: true}).length}, leader: ${leader}`);
-
   if (badVotes.length >= Math.ceil(votedAmount / 2) + 1) {
 
     this.votes = {

@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js",
-    "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore ."
+    "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore .",
+    "coverage": "node ./node_modules/istanbul/lib/cli cover mokka/node/index.js"
   },
   "keywords": [
     "mokka"
@@ -35,8 +36,10 @@
   },
   "devDependencies": {
     "chai": "^4.2.0",
+    "coveralls": "^3.0.2",
     "eslint": "^5.9.0",
     "eslint-plugin-async-await": "0.0.0",
+    "istanbul": "^0.4.5",
     "mocha": "^5.2.0"
   }
 }

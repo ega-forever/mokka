@@ -44,8 +44,8 @@ const init = async () => {
 
   const mokka = new TCPMokka({
     address: `/ip4/127.0.0.1/tcp/${port}/ipfs/${hashUtils.getIpfsHashFromHex(pubKey)}`,
-    election_min: process.env.ELECTION_MIN ? parseInt(process.env.ELECTION_MIN) : 200,
-    election_max: process.env.ELECTION_MAX ? parseInt(process.env.ELECTION_MAX) : 1000,
+    electionMin: process.env.ELECTION_MIN ? parseInt(process.env.ELECTION_MIN) : 200,
+    electionMax: process.env.ELECTION_MAX ? parseInt(process.env.ELECTION_MAX) : 1000,
     heartbeat: process.env.HEARTBEAT ? parseInt(process.env.HEARTBEAT) : 100,
     Log: Log,
     privateKey: privKey,
@@ -73,7 +73,7 @@ const init = async () => {
   for (let task of tasks) {
 
     if(randomDelay)
-      await Promise.delay(_.random(this.election_min, this.election_max * 2));
+      await Promise.delay(_.random(this.electionMin, this.electionMax * 2));
 
     console.log('running task at index: ', tasks.indexOf(task));
     let entry = await mokka.processor.push(task);
