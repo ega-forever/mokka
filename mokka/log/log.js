@@ -16,7 +16,8 @@ class Log {
 
     this.prefixes = {
       logs: 1,
-      term: 2
+      term: 2,
+      orphan: 3
     };
 
     this.node = node;
@@ -128,6 +129,89 @@ class Log {
     return await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
   }
 
+
+  async putOrphan(command){
+
+    let {index} = await this.getLastOrphan();
+    const nextIndex = index + 1;
+
+    let record = {command, index};
+    await this.db.put(`${this.prefixes.orphan}:${Log._getBnNumber(nextIndex)}`, record);
+
+    return record;
+  }
+
+  async pullOrphan(index){
+    await this.db.del(`${this.prefixes.orphan}:${Log._getBnNumber(index)}`);
+  }
+
+
+  async getLastOrphan(){
+
+    return await new Promise((resolve, reject) => {
+
+      let item = {
+        index: -1,
+        command: null
+      };
+
+      this.db.createReadStream({
+        reverse: true,
+        limit: 1,
+        lt: `${this.prefixes.orphan + 1}:${Log._getBnNumber(0)}`,
+        gte: `${this.prefixes.orphan}:${Log._getBnNumber(0)}`
+      })
+        .on('data', data => {
+          item = data;
+        })
+        .on('error', err => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(item);
+        });
+    });
+
+  }
+
+
+  async getOrphans(limit){
+
+    return await new Promise((resolve, reject) => {
+
+     let items = [];
+
+     let params = {
+       lt: `${this.prefixes.orphan + 1}:${Log._getBnNumber(0)}`,
+       gte: `${this.prefixes.orphan}:${Log._getBnNumber(0)}`
+     };
+
+     if(limit)
+       params.limit = limit;
+
+      this.db.createReadStream(params)
+        .on('data', data => {
+          items.push(data.value);
+        })
+        .on('error', err => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(items);
+        });
+    });
+
+  }
+
+
+  async getOrphan (index) {
+    try {
+      return await this.db.get(`${this.prefixes.orphan}:${Log._getBnNumber(index)}`);
+    } catch (err) {
+      return null;
+    }
+
+  }
 
   async addProof (term, proof) {
 
@@ -282,7 +366,7 @@ class Log {
       let entry = {
         index: 0,
         hash: _.fill(new Array(32), 0).join(''),
-        term: this.node.term,
+        term: 0,
         committed: true,
         createdAt: Date.now()
       };

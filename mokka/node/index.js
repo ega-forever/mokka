@@ -7,7 +7,8 @@ const EventEmitter = require('events'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUils = require('../utils/hashes'),
-  NodeCache = require('node-cache'),
+  //NodeCache = require('node-cache'),
+  NodeCache = require('ttl-mem-cache'),
   VoteActions = require('./actions/voteActions'),
   NodeActions = require('./actions/nodeActions'),
   semaphore = require('semaphore')(1),
@@ -54,7 +55,7 @@ class Mokka extends EventEmitter {
     this.voteTimeoutRandomFactor = options.voteTimeoutRandomFactor || 10;
     this.log = null;
     this.nodes = [];
-    this.cache = new NodeCache({checkperiod: this.election.max / 1000});
+    this.cache = new NodeCache();
     this.processor = new TaskProcessor(this);
     this.privateKey = options.privateKey;
     this.publicKey = options.privateKey ? Wallet.fromPrivateKey(Buffer.from(options.privateKey, 'hex')).getPublicKey().toString('hex') : options.publicKey;
@@ -93,7 +94,7 @@ class Mokka extends EventEmitter {
     });
 
     mokka.on('state change', function change (state) {
-      log.info(`state changed[${this.index}]: ${_.invert(states)[state]}`);
+      log.info(`state changed: ${_.invert(states)[state]}`);
       mokka.heartbeat(mokka.beat);
       mokka.emit(Object.keys(states)[state].toLowerCase());
     });

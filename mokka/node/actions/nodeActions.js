@@ -5,6 +5,9 @@ const _ = require('lodash'),
   secrets = require('secrets.js-grempe'),
   messageTypes = require('../factories/messageTypesFactory'),
   bunyan = require('bunyan'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
+  sem = require('semaphore')(1),
   log = bunyan.createLogger({name: 'node.actions.node'}),
   states = require('../factories/stateFactory');
 
@@ -37,13 +40,13 @@ const leave = function (publicKey) {
   let index = -1,
     node;
 
-  for (let i = 0; i < this.nodes.length; i++) 
+  for (let i = 0; i < this.nodes.length; i++)
     if (this.nodes[i] === publicKey || this.nodes[i].publicKey === publicKey) {
       node = this.nodes[i];
       index = i;
       break; //todo refactor
     }
-  
+
 
   if (~index && node) {
     this.nodes.splice(index, 1);
@@ -80,69 +83,101 @@ const end = function () {
 
 const promote = async function (priority = 1) {
 
-  if (this.votes.for && this.votes.for === this.publicKey) {
-    log.error('already promoted myself');
-    return;
-  }
+  return await new Promise(res => {
 
-  let {term: currentTerm} = await this.log.getLastInfo();
-  let {hash: prevTermHash} = await this.log.getFirstEntryByTerm(this.term - 1);
 
-  this.change({
-    state: states.CANDIDATE,  // We're now a candidate,
-    term: currentTerm + 1,    // but only for this term. //todo check
-    leader: ''              // We no longer have a leader.
-  });
+    sem.take(async () => {
 
-  this.votes.for = this.publicKey;
-  this.votes.granted = 1;
-  this.votes.started = Date.now();
+      let blackListed = this.cache.get(`blacklist.${this.publicKey}`);
 
-  let token = speakeasy.totp({
-    secret: this.networkSecret,
-    //step: this.election.max / 1000
-    step: 30,
-    window: 2
-  });
+      if(blackListed){
+        log.error('awaiting for next rounds');
+        sem.leave();
+        return res();
+      }
 
-  this.votes.secret = secrets.str2hex(token);
-  this.votes.shares = [];
+      if (this.votes.for && this.votes.for === this.publicKey) {
+        log.error('already promoted myself');
+        sem.leave();
+        return res();
+      }
 
-  const followerNodes = _.filter(this.nodes, node => node.state !== states.LEADER);
+      let {term: currentTerm} = await this.log.getLastInfo();
+      let {hash: prevTermHash} = await this.log.getFirstEntryByTerm(this.term - 1);
 
-  if (followerNodes.length !== 0) {
+      this.change({
+        state: states.CANDIDATE,  // We're now a candidate,
+        term: currentTerm + 1,    // but only for this term. //todo check
+        leader: ''              // We no longer have a leader.
+      });
 
-    let shares = secrets.share(this.votes.secret, followerNodes.length, Math.ceil(followerNodes.length / 2) + 1);
+      this.votes.for = this.publicKey;
+      this.votes.granted = 1;
+      this.votes.started = Date.now();
 
-    for (let index = 0; index < followerNodes.length; index++) {
+      let token = speakeasy.totp({
+        secret: this.networkSecret,
+        //step: this.election.max / 1000
+        step: 30,
+        window: 2
+      });
+
+      this.votes.secret = secrets.str2hex(token);
+      this.votes.shares = [];
+
+
+      let shares = secrets.share(this.votes.secret, this.nodes.length + 1, Math.ceil((this.nodes.length + 1) / 2) + 1); //todo include my vote
+
+      for (let index = 0; index < this.nodes.length; index++) {
+        this.votes.shares.push({
+          share: shares[index],
+          publicKey: this.nodes[index].publicKey,
+          voted: false
+        });
+
+        const packet = await this.actions.message.packet(messageTypes.VOTE, {
+          share: shares[index],
+          priority: priority,
+          prevTermHash: prevTermHash
+        });
+
+        log.info(`sending vote to ${this.nodes[index].publicKey}`);
+
+        this.actions.message.message(this.nodes[index].publicKey, packet);
+      }
+
+
+      const myShare = _.last(shares);
+      const signedShare = web3.eth.accounts.sign(myShare, `0x${this.privateKey}`);
+
       this.votes.shares.push({
-        share: shares[index],
-        publicKey: followerNodes[index].publicKey,
-        voted: false
+        share: _.last(shares),
+        publicKey: this.publicKey,
+        signed: signedShare,
+        voted: true
       });
 
-      const packet = await this.actions.message.packet(messageTypes.VOTE, {
-        share: shares[index],
-        priority: priority,
-        prevTermHash: prevTermHash
-      });
-      this.actions.message.message(followerNodes[index].publicKey, packet);
-    }
-  }
 
-  if (this.timers.active('term_change'))
-    this.timers.clear('term_change');
+      if (this.timers.active('term_change'))
+        this.timers.clear('term_change');
 
-  this.timers.setTimeout('term_change', async () => {
-    log.info('clean up passed voting');
-    this.votes.for = null;
-    this.votes.granted = 0;
-    this.votes.shares = [];
-    this.votes.secret = null;
-    this.votes.started = null;
-    if (this.state === states.CANDIDATE)
-      this.change({state: states.FOLLOWER, term: this.term - 1});
-  }, this.election.max * _.random(1, 5));
+      this.timers.setTimeout('term_change', async () => {
+        log.info('clean up passed voting');
+        this.votes.for = null;
+        this.votes.granted = 0;
+        this.votes.shares = [];
+        this.votes.secret = null;
+        this.votes.started = null;
+        if (this.state === states.CANDIDATE)
+          this.change({state: states.FOLLOWER, term: this.term - 1});
+      }, this.election.max);
+
+      sem.leave();
+      res();
+    });
+
+  });
+
 
 };
 

@@ -39,6 +39,7 @@ let validatedShares = _.reduce(signedShares, (result, signedShare, i)=>{
 }, []);
 
 
+console.log(validatedShares.length)
 // combine 2 shares:
 let comb = secrets.combine(validatedShares);
 

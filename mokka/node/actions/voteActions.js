@@ -4,6 +4,7 @@ const messageTypes = require('../factories/messageTypesFactory'),
   secrets = require('secrets.js-grempe'),
   _ = require('lodash'),
   bunyan = require('bunyan'),
+  calculateVoteDelay = require('../../utils/calculateVoteDelay'),
   log = bunyan.createLogger({name: 'node.actions.vote'}),
   EthUtil = require('ethereumjs-util'),
   web3 = new Web3();
@@ -11,30 +12,18 @@ const messageTypes = require('../factories/messageTypesFactory'),
 
 const vote = async function (packet) { //todo timeout leader on election
 
-  let blackListCount = this.cache.get(`blacklist.${packet.publicKey}`);
 
-  if (blackListCount === 3) {
-    this.emit(messageTypes.VOTE, packet, false);
-    let reply = await this.actions.message.packet(messageTypes.VOTED, {
-      granted: false,
-      signed: null,
-      reason: 'blacklisted'
-    });
+  let blackListed = this.cache.get(`blacklist.${packet.publicKey}`);
 
-    return {
-      reply: reply,
-      who: packet.publicKey
-    };
-  }
-
+  if (blackListed && (blackListed.term < packet.term || blackListed.hash !== packet.last.hash))
+    this.cache.del(`blacklist.${packet.publicKey}`);
 
   const {index, hash, createdAt} = await this.log.getLastInfo();
+  const currentTerm = this.state === states.CANDIDATE ? this.term - 1 : this.term;
 
   if (!packet.data.share) {
 
-    _.isNumber(blackListCount) ?
-      this.cache.set(`blacklist.${packet.publicKey}`, blackListCount + 1, _.random(1, 5) * this.election.max / 1000) :
-      this.cache.set(`blacklist.${packet.publicKey}`, 1, _.random(1, 5) * this.election.max / 1000);
+    this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
 
     this.emit(messageTypes.VOTE, packet, false);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
@@ -52,13 +41,25 @@ const vote = async function (packet) { //todo timeout leader on election
   const signedShare = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
 
 
+  if (blackListed) { //todo setup max bad voting rounds instead of 3
+    this.emit(messageTypes.VOTE, packet, false);
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {
+      granted: false,
+      signed: signedShare,
+      reason: 'blacklisted until next term'
+    });
+
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
+  }
+
 
   if (index !== 0 && Date.now() - createdAt < this.beat) {
     this.emit(messageTypes.VOTE, packet, false);
 
-    _.isNumber(blackListCount) ?
-      this.cache.set(`blacklist.${packet.publicKey}`, blackListCount + 1, _.random(1, 5) * this.election.max / 1000) :
-      this.cache.set(`blacklist.${packet.publicKey}`, 1, _.random(1, 5) * this.election.max / 1000);
+    this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
@@ -66,6 +67,7 @@ const vote = async function (packet) { //todo timeout leader on election
       reason: 'the voting window hasn\'t been closed yet',
       code: 0
     });
+
     return {
       reply: reply,
       who: packet.publicKey
@@ -75,9 +77,7 @@ const vote = async function (packet) { //todo timeout leader on election
   if (index !== 0 && Date.now() - createdAt < this.election.max) {
     this.emit(messageTypes.VOTE, packet, false);
 
-    _.isNumber(blackListCount) ?
-      this.cache.set(`blacklist.${packet.publicKey}`, blackListCount + 1, _.random(1, 5) * this.election.max / 1000) :
-      this.cache.set(`blacklist.${packet.publicKey}`, 1, _.random(1, 5) * this.election.max / 1000);
+    this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
@@ -91,12 +91,60 @@ const vote = async function (packet) { //todo timeout leader on election
     };
   }
 
-  if (this.votes.for && this.votes.for !== this.publicKey && (this.votes.priority >= packet.data.priority || ((this.votes.started && Date.now() - this.votes.started < this.election.max) || !this.votes.started))) {
+  if (currentTerm > packet.term) { //in case the candidate is outdated by term
     this.emit(messageTypes.VOTE, packet, false);
 
-    _.isNumber(blackListCount) ?
-      this.cache.set(`blacklist.${packet.publicKey}`, blackListCount + 1, _.random(1, 5) * this.election.max / 1000) :
-      this.cache.set(`blacklist.${packet.publicKey}`, 1, _.random(1, 5) * this.election.max / 1000);
+    this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
+
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {
+      granted: false,
+      signed: signedShare,
+      reason: 'the candidate is outdated (by term)',
+      code: 3
+    });
+    return {
+      reply: reply,
+      who: packet.publicKey
+    };
+  }
+
+  if (index > packet.last.index) {
+    let log = await this.log.get(packet.last.index);
+
+    if (log && log.hash === packet.last.hash) {
+
+      this.emit(messageTypes.VOTE, packet, false);
+
+      this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, this.election.max);
+
+      let reply = await this.actions.message.packet(messageTypes.VOTED, {
+        granted: false,
+        signed: signedShare,
+        reason: 'the candidate is outdated (by history)',
+        code: 3
+      });
+      return {
+        reply: reply,
+        who: packet.publicKey
+      };
+
+
+    }
+  }
+
+
+
+
+ // if(this.votes.for && this.votes.for !== this.publicKey){
+  if(this.votes.for && (this.votes.started && Date.now() - this.votes.started < this.election.max)){
+
+    log.info(`current voting: ${this.votes.for}`);
+
+    let ttl = await calculateVoteDelay(currentTerm, packet.publicKey, this); //todo think about fair ttl, which will be equal on all nodes
+    log.info(`blacklisting ${packet.publicKey} for ${ttl} under term: ${packet.term}`);
+    if (ttl)
+      this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, ttl);
+
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
@@ -108,38 +156,39 @@ const vote = async function (packet) { //todo timeout leader on election
       reply: reply,
       who: packet.publicKey
     };
+
   }
 
 
-  this.votes.started = Date.now();
-  this.votes.priority = packet.data.priority || 1;
-  this.votes.share = packet.data.share;
 
-  if (this.term > packet.term) { //in case the candidate is outdated
+
+
+  //if ((this.votes.for && this.votes.for !== this.publicKey) || (this.votes.priority >= packet.data.priority || ((this.votes.started && Date.now() - this.votes.started < this.election.max) || !this.votes.started))) {
+/*  if (this.votes.priority >= packet.data.priority || ((this.votes.started && Date.now() - this.votes.started < this.election.max) || !this.votes.started)) {
     this.emit(messageTypes.VOTE, packet, false);
-
-    _.isNumber(blackListCount) ?
-      this.cache.set(`blacklist.${packet.publicKey}`, blackListCount + 1, _.random(1, 5) * this.election.max / 1000) :
-      this.cache.set(`blacklist.${packet.publicKey}`, 1, _.random(1, 5) * this.election.max / 1000);
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
       signed: signedShare,
-      reason: 'the candidate is outdated',
-      code: 3
+      reason: 'already voted for another candidate',
+      code: 2
     });
     return {
       reply: reply,
       who: packet.publicKey
     };
-  }
+  }*/
 
 
-  if (_.isNumber(blackListCount))
+  this.votes.for = packet.publicKey;
+  this.votes.started = Date.now();
+  this.votes.priority = packet.data.priority || 1;
+  this.votes.share = packet.data.share;
+
+  if (blackListed)
     this.cache.del(`blacklist.${packet.publicKey}`);
 
   if (packet.last.index > index) {
-    this.votes.for = packet.publicKey;
     this.emit(messageTypes.VOTE, packet, true);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
     return {
@@ -149,7 +198,6 @@ const vote = async function (packet) { //todo timeout leader on election
   }
 
   if (packet.last.index === index && packet.last.hash !== hash) { //todo validation by proof supplied in first commit for entry
-    this.votes.for = packet.publicKey;
     this.emit(messageTypes.VOTE, packet, true);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
     return {
@@ -159,7 +207,6 @@ const vote = async function (packet) { //todo timeout leader on election
   }
 
 
-  this.votes.for = packet.publicKey;
   this.emit(messageTypes.VOTE, packet, true);
   this.heartbeat(this.timeout());
   let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
@@ -172,7 +219,7 @@ const vote = async function (packet) { //todo timeout leader on election
 const voted = async function (packet) {
 
 
-  log.info(`received new vote for term[${this.term}]`);
+  log.info(`received new vote for term[${this.term}] with reason: ${packet.data.reason} from peer: ${packet.publicKey}`);
 
   if (states.CANDIDATE !== this.state) {
     log.info('no longer a candidate');
@@ -229,12 +276,12 @@ const voted = async function (packet) {
   localShare.code = packet.data.code;
   localShare.reason = packet.data.reason;
 
-  if (!packet.data.granted) 
+  if (!packet.data.granted)
     log.error(`vote fail due to reason: ${packet.data.reason}`);
-  
-
 
   let votedAmount = _.chain(this.votes.shares).filter({voted: true}).size().value();
+
+  log.info(`collected votes: ${votedAmount}`);
 
   if (!this.quorum(votedAmount))
     return;
@@ -251,19 +298,42 @@ const voted = async function (packet) {
     };
 
     let dominatedReason = _.chain(badVotes)
-      .transform((result, vote)=>{
-        result[vote.reason] = (result[vote.reason] || 0) + 1;
+      .transform((result, vote) => {
+        result[vote.code] = (result[vote.code] || 0) + 1;
       }, {})
       .toPairs()
-      .sortBy(item=>item[1])
+      .sortBy(item => item[1])
       .last()
       .nth(0)
       .value();
 
     log.error(`vote result error: ${dominatedReason}`);
 
-    this.change({term: this.term - 1, state: states.FOLLOWER});
     let reply = await this.actions.message.packet(messageTypes.ACK);
+
+
+    if (packet.data.code === 2) {
+      const currentTerm = this.state === states.CANDIDATE ? this.term - 1 : this.term;
+      const ttl = await calculateVoteDelay(currentTerm, this.publicKey, this);
+      log.info(`estimated ttl: ${ttl}`);
+      this.cache.set(`blacklist.${this.publicKey}`, {term: this.term - 1, hash: packet.last.hash}, ttl);
+
+
+      if (this.timers.active('term_change'))
+        this.timers.clear('term_change');
+
+
+      log.info('clean up passed voting');
+      this.votes.for = null;
+      this.votes.granted = 0;
+      this.votes.shares = [];
+      this.votes.secret = null;
+      this.votes.started = null;
+    }
+
+
+    if (this.state === states.CANDIDATE)
+      this.change({term: this.term - 1, state: states.FOLLOWER});
     return {
       reply: reply,
       who: packet.publicKey
@@ -293,7 +363,8 @@ const voted = async function (packet) {
   this.change({leader: this.publicKey, state: states.LEADER});
   let proof = {
     shares: this.votes.shares.map(share => _.pick(share, 'share', 'signed')),
-    secret: this.votes.secret
+    secret: this.votes.secret,
+    time: this.votes.started
   };
 
   await this.log.addProof(this.term, proof);

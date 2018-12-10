@@ -29,8 +29,26 @@ class TaskProcessor {
         res(entry);
       })
     );
-
   }
+
+  async pushOrphan (command) { //todo think do we need 2 methods
+
+    return await new Promise(res =>
+      this.sem.take(async () => {
+
+        if (this.mokka.state !== states.LEADER)
+          await this._lock();
+
+        let entry = await this._save(command.command);
+        await this._broadcast(entry.index);
+        await this.mokka.log.pullOrphan(command.index);
+
+        this.sem.leave();
+        res(entry);
+      })
+    );
+  }
+
 
 
   async _lock () {
@@ -56,9 +74,14 @@ class TaskProcessor {
     if (this.mokka.state !== states.LEADER) {
       log.info('trying to propose task again');
       let timeout = this.mokka.timeout();//todo test max skip rounds for voting
-      let randomFactor = this.mokka.voteTimeoutRandomFactor <= 1 ? 1 : _.random(1, this.mokka.voteTimeoutRandomFactor);
-      this.mokka.heartbeat(timeout * (randomFactor + 1));
-      await Promise.delay(_.random(0, timeout * randomFactor));
+      const {createdAt} = await this.mokka.log.getLastInfo(); //todo replace with blacklist response
+      const delta = Date.now() - createdAt;
+
+      if(delta < this.mokka.election.max)
+        timeout+=delta;
+
+      this.mokka.heartbeat(timeout);
+      await Promise.delay(timeout);
       return await this._lock();
     }
 

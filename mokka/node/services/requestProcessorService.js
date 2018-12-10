@@ -54,6 +54,7 @@ class RequestProcessor {
           pubKeys,
           packet.proof.secret,
           _.get(proofEntry, 'createdAt', Date.now()),
+          //packet.proof.time,
           packet.proof.shares);
 
         if (!validated) {
@@ -69,7 +70,7 @@ class RequestProcessor {
       }
 
 
-      if (packet.proof.index && !_.has(packet, 'proof.shares')) {
+      if (packet.proof.index && !_.has(packet, 'proof.shares')) { //todo fix
 
         let proofEntryShare = await this.mokka.log.getProof(packet.term);
 
@@ -96,27 +97,27 @@ class RequestProcessor {
 
     if (packet.type === messageTypes.VOTE)  //add rule - don't vote for node, until this node receive the right history (full history)
       reply = await this.mokka.actions.vote.vote(packet);
-    
 
-    if (packet.type === messageTypes.VOTED) 
+
+    if (packet.type === messageTypes.VOTED)
       reply = await this.mokka.actions.vote.voted(packet);
-    
 
-    if (packet.type === messageTypes.ERROR) 
+
+    if (packet.type === messageTypes.ERROR)
       this.mokka.emit(messageTypes.ERROR, new Error(packet.data));
 
 
-    if (packet.type === messageTypes.APPEND) 
+    if (packet.type === messageTypes.APPEND)
       reply = await this.mokka.actions.append.append(packet);
-    
 
-    if (packet.type === messageTypes.APPEND_ACK) 
+
+    if (packet.type === messageTypes.APPEND_ACK)
       reply = await this.mokka.actions.append.appendAck(packet);
-    
 
-    if (packet.type === messageTypes.APPEND_FAIL) 
+
+    if (packet.type === messageTypes.APPEND_FAIL)
       reply = await this.mokka.actions.append.appendFail(packet);
-    
+
 
     if (!Object.values(messageTypes).includes(packet.type)) {
       let response = await this.mokka.actions.message.packet('error', 'Unknown message type: ' + packet.type);
@@ -133,12 +134,11 @@ class RequestProcessor {
     let {index} = await this.mokka.log.getLastInfo();
     let entry = await this.mokka.log.getLastEntry();
 
-    if(this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat)
+    if (this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat)
       reply = await this.mokka.actions.append.obtain(packet);
-    
 
 
-    if(!reply && this.mokka.state === states.LEADER)
+    if (!reply && this.mokka.state === states.LEADER)
       return;
 
     if (!reply) {

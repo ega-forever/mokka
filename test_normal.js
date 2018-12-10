@@ -76,6 +76,8 @@ const init = async () => {
 
   let start = Date.now();
 
+  let processed = 0;
+
   await Promise.all([
     (async () => {
       let node = nodes[0];
@@ -83,6 +85,7 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.processor.push(tasks[i]));
           console.log(1, entry.index, entry.hash, i);
+          processed++;
         } catch (e) {
 
           if (e instanceof Promise.TimeoutError) {
@@ -111,22 +114,8 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.processor.push(tasks[i]));
           console.log(2, entry.index, entry.hash, i);
+          processed++;
         } catch (e) {
-
-          if (e instanceof Promise.TimeoutError) {
-            console.log('task has been reverted by timeout:', i);
-
-            const index1 = await nodes[1].log.getLastInfo();
-            const index2 = await nodes[2].log.getLastInfo();
-            const index3 = await nodes[3].log.getLastInfo();
-
-            console.log(index1, index2, index3);
-
-            await Promise.delay(3000);
-
-            continue;
-          }
-
           console.log(e);
         }
       
@@ -138,22 +127,8 @@ const init = async () => {
         try {
           let entry = await Promise.resolve(node.processor.push(tasks[i]));
           console.log(3, entry.index, entry.hash, i);
+          processed++;
         } catch (e) {
-
-          if (e instanceof Promise.TimeoutError) {
-            console.log('task has been reverted by timeout:', i);
-
-            const index1 = await nodes[1].log.getLastInfo();
-            const index2 = await nodes[2].log.getLastInfo();
-            const index3 = await nodes[3].log.getLastInfo();
-
-            console.log(index1, index2, index3);
-
-            await Promise.delay(3000);
-
-            continue;
-          }
-
           console.log(e);
         }
       
@@ -164,7 +139,7 @@ const init = async () => {
 
   let time = (Date.now() - start) / 1000;
   console.log('benchmark: ', time);
-  console.log('process tx per second', tasks.length / time);
+  console.log('process tx per second', processed / time);
   await Promise.delay(2000);
 
   const index1 = await nodes[0].log.getLastInfo();
@@ -189,6 +164,7 @@ const init = async () => {
   let entities6 = await nodes[5].log.getEntriesAfter();
 
   console.log(entities1.length, entities2.length, entities3.length, entities4.length, entities5.length, entities6.length);
+  console.log(processed);
 
   process.exit(0);
 
