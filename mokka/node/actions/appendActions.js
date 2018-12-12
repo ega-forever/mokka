@@ -1,6 +1,7 @@
 const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
   bunyan = require('bunyan'),
+  Promise = require('bluebird'),
   log = bunyan.createLogger({name: 'node.actions.append'}),
   states = require('../factories/stateFactory');
 
@@ -20,7 +21,31 @@ const append = async function (packet) { //todo move write to index.js
     let term = packet.term > this.term ? this.term - 1 : packet.term - 1;
 
     let prevTerm = await this.log.getLastEntryByTerm(term);
+
+
+    for (let logIndex = prevTerm.index + 1; logIndex <= index; logIndex++) {
+      let entry = await this.log.get(logIndex);
+
+      if (entry.owner !== this.publicKey) {
+        log.info(`can't put command to orphan, as i am not a leader ${entry.owner} vs ${this.publicKey}`);
+        continue;
+      }
+
+      log.info(`putting command back: ${JSON.stringify(entry.command.task)} to pending (by another root)`);
+      await this.processor.push(entry.command.task);
+
+    }
+
+
+    log.info(`should drop ${index - prevTerm.index}, with current index ${index}, current term: ${term} and leader term ${packet.term}`);
     await this.log.removeEntriesAfter(prevTerm.index);
+    this.term--;
+
+    let {index: indexAfter} = await this.log.getLastInfo();
+    log.info(`after: ${indexAfter}`);
+
+    //todo add to pending
+
     return null;
   }
 
@@ -35,7 +60,6 @@ const append = async function (packet) { //todo move write to index.js
     if (index >= packet.data.index) {
 
       let record = await this.log.get(packet.data.index);
-      console.log(record.hash, packet.data.hash);
 
       if (record.hash === packet.data.hash) {
         reply = await this.actions.message.packet(messageTypes.APPEND_ACK, {
@@ -54,19 +78,17 @@ const append = async function (packet) { //todo move write to index.js
 
     if (index >= packet.data.index) { //not next log to append
       log.info(`the leader has another history. Rewrite mine ${index} -> ${packet.data.index - 1}`);
-      // process.exit(0)//todo make sure to recommit
 
       for (let logIndex = packet.data.index; logIndex <= index; logIndex++) {
         let entry = await this.log.get(logIndex);
-        log.info(`putting command: ${entry.command} to orphan`);
 
         if (entry.owner !== this.publicKey) {
           log.info(`can't put command to orphan, as i am not a leader ${entry.owner} vs ${this.publicKey}`);
           continue;
         }
 
-        let record = await this.log.putOrphan(entry.command);
-        await this.processor.pushOrphan(record);
+        log.info(`putting command back: ${JSON.stringify(entry.command.task)} to pending (rewrite mine)`);
+        await this.processor.push(entry.command.task);
 
       }
 

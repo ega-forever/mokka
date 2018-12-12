@@ -82,20 +82,20 @@ const message = async function (who, what, options = {}) {
 };
 
 const packet = async function (type, data) {
-  let mokka = this,
-    wrapped = {
-      state: mokka.state,
-      term: mokka.term,
-      address: mokka.address, //todo remove
-      publicKey: mokka.publicKey,
+
+    const wrapped = {
+      state: this.state,
+      term: this.term,
+      address: this.address, //todo remove
+      publicKey: this.publicKey,
       type: type,
-      leader: mokka.leader
+      leader: this.leader
     };
 
 
-  wrapped.last = await mokka.log.getLastInfo();
+  wrapped.last = await this.log.getLastInfo();
 
-  if (arguments.length === 2)
+  if (data)
     wrapped.data = data;
 
   return wrapped;

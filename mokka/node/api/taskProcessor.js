@@ -9,12 +9,62 @@ const Promise = require('bluebird'),
 class TaskProcessor {
 
   constructor (mokka) {
+    this.semPending = semaphore(1);
     this.sem = semaphore(1);
     this.mokka = mokka;
+    this.run = 1;
+
+  }
+
+  async push (task) {
+    return await new Promise(res =>
+      this.semPending.take(async () => {
+        await this.mokka.log.putPending(task);
+        this.semPending.leave();
+        res();
+      })
+    );
+
+
   }
 
 
-  async push (task) {
+  async runLoop () { //loop for checking new packets
+    while (this.run) {
+
+      let lastEntry = await this.mokka.log.getLastEntry();//todo
+
+      if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {
+
+        let followers = _.chain(this.mokka.nodes)
+          .reject(node => _.find(lastEntry.responses, {publicKey: node.publicKey}))
+          .value();
+
+        const minConfirmations = Math.floor(followers.length / 2) + 1;
+
+        if (lastEntry.responses.length - 1 < minConfirmations) {
+          await Promise.delay(this.mokka.timeout());
+          continue;
+        }
+      }
+
+
+      let pending = await this.mokka.log.getFirstPending();
+      if (pending.index === -1) {
+        await Promise.delay(this.mokka.timeout()); //todo delay for next tick or event on new push
+        continue;
+      }
+
+
+      await this._commit(pending.command);
+      console.log('pulling pending: ', pending.index);
+      await this.mokka.log.pullPending(pending.index);
+    }
+
+
+  }
+
+  async _commit (task) {
 
     return await new Promise(res =>
       this.sem.take(async () => {
@@ -23,33 +73,13 @@ class TaskProcessor {
           await this._lock();
 
         let entry = await this._save(task);
-        await this._broadcast(entry.index);
+        await this._broadcast(entry.index, entry.hash);
 
         this.sem.leave();
         res(entry);
       })
     );
   }
-
-  async pushOrphan (command) { //todo think do we need 2 methods
-
-    return await new Promise(res =>
-      this.sem.take(async () => {
-
-        if (this.mokka.state !== states.LEADER)
-          await this._lock();
-
-        let entry = await this._save(command.command);
-        await this._broadcast(entry.index);
-        await this.mokka.log.pullOrphan(command.index);
-
-        this.sem.leave();
-        res(entry);
-      })
-    );
-  }
-
-
 
   async _lock () {
 
@@ -77,8 +107,8 @@ class TaskProcessor {
       const {createdAt} = await this.mokka.log.getLastInfo(); //todo replace with blacklist response
       const delta = Date.now() - createdAt;
 
-      if(delta < this.mokka.election.max)
-        timeout+=delta;
+      if (delta < this.mokka.election.max)
+        timeout += delta;
 
       this.mokka.heartbeat(timeout);
       await Promise.delay(timeout);
@@ -91,16 +121,15 @@ class TaskProcessor {
     return await this.mokka.log.saveCommand({task: task}, this.mokka.term);
   }
 
-  async _broadcast (index) {
+  async _broadcast (index, hash) {
 
     log.info(`broadcasting ${index}`);
     let entry = await this.mokka.log.get(index);
 
-    //  if(_.find(this.mokka.nodes, {state: states.CHILD}))
-    //    throw Error('child detected');
+    if (!entry || entry.hash !== hash)
+      return log.info(`can't broadcast entry at index ${index}`);
 
-    if(!entry)
-      return;
+    log.info(`broadcasting task ${entry.command.task}`);
 
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;
@@ -113,19 +142,10 @@ class TaskProcessor {
     if (followers.length === 0)
       return entry;
 
-    let options = {
-      timeout: this.mokka.beat,
-      minConfirmations: Math.floor(followers.length / 2) + 1
-    };
-
     const appendPacket = await this.mokka.actions.message.appendPacket(entry);
-    let pubKeys = followers.map(node=>node.publicKey);
+    let pubKeys = followers.map(node => node.publicKey);
 
-    try {
-      await this.mokka.actions.message.message(pubKeys, appendPacket, options);
-    } catch (e) {
-      return await this._broadcast(index);
-    }
+    await this.mokka.actions.message.message(pubKeys, appendPacket);
 
   }
 

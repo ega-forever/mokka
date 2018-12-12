@@ -312,9 +312,10 @@ const voted = async function (packet) {
     let reply = await this.actions.message.packet(messageTypes.ACK);
 
 
-    if (packet.data.code === 2) {
+    //if (packet.data.code === 2) {
+    if (packet.data.code === 2 || packet.data.code === 1) {
       const currentTerm = this.state === states.CANDIDATE ? this.term - 1 : this.term;
-      const ttl = await calculateVoteDelay(currentTerm, this.publicKey, this);
+      const ttl = packet.data.code === 2 ? await calculateVoteDelay(currentTerm, this.publicKey, this) : this.election.max;
       log.info(`estimated ttl: ${ttl}`);
       this.cache.set(`blacklist.${this.publicKey}`, {term: this.term - 1, hash: packet.last.hash}, ttl);
 

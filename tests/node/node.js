@@ -15,20 +15,22 @@ process.on('unhandledRejection', function (reason, p) {
 
 process.on('message', message => {
 
-  if(message.command === 'start')
+  if (message.command === 'start')
     initMokka(message.options);
 
-  if(message.command === 'push')
+  if (message.command === 'push')
     sendCommand(message.data);
 
-  if(message.command === 'status')
+  if (message.command === 'status')
     getStatus();
 
+  if (message.command === 'logs')
+    getLogs();
 
 });
 
 
-const initMokka = (options)=>{
+const initMokka = (options) => {
 
   const pubKey = Wallet.fromPrivateKey(Buffer.from(options.privateKey, 'hex')).getPublicKey().toString('hex');
 
@@ -57,13 +59,27 @@ const initMokka = (options)=>{
 };
 
 
-const sendCommand = async (command)=>{
+const sendCommand = async (command) => {
   mokka.processor.push(command);
   process.send({command: 'pushed', data: command});
 };
 
 
-const getStatus = async ()=>{
+const getStatus = async () => {
   const info = await mokka.log.getLastInfo();
   process.send({command: 'status', info: info})
+};
+
+const getLogs = async () => {
+  const info = await mokka.log.getLastInfo();
+
+  let items = [];
+
+  for (let index = 0; index <= info.index; index++) {
+    let log = await mokka.log.get(index);
+    if (log)
+      items.push(log);
+  }
+
+  process.send({command: 'logs', data: items});
 };

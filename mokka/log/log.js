@@ -17,7 +17,7 @@ class Log {
     this.prefixes = {
       logs: 1,
       term: 2,
-      orphan: 3
+      pending: 3
     };
 
     this.node = node;
@@ -130,23 +130,25 @@ class Log {
   }
 
 
-  async putOrphan(command){
+  async putPending(command){
 
-    let {index} = await this.getLastOrphan();
+    let {index} = await this.getLastPending();
     const nextIndex = index + 1;
 
-    let record = {command, index};
-    await this.db.put(`${this.prefixes.orphan}:${Log._getBnNumber(nextIndex)}`, record);
+    let record = {command, index: nextIndex};
+    console.log(record)
+    console.log(`${this.prefixes.pending}:${Log._getBnNumber(nextIndex)}`)
+    await this.db.put(`${this.prefixes.pending}:${Log._getBnNumber(nextIndex)}`, record);
 
     return record;
   }
 
-  async pullOrphan(index){
-    await this.db.del(`${this.prefixes.orphan}:${Log._getBnNumber(index)}`);
+  async pullPending(index){
+    await this.db.del(`${this.prefixes.pending}:${Log._getBnNumber(index)}`);
   }
 
 
-  async getLastOrphan(){
+  async getLastPending(){
 
     return await new Promise((resolve, reject) => {
 
@@ -158,11 +160,11 @@ class Log {
       this.db.createReadStream({
         reverse: true,
         limit: 1,
-        lt: `${this.prefixes.orphan + 1}:${Log._getBnNumber(0)}`,
-        gte: `${this.prefixes.orphan}:${Log._getBnNumber(0)}`
+        lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
+        gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
       })
         .on('data', data => {
-          item = data;
+          item = data.value;
         })
         .on('error', err => {
           reject(err);
@@ -174,44 +176,33 @@ class Log {
 
   }
 
-
-  async getOrphans(limit){
+  async getFirstPending(){
 
     return await new Promise((resolve, reject) => {
 
-     let items = [];
+      let item = {
+        index: -1,
+        command: null
+      };
 
-     let params = {
-       lt: `${this.prefixes.orphan + 1}:${Log._getBnNumber(0)}`,
-       gte: `${this.prefixes.orphan}:${Log._getBnNumber(0)}`
-     };
-
-     if(limit)
-       params.limit = limit;
-
-      this.db.createReadStream(params)
+      this.db.createReadStream({
+        limit: 1,
+        lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
+        gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
+      })
         .on('data', data => {
-          items.push(data.value);
+          item = data.value;
         })
         .on('error', err => {
           reject(err);
         })
         .on('end', () => {
-          resolve(items);
+          resolve(item);
         });
     });
 
   }
 
-
-  async getOrphan (index) {
-    try {
-      return await this.db.get(`${this.prefixes.orphan}:${Log._getBnNumber(index)}`);
-    } catch (err) {
-      return null;
-    }
-
-  }
 
   async addProof (term, proof) {
 

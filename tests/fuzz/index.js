@@ -435,7 +435,7 @@ module.exports = (ctx) => {
           heartbeat: 100,
           port: ctx.ports[index],
           peers: uris,
-          privateKey: privKeys[index],
+          privateKey: privKeys[index]
         }
       });
 
@@ -445,6 +445,24 @@ module.exports = (ctx) => {
 
         if (data.command === 'status') {
           states[index] = data.info;
+        }
+
+        if (data.command === 'logs') {
+
+          let duplicates = _.chain(data.data)
+            .compact()
+            .map(item => item.command.task[0])
+            .countBy()
+            .toPairs()
+            .filter(pair => pair[1] > 1)
+            .fromPairs()
+            .value();
+
+          let missedTasks = _.reject(data.data, item=> _.isNumber(item.command.task[0]));
+
+          console.log(require('util').inspect(duplicates, null, 10));
+          console.log('--------');
+          console.log(require('util').inspect(missedTasks, null, 10));
         }
 
       });
@@ -464,12 +482,18 @@ module.exports = (ctx) => {
 
     await new Promise(res => {
 
-      let intervalId = setInterval(() => {
+      let intervalId = setInterval(async () => {
         let records = Object.values(states);
 
 
         console.log('super states')
         console.log(require('util').inspect(states, null, 5));
+
+
+        if (records.length === ctx.nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1 &&
+          _.uniq(records.map(rec => rec.index)).length === 1 && _.uniq(records.map(rec => rec.index))[0] === taskAmount * ctx.nodes.length + 1) {
+          ctx.nodes[0].send({command: 'logs'});
+        }
 
 
         if (records.length === ctx.nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1 &&
@@ -480,6 +504,7 @@ module.exports = (ctx) => {
           expect(_.uniq(records.map(rec => rec.index)).length).to.eq(1);
           expect(_.uniq(records.map(rec => rec.term)).length).to.eq(1);
 
+
           clearInterval(intervalId);
           res();
         }
@@ -488,7 +513,7 @@ module.exports = (ctx) => {
           node.send({command: 'status'});
 
 
-      }, 3000);
+      }, 5000);
 
     });
 

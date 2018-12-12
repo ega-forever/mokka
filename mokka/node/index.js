@@ -113,7 +113,13 @@ class Mokka extends EventEmitter {
 
       semaphore.take(async () => {
 
-        let data = await this.requestProcessor.process(packet);
+        let data = await Promise.resolve(this.requestProcessor.process(packet)).timeout(20000).catch(e=>{
+
+          console.log(require('util').inspect(packet, null, 10));
+          console.log(e)
+
+          process.exit(0)
+        });
 
         if (!_.has(data, 'who') && !_.has(data, '0.who'))
           return semaphore.leave();
@@ -150,6 +156,8 @@ class Mokka extends EventEmitter {
     if (_.isFunction(mokka.Log))
       mokka.log = new mokka.Log(mokka, options.log_options);
 
+
+    mokka.processor.runLoop();
 
     function initialize (err) {
       if (err) return mokka.emit(messageTypes.ERROR, err);
@@ -203,7 +211,7 @@ class Mokka extends EventEmitter {
 
       log.info('send append request by timeout');
       mokka.emit(messageTypes.ACK, packet);
-      await mokka.actions.message.message(states.FOLLOWER, packet, {ensure: false, timeout: this.election.max});
+      await mokka.actions.message.message(states.FOLLOWER, packet, {timeout: this.election.max});
       mokka.heartbeat(mokka.beat);
     }, duration);
 

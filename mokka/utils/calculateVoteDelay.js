@@ -1,7 +1,5 @@
 const _ = require('lodash'),
-  bunyan = require('bunyan'),
   crypto = require('crypto'),
-  log = bunyan.createLogger({name: 'node.utils.calculateVoteDelay'}),
   speakeasy = require('speakeasy');
 
 module.exports = async (currentTerm, publicKey, mokka)=>{
@@ -18,11 +16,14 @@ module.exports = async (currentTerm, publicKey, mokka)=>{
       if (!index)
         continue;
 
-      let {owner} = await mokka.log.get(index);
-      if (owner === mokka.publicKey)
+      let entry =  await mokka.log.get(index);
+      if(!entry)
         continue;
 
-      owners.push({index, owner});
+      if (entry.owner === mokka.publicKey)
+        continue;
+
+      owners.push({index: index, owner: entry.owner});
     }
 
   let currentOwnerPosition = _.chain(owners)
@@ -40,16 +41,12 @@ module.exports = async (currentTerm, publicKey, mokka)=>{
     })
     .value();
 
-  log.info('candidate index: ', currentOwnerPosition);
-
   if (!currentOwnerPosition) {
 
     let token = speakeasy.hotp({
       secret: mokka.networkSecret,
       counter: currentTerm
     });
-
-    log.info(`super token: ${token} for term: ${currentTerm}`);
 
     currentOwnerPosition = _.chain(peers)
       .map(pubKey => {
@@ -72,7 +69,6 @@ module.exports = async (currentTerm, publicKey, mokka)=>{
 
   }
 
-  console.log(`current pos: ${currentOwnerPosition}`)
   return (currentOwnerPosition + 1) * mokka.election.max;
 
 };

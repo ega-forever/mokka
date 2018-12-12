@@ -3,6 +3,7 @@ const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
   validateSecretUtil = require('../../utils/validateSecret'),
   bunyan = require('bunyan'),
+  Promise = require('bluebird'),
   log = bunyan.createLogger({name: 'node.services.requestProcessor'});
 
 
@@ -46,16 +47,16 @@ class RequestProcessor {
 
       if (packet.proof.index && _.has(packet, 'proof.shares')) {
 
-        let proofEntry = await this.mokka.log.get(packet.proof.index);
+        let proofEntry = await Promise.resolve(this.mokka.log.get(packet.proof.index)).timeout(15000).catch((e)=>Promise.reject('case 1'));
 
-        let validated = validateSecretUtil(
+        let validated = await Promise.resolve(validateSecretUtil(
           this.mokka.networkSecret,
           this.mokka.election.max,
           pubKeys,
           packet.proof.secret,
           _.get(proofEntry, 'createdAt', Date.now()),
           //packet.proof.time,
-          packet.proof.shares);
+          packet.proof.shares)).timeout(2000).catch(()=>Promise.reject('case 2'));
 
         if (!validated) {
           log.error('the initial proof validation failed');
@@ -66,11 +67,11 @@ class RequestProcessor {
           };
         }
 
-        await this.mokka.log.addProof(packet.term, packet.proof);
+        await Promise.resolve(this.mokka.log.addProof(packet.term, packet.proof)).catch(()=>Promise.reject('case 3'));
       }
 
 
-      if (packet.proof.index && !_.has(packet, 'proof.shares')) { //todo fix
+      if (packet.proof.index && !_.has(packet, 'proof.shares')) { //todo send initial proof on fail
 
         let proofEntryShare = await this.mokka.log.getProof(packet.term);
 
@@ -134,8 +135,12 @@ class RequestProcessor {
     let {index} = await this.mokka.log.getLastInfo();
     let entry = await this.mokka.log.getLastEntry();
 
-    if (this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat)
+
+    if (this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat){
       reply = await this.mokka.actions.append.obtain(packet);
+      log.info(`obtained a new log with index ${reply.reply.data.index} for follower`);
+
+    }
 
 
     if (!reply && this.mokka.state === states.LEADER)
