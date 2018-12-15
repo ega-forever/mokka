@@ -32,6 +32,12 @@ class TaskProcessor {
   async runLoop () { //loop for checking new packets
     while (this.run) {
 
+
+      if(!this.sem.available()){
+        await Promise.delay(this.mokka.timeout());
+        continue;
+      }
+
       let lastEntry = await this.mokka.log.getLastEntry();//todo
 
       if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {
@@ -50,21 +56,21 @@ class TaskProcessor {
 
 
       let pending = await this.mokka.log.getFirstPending();
-      if (pending.index === -1) {
+      if (!pending.hash) {
         await Promise.delay(this.mokka.timeout()); //todo delay for next tick or event on new push
         continue;
       }
 
 
-      await this._commit(pending.command);
-      console.log('pulling pending: ', pending.index);
-      await this.mokka.log.pullPending(pending.index);
+      await this._commit(pending.command, pending.hash);
+      log.info(`pulling pending task ${pending.command} with hash ${pending.hash}`);
+      await this.mokka.log.pullPending(pending.hash);
     }
 
 
   }
 
-  async _commit (task) {
+  async _commit (task, hash) {
 
     return await new Promise(res =>
       this.sem.take(async () => {
@@ -72,8 +78,18 @@ class TaskProcessor {
         if (this.mokka.state !== states.LEADER)
           await this._lock();
 
+        //todo check here the pending task is still exist!!
+
+        let checkPending = await this.mokka.log.getPending(hash);
+
+        if(!checkPending){
+          this.sem.leave();
+          return res();
+        }
+
         let entry = await this._save(task);
         await this._broadcast(entry.index, entry.hash);
+        log.info(`task has been broadcasted ${task}`);
 
         this.sem.leave();
         res(entry);
@@ -123,13 +139,12 @@ class TaskProcessor {
 
   async _broadcast (index, hash) {
 
-    log.info(`broadcasting ${index}`);
     let entry = await this.mokka.log.get(index);
 
     if (!entry || entry.hash !== hash)
       return log.info(`can't broadcast entry at index ${index}`);
 
-    log.info(`broadcasting task ${entry.command.task}`);
+    log.info(`broadcasting task ${entry.command.task} at index ${index}`);
 
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;

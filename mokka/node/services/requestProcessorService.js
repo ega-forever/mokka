@@ -47,16 +47,16 @@ class RequestProcessor {
 
       if (packet.proof.index && _.has(packet, 'proof.shares')) {
 
-        let proofEntry = await Promise.resolve(this.mokka.log.get(packet.proof.index)).timeout(15000).catch((e)=>Promise.reject('case 1'));
+        let proofEntry = await this.mokka.log.get(packet.proof.index);
 
-        let validated = await Promise.resolve(validateSecretUtil(
+        let validated = validateSecretUtil(
           this.mokka.networkSecret,
           this.mokka.election.max,
           pubKeys,
           packet.proof.secret,
           _.get(proofEntry, 'createdAt', Date.now()),
           //packet.proof.time,
-          packet.proof.shares)).timeout(2000).catch(()=>Promise.reject('case 2'));
+          packet.proof.shares);
 
         if (!validated) {
           log.error('the initial proof validation failed');
@@ -67,7 +67,7 @@ class RequestProcessor {
           };
         }
 
-        await Promise.resolve(this.mokka.log.addProof(packet.term, packet.proof)).catch(()=>Promise.reject('case 3'));
+        await this.mokka.log.addProof(packet.term, packet.proof);
       }
 
 
@@ -136,10 +136,12 @@ class RequestProcessor {
     let entry = await this.mokka.log.getLastEntry();
 
 
-    if (this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat){
+    let validateLogSent = this.mokka.cache.get(`requests.${packet.publicKey}.${packet.last.index + 1}`);
+
+    if (!validateLogSent && this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat){
       reply = await this.mokka.actions.append.obtain(packet);
       log.info(`obtained a new log with index ${reply.reply.data.index} for follower`);
-
+      this.mokka.cache.set(`requests.${packet.publicKey}.${packet.last.index + 1}`, true, this.mokka.election.max);
     }
 
 

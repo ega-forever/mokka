@@ -76,6 +76,7 @@ class Mokka extends EventEmitter {
     this.state = options.state || states.FOLLOWER;    // Our current state.
     this.leader = '';                               // Leader in our cluster.
     this.term = 0;                                  // Our current term.
+    this.leadershipStarted = null;                  //leader start time
     this.requestProcessor = new RequestProcessor(this);
 
     this._initialize(options);
@@ -109,17 +110,11 @@ class Mokka extends EventEmitter {
       }
     });
 
-    mokka.on('data', async (packet, write) => {
+    mokka.on('data', async (packet) => {
 
       semaphore.take(async () => {
 
-        let data = await Promise.resolve(this.requestProcessor.process(packet)).timeout(20000).catch(e=>{
-
-          console.log(require('util').inspect(packet, null, 10));
-          console.log(e)
-
-          process.exit(0)
-        });
+        let data = await this.requestProcessor.process(packet);
 
         if (!_.has(data, 'who') && !_.has(data, '0.who'))
           return semaphore.leave();
@@ -127,17 +122,9 @@ class Mokka extends EventEmitter {
         if (_.isArray(data)) {
 
           for (let item of data)
-            item.who === packet.publicKey && write ?
-              write(item.reply) :
-              this.actions.message.message(item.who, item.reply);
+            this.actions.message.message(item.who, item.reply);
 
 
-          return semaphore.leave();
-        }
-
-
-        if (data.who === packet.publicKey && write) {
-          write(data.reply);
           return semaphore.leave();
         }
 
@@ -211,7 +198,7 @@ class Mokka extends EventEmitter {
 
       log.info('send append request by timeout');
       mokka.emit(messageTypes.ACK, packet);
-      await mokka.actions.message.message(states.FOLLOWER, packet, {timeout: this.election.max});
+      await mokka.actions.message.message(states.FOLLOWER, packet);
       mokka.heartbeat(mokka.beat);
     }, duration);
 
@@ -270,7 +257,7 @@ class Mokka extends EventEmitter {
    * @return {Promise<void>}
    */
   async commitEntries (entries) {
-    for(let entry of entries)
+    for (let entry of entries)
       await this.log.commit(entry.index);
   }
 }

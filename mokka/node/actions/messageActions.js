@@ -18,14 +18,11 @@ const _timing = function (latency = []) {
   return true;
 };
 
-const message = async function (who, what, options = {}) {
+const message = async function (who, what) {
 
   let latency = [],
     mokka = this,
     nodes = [];
-
-  if (!_.has(options, 'minConfirmations'))
-    options.minConfirmations = _.isArray(who) ? who.length : 1;
 
   switch (who) {
     case states.LEADER:
@@ -53,31 +50,11 @@ const message = async function (who, what, options = {}) {
 
   }
 
-
-  await Promise.some(nodes.map(async client => {
-
-    let start = Date.now();
-    let output = {
-      client: client.publicKey,
-      error: null,
-      data: null
-    };
-
-    let item = new Promise((res, rej) => client.write(what, (err, data) => err ? rej(err) : res(data))); //todo ack on each action
-
-    item = options.timeout ?
-      await item.timeout(options.timeout) : await item;
-    output.data = item;
-    mokka.emit('data', item);
+  for(let client of nodes)
+    client.write(what);
 
 
-    latency.push(Date.now() - start);
-
-    return output;
-  }), options.minConfirmations);
-
-
-  _timing.call(mokka, latency);
+ // _timing.call(mokka, latency); //todo implement timing
 
 };
 
@@ -86,7 +63,6 @@ const packet = async function (type, data) {
     const wrapped = {
       state: this.state,
       term: this.term,
-      address: this.address, //todo remove
       publicKey: this.publicKey,
       type: type,
       leader: this.leader
@@ -118,7 +94,6 @@ const appendPacket = async function (entry) {
   return {
     state: mokka.state,
     term: mokka.term,
-    address: mokka.address, //todo remove
     publicKey: mokka.publicKey,
     type: messageTypes.APPEND,
     leader: mokka.leader,

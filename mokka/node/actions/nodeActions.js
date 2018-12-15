@@ -90,8 +90,16 @@ const promote = async function (priority = 1) {
 
       let blackListed = this.cache.get(`blacklist.${this.publicKey}`);
 
-      if(blackListed){
+      if (blackListed) {
         log.error('awaiting for next rounds');
+        sem.leave();
+        return res();
+      }
+
+      let locked = this.cache.get('commit.locked');
+
+      if (locked) {
+        log.error('awaiting for new possible leader');
         sem.leave();
         return res();
       }
@@ -135,10 +143,17 @@ const promote = async function (priority = 1) {
           voted: false
         });
 
+
+        let {index: peerIndex, hash: peerHash} = await this.log.getLastAcked(this.nodes[index].publicKey);
+
         const packet = await this.actions.message.packet(messageTypes.VOTE, {
           share: shares[index],
           priority: priority,
-          prevTermHash: prevTermHash
+          prevTermHash: prevTermHash,
+          peerLog: { //todo implement in voting
+            index: peerIndex,
+            hash: peerHash
+          }
         });
 
         log.info(`sending vote to ${this.nodes[index].publicKey}`);

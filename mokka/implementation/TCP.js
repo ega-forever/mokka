@@ -26,10 +26,9 @@ class TCPMokka extends Mokka {
    * The message to write.
    *
    * @param {Object} packet The packet to write to the connection.
-   * @param {Function} fn Completion callback.
    * @api private
    */
-  write (packet, fn) {
+  write (packet) {
     if (!this.socket) {
       this.socket = msg.socket('req');
 
@@ -39,9 +38,7 @@ class TCPMokka extends Mokka {
       });
     }
 
-    this.socket.send(packet, (data) => {
-      fn(undefined, data);
-    });
+    this.socket.send(packet);
   }
 
 }

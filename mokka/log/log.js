@@ -1,6 +1,7 @@
 const encode = require('encoding-down'),
   _ = require('lodash'),
   semaphore = require('semaphore')(1),
+  crypto = require('crypto'),
   MerkleTools = require('merkle-tools'),
   levelup = require('levelup');
 
@@ -130,41 +131,85 @@ class Log {
   }
 
 
-  async putPending(command){
+  async putPending (command) {
 
-    let {index} = await this.getLastPending();
-    const nextIndex = index + 1;
 
-    let record = {command, index: nextIndex};
-    console.log(record)
-    console.log(`${this.prefixes.pending}:${Log._getBnNumber(nextIndex)}`)
-    await this.db.put(`${this.prefixes.pending}:${Log._getBnNumber(nextIndex)}`, record);
+    let record = {command};
 
-    return record;
+    const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
+
+    await this.db.put(`${this.prefixes.pending}:${hash}`, record);//todo hash
+
+    return {
+      command: command,
+      hash: hash
+    };
   }
 
-  async pullPending(index){
-    await this.db.del(`${this.prefixes.pending}:${Log._getBnNumber(index)}`);
+  async pullPending (hash) {
+    await this.db.del(`${this.prefixes.pending}:${hash}`);
   }
 
+  async getPending (hash, task = false) {
 
-  async getLastPending(){
+    if (task)
+      hash = crypto.createHmac('sha256', JSON.stringify(task)).digest('hex');
+
+    try {
+      return await this.db.get(`${this.prefixes.pending}:${hash}`);
+    }catch (e) {
+      return null;
+    }
+  }
+
+  /*
+
+    async getLastPending () {
+
+      return await new Promise((resolve, reject) => {
+
+        let item = {
+          index: -1,
+          command: null
+        };
+
+        this.db.createReadStream({
+          reverse: true,
+          limit: 1,
+          lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
+          gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
+        })
+          .on('data', data => {
+            item = data.value;
+          })
+          .on('error', err => {
+            reject(err);
+          })
+          .on('end', () => {
+            resolve(item);
+          });
+      });
+
+    }
+  */
+
+  async getFirstPending () {
 
     return await new Promise((resolve, reject) => {
 
       let item = {
-        index: -1,
+        hash: null,
         command: null
       };
 
       this.db.createReadStream({
-        reverse: true,
         limit: 1,
         lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
         gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
       })
         .on('data', data => {
           item = data.value;
+          item.hash = data.key.toString().replace(`${this.prefixes.pending}:`, '');
         })
         .on('error', err => {
           reject(err);
@@ -176,33 +221,34 @@ class Log {
 
   }
 
-  async getFirstPending(){
+  /*
+    async getPendings (limit) { //todo remove
 
-    return await new Promise((resolve, reject) => {
+      return await new Promise((resolve, reject) => {
 
-      let item = {
-        index: -1,
-        command: null
-      };
+        let items = [];
 
-      this.db.createReadStream({
-        limit: 1,
-        lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
-        gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
-      })
-        .on('data', data => {
-          item = data.value;
+        this.db.createReadStream({
+          lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
+          gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
         })
-        .on('error', err => {
-          reject(err);
-        })
-        .on('end', () => {
-          resolve(item);
-        });
-    });
+          .on('data', data => {
+            let item = data.value;
+            item.hash = data.key.toString().replace(`${this.prefixes.pending}:`, '');
+            items.push(item);
+          })
+          .on('error', err => {
+            reject(err);
+          })
+          .on('end', () => {
+            resolve(items);
+          });
+      });
 
-  }
+    }
 
+
+  */
 
   async addProof (term, proof) {
 
@@ -272,7 +318,10 @@ class Log {
   async getEntriesAfter (index, limit) {
     const entries = [];
 
-    let query = {gt: `${this.prefixes.logs}:${Log._getBnNumber(index)}`, lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`};
+    let query = {
+      gt: `${this.prefixes.logs}:${Log._getBnNumber(index)}`,
+      lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`
+    };
 
     if (limit)
       query.limit = limit;
@@ -454,7 +503,7 @@ class Log {
         responses: []
       };
 
-    const entryIndex = await entry.responses.findIndex(resp => resp.publicKey === publicKey);
+    const entryIndex = entry.responses.findIndex(resp => resp.publicKey === publicKey);
     // node hasn't voted yet. Add response
     if (entryIndex === -1)
       entry.responses.push({
@@ -467,6 +516,44 @@ class Log {
 
     return entry;
   }
+
+
+  getLastAcked (publicKey) {
+    const defaultInfo = {
+      index: 0,
+      term: this.node.term,
+      hash: _.fill(new Array(32), 0).join('')
+    };
+    // We know it is the first entry, so save the query time
+
+    return new Promise((resolve, reject) => {
+      let hasResolved = false;
+
+      this.db.createReadStream({
+        reverse: true,
+        lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`,
+        gt: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
+      })
+        .on('data', (data) => {
+
+          if (hasResolved || data.value.responses.findIndex(resp => resp.publicKey === publicKey) === -1)
+            return;
+
+          hasResolved = true;
+          resolve(data.value);
+        })
+        .on('error', (err) => {
+          hasResolved = true;
+          reject(err);
+        })
+        .on('end', () => {
+          if (!hasResolved)
+            resolve(defaultInfo);
+
+        });
+    });
+  }
+
 
   /**
    * commit - Set the entry to committed

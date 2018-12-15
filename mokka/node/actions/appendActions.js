@@ -1,7 +1,7 @@
 const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
   bunyan = require('bunyan'),
-  Promise = require('bluebird'),
+  crypto = require('crypto'),
   log = bunyan.createLogger({name: 'node.actions.append'}),
   states = require('../factories/stateFactory');
 
@@ -57,7 +57,8 @@ const append = async function (packet) { //todo move write to index.js
     if (packet.data.index > index + 1)
       return null;
 
-    if (index >= packet.data.index) {
+
+    if(index === packet.data.index){
 
       let record = await this.log.get(packet.data.index);
 
@@ -71,15 +72,17 @@ const append = async function (packet) { //todo move write to index.js
           reply: reply,
           who: packet.publicKey
         };
-
-
       }
+
     }
 
-    if (index >= packet.data.index) { //not next log to append
+
+
+    if (index >= packet.data.index) {
+
       log.info(`the leader has another history. Rewrite mine ${index} -> ${packet.data.index - 1}`);
 
-      for (let logIndex = packet.data.index; logIndex <= index; logIndex++) {
+      for (let logIndex = packet.data.index; logIndex <= index; logIndex++) { //todo
         let entry = await this.log.get(logIndex);
 
         if (entry.owner !== this.publicKey) {
@@ -87,13 +90,35 @@ const append = async function (packet) { //todo move write to index.js
           continue;
         }
 
-        log.info(`putting command back: ${JSON.stringify(entry.command.task)} to pending (rewrite mine)`);
+        if(_.find(entry.responses, {publicKey: packet.publicKey})){
+          log.info(`trying to rewrite existent log ${entry.command.task}`);
+//          continue;
+        }
+
+
+        if(entry.responses.length >= this.majority()){ //todo test
+          log.info(`trying to rewrite majority log ${entry.command.task}`);
+  //        continue;
+        }
+
+
+
+        const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
+        log.info(`putting command back: ${JSON.stringify(entry.command.task)} to pending (rewrite mine) with confirmations ${entry.responses.length} with hash: ${taskHash}`);
         await this.processor.push(entry.command.task);
 
       }
 
       await this.log.removeEntriesAfter(packet.data.index - 1);
     }
+
+
+  //  if(packet.data.owner === this.publicKey){ //todo validate all packets from
+      const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
+      //log.info(`the leader tries to apply my own log! ${packet.data.command.task} with hash ${taskHash}`);
+      log.info(`pulling possible task ${packet.data.command.task} with hash ${taskHash}`);
+      await this.log.pullPending(taskHash);
+  //  }
 
 
     try {

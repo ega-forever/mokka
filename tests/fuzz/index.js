@@ -463,6 +463,19 @@ module.exports = (ctx) => {
           console.log(require('util').inspect(duplicates, null, 10));
           console.log('--------');
           console.log(require('util').inspect(missedTasks, null, 10));
+          console.log('-------')
+          let duplicateKeys = _.chain(data.data)
+            .compact()
+            .map(item => ({task: item.command.task[0], pubKey: item.owner}))
+            .groupBy('task')
+            .toPairs()
+            .filter(pair => pair[1].length > 1)
+            .fromPairs()
+            .value();
+
+          console.log(require('util').inspect(duplicateKeys, null, 10))
+
+
         }
 
       });
@@ -491,7 +504,7 @@ module.exports = (ctx) => {
 
 
         if (records.length === ctx.nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1 &&
-          _.uniq(records.map(rec => rec.index)).length === 1 && _.uniq(records.map(rec => rec.index))[0] === taskAmount * ctx.nodes.length + 1) {
+          _.uniq(records.map(rec => rec.index)).length === 1 && _.uniq(records.map(rec => rec.index))[0] >= taskAmount * ctx.nodes.length + 1) {
           ctx.nodes[0].send({command: 'logs'});
         }
 

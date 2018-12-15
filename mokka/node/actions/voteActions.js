@@ -56,7 +56,8 @@ const vote = async function (packet) { //todo timeout leader on election
   }
 
 
-  if (index !== 0 && Date.now() - createdAt < this.beat) {
+ // if (index !== 0 && Date.now() - createdAt < this.beat) { //todo validate
+  if (packet.last.index !== 0 && Date.now() - createdAt < this.beat) {
     this.emit(messageTypes.VOTE, packet, false);
 
     this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
@@ -74,7 +75,8 @@ const vote = async function (packet) { //todo timeout leader on election
     };
   }
 
-  if (index !== 0 && Date.now() - createdAt < this.election.max) {
+  //if (index !== 0 && Date.now() - createdAt < this.election.max) { //todo validate
+  if (packet.last.index !== 0 && Date.now() - createdAt < this.election.max) {
     this.emit(messageTypes.VOTE, packet, false);
 
     this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
@@ -133,6 +135,37 @@ const vote = async function (packet) { //todo timeout leader on election
   }
 
 
+  if (index === packet.last.index && hash !== packet.last.hash) {
+
+      this.emit(messageTypes.VOTE, packet, false);
+
+      this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, this.election.max);
+
+      let reply = await this.actions.message.packet(messageTypes.VOTED, {
+        granted: false,
+        signed: signedShare,
+        reason: 'the candidate has wrong history',
+        code: 3
+      });
+      return {
+        reply: reply,
+        who: packet.publicKey
+      };
+
+  }
+
+
+  if(packet.last.index > index){
+
+    console.log('super22')
+    console.log(require('util').inspect(packet, null, 10));
+    process.exit(0);
+
+
+  }
+
+
+///todo validation by existed index, where leader, in case of having upper log, provide the follower the index's hash which is equal to current user's max index
 
 
  // if(this.votes.for && this.votes.for !== this.publicKey){
