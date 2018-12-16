@@ -1,9 +1,7 @@
 const speakeasy = require('speakeasy'),
-  EthUtil = require('ethereumjs-util'),
-  Web3 = require('web3'),
-  web3 = new Web3(),
   _ = require('lodash'),
   bunyan = require('bunyan'),
+  restorePubKey = require('../../utils/restorePubKey'),
   log = bunyan.createLogger({name: 'node.services.proofValidation'}),
   secrets = require('secrets.js-grempe');
 
@@ -14,26 +12,31 @@ class ProofValidation {
   }
 
 
-  async validate (term, proof) {
+  async validate (term, proof, entry) {
 
     let savedProof = await this.mokka.log.getProof(term);
 
-    if (savedProof && savedProof.proof === proof)
+    if (savedProof && savedProof.proof === proof && !entry)
       return true;
 
-
     let extracted = ProofValidation._extract(proof);
+
+    if (entry) {
+
+      let item = _.chain(extracted.items).sortBy('secret').last().value();
+      const restoredPublicKey = restorePubKey(item.secret, _.pick(item, ['r', 's', 'v']));
+
+      if (entry.owner !== restoredPublicKey)
+        return false;
+    }
+
 
     let pubKeys = this.mokka.nodes.map(node => node.publicKey);
     pubKeys.push(this.mokka.publicKey);
 
-    let items = _.filter(extracted.items, item=>{
+    let items = _.filter(extracted.items, item => {
 
-      const restoredPublicKey = EthUtil.ecrecover(
-        Buffer.from(web3.eth.accounts.hashMessage(item.secret).replace('0x', ''), 'hex'),
-        parseInt(item.v),
-        Buffer.from(item.r.replace('0x', ''), 'hex'),
-        Buffer.from(item.s.replace('0x', ''), 'hex')).toString('hex');
+      const restoredPublicKey = restorePubKey(item.secret, _.pick(item, ['r', 's', 'v']));
       return pubKeys.includes(restoredPublicKey);
 
     });
@@ -69,7 +72,7 @@ class ProofValidation {
 
     let items = [];
 
-    let offset = 35 + 64 + 64 + 2;
+    let offset = 35 + 64 + 64 + 2; //todo obtain first value (i.e. 35)
 
     let time = proof.substr(proof.length - 13, proof.length);
     proof = proof.substr(0, proof.length - 13);

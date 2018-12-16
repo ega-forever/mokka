@@ -4,9 +4,9 @@ const messageTypes = require('../factories/messageTypesFactory'),
   secrets = require('secrets.js-grempe'),
   _ = require('lodash'),
   bunyan = require('bunyan'),
+  restorePubKey = require('../../utils/restorePubKey'),
   calculateVoteDelay = require('../../utils/calculateVoteDelay'),
   log = bunyan.createLogger({name: 'node.actions.vote'}),
-  EthUtil = require('ethereumjs-util'),
   web3 = new Web3();
 
 
@@ -28,7 +28,7 @@ const vote = async function (packet) {
     this.emit(messageTypes.VOTE, packet, false);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
-      signed: null,
+      signature: null,
       reason: 'share is not provided'
     });
 
@@ -38,14 +38,15 @@ const vote = async function (packet) {
     };
   }
 
-  const signedShare = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
+  const {signature} = web3.eth.accounts.sign(packet.data.share, `0x${this.privateKey}`);
 
 
   if (blackListed) {
     this.emit(messageTypes.VOTE, packet, false);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
-      signed: signedShare,
+      signature: signature,
+      share: packet.data.share,
       reason: 'blacklisted until next term'
     });
 
@@ -63,7 +64,8 @@ const vote = async function (packet) {
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
-      signed: signedShare,
+      signature: signature,
+      share: packet.data.share,
       reason: 'the voting window hasn\'t been closed yet',
       code: 0
     });
@@ -81,7 +83,8 @@ const vote = async function (packet) {
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
-      signed: signedShare,
+      signature: signature,
+      share: packet.data.share,
       reason: 'it seems that master is still committing',
       code: 1
     });
@@ -98,7 +101,8 @@ const vote = async function (packet) {
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
-      signed: signedShare,
+      signature: signature,
+      share: packet.data.share,
       reason: 'the candidate is outdated (by term)',
       code: 3
     });
@@ -119,7 +123,8 @@ const vote = async function (packet) {
 
       let reply = await this.actions.message.packet(messageTypes.VOTED, {
         granted: false,
-        signed: signedShare,
+        signature: signature,
+        share: packet.data.share,
         reason: 'the candidate is outdated (by history)',
         code: 3
       });
@@ -141,7 +146,8 @@ const vote = async function (packet) {
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
-      signed: signedShare,
+      signature: signature,
+      share: packet.data.share,
       reason: 'the candidate has wrong history',
       code: 3
     });
@@ -177,7 +183,8 @@ const vote = async function (packet) {
 
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: false,
-      signed: signedShare,
+      signature: signature,
+      share: packet.data.share,
       reason: 'already voted for another candidate',
       code: 2
     });
@@ -197,7 +204,10 @@ const vote = async function (packet) {
 
   if (packet.last.index > index) {
     this.emit(messageTypes.VOTE, packet, true);
-    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {
+      granted: true, signature: signature,
+      share: packet.data.share
+    });
     return {
       reply: reply,
       who: packet.publicKey
@@ -206,7 +216,10 @@ const vote = async function (packet) {
 
   if (packet.last.index === index && packet.last.hash !== hash) {
     this.emit(messageTypes.VOTE, packet, true);
-    let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
+    let reply = await this.actions.message.packet(messageTypes.VOTED, {
+      granted: true, signature: signature,
+      share: packet.data.share
+    });
     return {
       reply: reply,
       who: packet.publicKey
@@ -216,7 +229,10 @@ const vote = async function (packet) {
 
   this.emit(messageTypes.VOTE, packet, true);
   this.heartbeat(this.timeout());
-  let reply = await this.actions.message.packet(messageTypes.VOTED, {granted: true, signed: signedShare});
+  let reply = await this.actions.message.packet(messageTypes.VOTED, {
+    granted: true, signature: signature,
+    share: packet.data.share
+  });
   return {
     reply: reply,
     who: packet.publicKey
@@ -237,7 +253,7 @@ const voted = async function (packet) {
     };
   }
 
-  if (!packet.data.signed) {
+  if (!packet.data.signature) {
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'the vote hasn\'t been singed, ignoring vote');
     return {
       reply: reply,
@@ -245,15 +261,11 @@ const voted = async function (packet) {
     };
   }
 
-  const restoredPublicKey = EthUtil.ecrecover(//todo replace with signature
-    Buffer.from(packet.data.signed.messageHash.replace('0x', ''), 'hex'),
-    parseInt(packet.data.signed.v),
-    Buffer.from(packet.data.signed.r.replace('0x', ''), 'hex'),
-    Buffer.from(packet.data.signed.s.replace('0x', ''), 'hex')).toString('hex');
+  const restoredPublicKey = restorePubKey(packet.data.share, packet.data.signature);
 
   let localShare = _.find(this.votes.shares, {
     publicKey: restoredPublicKey,
-    share: packet.data.signed.message,
+    share: packet.data.share,
     voted: false
   });
 
@@ -279,7 +291,8 @@ const voted = async function (packet) {
   localShare.granted = packet.data.granted;
   localShare.leader = packet.leader;
   localShare.last = packet.last;
-  localShare.signed = packet.data.signed;
+  localShare.signature = packet.data.signature;
+  localShare.share = packet.data.share;
   localShare.code = packet.data.code;
   localShare.reason = packet.data.reason;
 
@@ -328,7 +341,7 @@ const voted = async function (packet) {
     }
 
 
-    if (this.state === states.CANDIDATE){
+    if (this.state === states.CANDIDATE) {
 
       this.change({term: this.term - 1, state: states.FOLLOWER});
       if (this.timers.active('term_change'))
@@ -371,8 +384,11 @@ const voted = async function (packet) {
 
   this.change({leader: this.publicKey, state: states.LEADER});
 
-  const compacted = _.chain(this.votes.shares).map(item => item.signed).compact().reduce((result, item) => {
-    return `${result}${item.message}${item.r.replace('0x', '')}${item.s.replace('0x', '')}${item.v.replace('0x', '')}`;
+  const compacted = _.chain(this.votes.shares).compact().filter(vote=>vote.signature).reduce((result, item) => {
+
+    console.log(item)
+
+    return `${result}${item.share}${item.signature.replace('0x', '')}`;
   }, '').thru(item => `${item}${this.votes.started}`).value();
 
   await this.log.addProof(this.term, {

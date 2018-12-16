@@ -135,6 +135,8 @@ const promote = async function (priority = 1) {
 
       let shares = secrets.share(this.votes.secret, this.nodes.length + 1, Math.ceil((this.nodes.length + 1) / 2) + 1);
 
+      shares = _.sortBy(shares);
+
       for (let index = 0; index < this.nodes.length; index++) {
         this.votes.shares.push({
           share: shares[index],
@@ -154,12 +156,12 @@ const promote = async function (priority = 1) {
 
 
       const myShare = _.last(shares);
-      const signedShare = web3.eth.accounts.sign(myShare, `0x${this.privateKey}`);
+      const {signature} = web3.eth.accounts.sign(myShare, `0x${this.privateKey}`);
 
       this.votes.shares.push({
         share: _.last(shares),
         publicKey: this.publicKey,
-        signed: signedShare,
+        signature: signature,
         voted: true
       });
 

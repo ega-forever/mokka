@@ -5,9 +5,7 @@ const encode = require('encoding-down'),
   MerkleTools = require('merkle-tools'),
   levelup = require('levelup'),
   bunyan = require('bunyan'),
-  Web3 = require('web3'),
-  web3 = new Web3(),
-  EthUtil = require('ethereumjs-util'),
+  restorePubKey = require('../utils/restorePubKey'),
   log = bunyan.createLogger({name: 'node.log.log'});
 
 
@@ -42,11 +40,7 @@ class Log {
         }
 
         if (owner) {
-          const restoredPublicKey = EthUtil.ecrecover(
-            Buffer.from(web3.eth.accounts.hashMessage(JSON.stringify(command)).replace('0x', ''), 'hex'),
-            parseInt(signature.substr(signature.length - 2), 16),
-            Buffer.from(signature.replace('0x', '').substr(0, 64), 'hex'),
-            Buffer.from(signature.replace('0x', '').substr(64, 64), 'hex')).toString('hex');
+          const restoredPublicKey = restorePubKey(command, signature);
 
           console.log(`super owner ${owner} vs ${restoredPublicKey}`)
 
