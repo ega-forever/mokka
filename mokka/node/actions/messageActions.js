@@ -1,5 +1,4 @@
 const _ = require('lodash'),
-  Promise = require('bluebird'),
   states = require('../factories/stateFactory'),
   messageTypes = require('../factories/messageTypesFactory');
 
@@ -93,9 +92,9 @@ const appendPacket = async function (entry) {
   if(entry){
     payload.data = entry;
     payload.last = await this.log.getEntryInfoBefore(entry);
-  }else {
+  }else 
     payload.last = await this.log.getLastEntry();
-  }
+  
 
   return payload;
 };

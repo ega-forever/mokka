@@ -58,7 +58,7 @@ module.exports = async (currentTerm, publicKey, mokka)=>{
         return {
           hash: hash,
           key: pubKey
-        }
+        };
 
       })
       .sortBy('hash')

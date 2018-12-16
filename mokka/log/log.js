@@ -42,8 +42,6 @@ class Log {
         if (owner) {
           const restoredPublicKey = restorePubKey(command, signature);
 
-          console.log(`super owner ${owner} vs ${restoredPublicKey}`)
-
           if (restoredPublicKey !== owner) {
             semaphore.leave();
             return rej({code: 1, message: 'wrong signature provided'});

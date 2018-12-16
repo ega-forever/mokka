@@ -44,6 +44,7 @@ class ProofValidation {
     let comb = secrets.combine(items.map(item => item.secret));
     comb = secrets.hex2str(comb);
 
+
     let verified = speakeasy.totp.verify({
       secret: this.mokka.networkSecret,
       token: comb,

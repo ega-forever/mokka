@@ -385,9 +385,6 @@ const voted = async function (packet) {
   this.change({leader: this.publicKey, state: states.LEADER});
 
   const compacted = _.chain(this.votes.shares).compact().filter(vote=>vote.signature).reduce((result, item) => {
-
-    console.log(item)
-
     return `${result}${item.share}${item.signature.replace('0x', '')}`;
   }, '').thru(item => `${item}${this.votes.started}`).value();
 

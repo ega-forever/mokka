@@ -133,7 +133,7 @@ const promote = async function (priority = 1) {
       this.votes.shares = [];
 
 
-      let shares = secrets.share(this.votes.secret, this.nodes.length + 1, Math.ceil((this.nodes.length + 1) / 2) + 1);
+      let shares = secrets.share(this.votes.secret, this.nodes.length + 1, this.majority());
 
       shares = _.sortBy(shares);
 
