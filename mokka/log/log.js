@@ -122,15 +122,6 @@ class Log {
     if (!firstEntryByTerm.index) {
       let proof = await this.getProof(entry.term);
 
-      if(!proof){
-        log.info(entry);
-        process.exit(0)
-
-      }
-
-
-
-
       proof.hash = entry.hash;
       proof.index = entry.index;
 
@@ -167,7 +158,7 @@ class Log {
 
     try {
       return await this.db.get(`${this.prefixes.pending}:${hash}`);
-    }catch (e) {
+    } catch (e) {
       return null;
     }
   }
@@ -212,7 +203,38 @@ class Log {
 
   }
 
-  async getFirstEntryByTerm (term) { //todo fix
+
+  async getLastProof () { //todo implement
+    return await new Promise((resolve, reject) => {
+      let entry = {
+        index: -1,
+        hash: null,
+        term: -1,
+        proof: null
+      };
+
+
+      this.db.createReadStream({
+        reverse: true,
+        limit: 1,
+        lt: `${this.prefixes.term + 1}:${Log._getBnNumber(0)}`,
+        gte: `${this.prefixes.term}:${Log._getBnNumber(0)}`
+      })
+        .on('data', data => {
+          entry = data.value;
+          entry.term = parseInt(data.key.toString().replace(`${this.prefixes.term}:`, ''), 2);
+        })
+        .on('error', err => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(entry);
+        });
+    });
+
+  }
+
+  async getFirstEntryByTerm (term) {
     try {
       let item = await this.db.get(`${this.prefixes.term}:${Log._getBnNumber(term)}`);
       return await this.db.get(`${this.prefixes.logs}:${Log._getBnNumber(item.index)}`);
@@ -291,13 +313,15 @@ class Log {
    * @return {Promise<void>} Returns once all antries are removed
    * @public
    */
-  async removeEntriesAfter (index) {
+  async removeEntriesAfter (index) { //todo implement keep last term
     const entries = await this.getEntriesAfter(index);
 
-    for (let entry of entries) {
-      await this.db.del(`${this.prefixes.term}:${Log._getBnNumber(entry.term)}`);
+    log.info(`removing entities after index ${index}`);
+
+
+    for (let entry of entries)
       await this.db.del(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`);
-    }
+
 
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
     this.node.term = lastIndex === 0 ? 0 : lastTerm;
@@ -460,42 +484,42 @@ class Log {
   }
 
 
- /* getLastAcked () {
-    const defaultInfo = {
-      index: 0,
-      term: this.node.term,
-      hash: _.fill(new Array(32), 0).join('')
-    };
-    // We know it is the first entry, so save the query time
+  /* getLastAcked () {
+     const defaultInfo = {
+       index: 0,
+       term: this.node.term,
+       hash: _.fill(new Array(32), 0).join('')
+     };
+     // We know it is the first entry, so save the query time
 
-    return new Promise((resolve, reject) => {
-      let hasResolved = false;
+     return new Promise((resolve, reject) => {
+       let hasResolved = false;
 
-      this.db.createReadStream({
-        reverse: true,
-        limit: this.node.nodes.length,
-        lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`,
-        gt: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
-      })
-        .on('data', (data) => {
+       this.db.createReadStream({
+         reverse: true,
+         limit: this.node.nodes.length,
+         lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`,
+         gt: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
+       })
+         .on('data', (data) => {
 
-          if (hasResolved || data.value.responses.length >= this.node.majority())
-            return;
+           if (hasResolved || data.value.responses.length >= this.node.majority())
+             return;
 
-          hasResolved = true;
-          resolve(data.value);
-        })
-        .on('error', (err) => {
-          hasResolved = true;
-          reject(err);
-        })
-        .on('end', () => {
-          if (!hasResolved)
-            resolve(defaultInfo);
+           hasResolved = true;
+           resolve(data.value);
+         })
+         .on('error', (err) => {
+           hasResolved = true;
+           reject(err);
+         })
+         .on('end', () => {
+           if (!hasResolved)
+             resolve(defaultInfo);
 
-        });
-    });
-  }*/
+         });
+     });
+   }*/
 
 
   /**

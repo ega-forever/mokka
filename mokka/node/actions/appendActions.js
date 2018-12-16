@@ -38,8 +38,8 @@ const append = async function (packet) {
 
 
     log.info(`should drop ${index - prevTerm.index}, with current index ${index}, current term: ${term} and leader term ${packet.term}`);
-    await this.log.removeEntriesAfter(prevTerm.index);
-    this.term--;
+    await this.log.removeEntriesAfter(prevTerm.index); //this clean up term
+    this.term--; // todo check
 
     let {index: indexAfter} = await this.log.getLastInfo();
     log.info(`after: ${indexAfter}`);

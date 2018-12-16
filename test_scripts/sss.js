@@ -2,6 +2,7 @@ const secrets = require('secrets.js-grempe'),
   Wallet = require('ethereumjs-wallet'),
   EthUtil = require('ethereumjs-util'),
   _ = require('lodash'),
+  RLP = require('rlp'),
   Web3 = require('web3'),
   web3 = new Web3();
 
@@ -22,15 +23,21 @@ let shares = secrets.share(pwHex, privKeys.length, 3);
 let signedShares = shares.map((share, i) => { //each node sign it's share secret
   let {r, s, v, messageHash, message} = web3.eth.accounts.sign(share, `0x${privKeys[i]}`);
 
-  console.log(message)
+  console.log(web3.eth.accounts.sign(share, `0x${privKeys[i]}`))
+
   console.log(web3.eth.accounts.hashMessage(message), messageHash);
-
-
-  return {r, s, v, message}
+  return {
+    r: '0x' + EthUtil.setLength(Buffer.from(r.replace('0x', ''), 'hex'), 32).toString('hex'),
+    s: '0x' + EthUtil.setLength(Buffer.from(s.replace('0x', ''), 'hex'), 32).toString('hex'),
+    v,
+    message
+  }
 });
 
 
 let validatedShares = _.chain(signedShares).reduce((result, signedShare, i) => {
+
+  console.log(signedShare)
 
   const publicKey = EthUtil.ecrecover(Buffer.from(web3.eth.accounts.hashMessage(signedShare.message).replace('0x', ''), 'hex'), parseInt(signedShare.v), Buffer.from(signedShare.r.replace('0x', ''), 'hex'), Buffer.from(signedShare.s.replace('0x', ''), 'hex'));
 
@@ -44,13 +51,9 @@ let validatedShares = _.chain(signedShares).reduce((result, signedShare, i) => {
 }, []).take(3).value();
 
 
-console.log(validatedShares);
-// combine 2 shares:
-
 const compacted = _.chain(validatedShares).reduce((result, item) => {
   return `${result}${item.message}${item.r.replace('0x', '')}${item.s.replace('0x', '')}${item.v.replace('0x', '')}`;
 }, '').value();
-
 
 const decoded = _.chain(compacted).thru(compacted => {
 

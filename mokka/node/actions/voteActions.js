@@ -345,8 +345,12 @@ const voted = async function (packet) {
       const ttl = packet.data.code === 2 ? await calculateVoteDelay(currentTerm, this.publicKey, this) : this.election.max;
       log.info(`estimated ttl: ${ttl}`);
       this.cache.set(`blacklist.${this.publicKey}`, {term: this.term - 1, hash: packet.last.hash}, ttl);
+    }
 
 
+    if (this.state === states.CANDIDATE){
+
+      this.change({term: this.term - 1, state: states.FOLLOWER});
       if (this.timers.active('term_change'))
         this.timers.clear('term_change');
 
@@ -359,9 +363,6 @@ const voted = async function (packet) {
       this.votes.started = null;
     }
 
-
-    if (this.state === states.CANDIDATE)
-      this.change({term: this.term - 1, state: states.FOLLOWER});
     return {
       reply: reply,
       who: packet.publicKey
