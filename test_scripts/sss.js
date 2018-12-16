@@ -18,30 +18,60 @@ let pwHex = secrets.str2hex(pw); // => hex string
 
 let shares = secrets.share(pwHex, privKeys.length, 3);
 
-console.log(shares);
 
-let signedShares = shares.map((share, i) => //each node sign it's share secret
-  web3.eth.accounts.sign(share, `0x${privKeys[i]}`)
-);
+let signedShares = shares.map((share, i) => { //each node sign it's share secret
+  let {r, s, v, messageHash, message} = web3.eth.accounts.sign(share, `0x${privKeys[i]}`);
+
+  console.log(message)
+  console.log(web3.eth.accounts.hashMessage(message), messageHash);
 
 
-let validatedShares = _.reduce(signedShares, (result, signedShare, i)=>{
+  return {r, s, v, message}
+});
 
-  const publicKey = EthUtil.ecrecover(Buffer.from(signedShare.messageHash.replace('0x', ''), 'hex'), parseInt(signedShare.v), Buffer.from(signedShare.r.replace('0x', ''), 'hex'), Buffer.from(signedShare.s.replace('0x', ''), 'hex'));
+
+let validatedShares = _.chain(signedShares).reduce((result, signedShare, i) => {
+
+  const publicKey = EthUtil.ecrecover(Buffer.from(web3.eth.accounts.hashMessage(signedShare.message).replace('0x', ''), 'hex'), parseInt(signedShare.v), Buffer.from(signedShare.r.replace('0x', ''), 'hex'), Buffer.from(signedShare.s.replace('0x', ''), 'hex'));
 
   let peerPubKey = Wallet.fromPrivateKey(Buffer.from(privKeys[i], 'hex')).getPublicKey().toString('hex');
 
-  if(peerPubKey === publicKey.toString('hex'))
-    result.push(signedShare.message);
+  if (peerPubKey === publicKey.toString('hex'))
+    result.push(signedShare);
 
   return result;
 
-}, []);
+}, []).take(3).value();
 
 
-console.log(validatedShares.length)
+console.log(validatedShares);
 // combine 2 shares:
-let comb = secrets.combine(validatedShares);
+
+const compacted = _.chain(validatedShares).reduce((result, item) => {
+  return `${result}${item.message}${item.r.replace('0x', '')}${item.s.replace('0x', '')}${item.v.replace('0x', '')}`;
+}, '').value();
+
+
+const decoded = _.chain(compacted).thru(compacted => {
+
+  let items = [];
+
+  for (let index = 0; index < compacted.length; index += 197){
+    let item = compacted.substr(index, index + 197);
+
+    let secret = item.substr(0, 67);
+    let r = `0x${item.substr(67, 64)}`;
+    let s = `0x${item.substr(131, 64)}`;
+    let v = `0x${item.substr(195, 2)}`;
+
+    items.push({secret, r, s, v});
+  }
+
+  return items;
+}).value();
+
+
+let comb = secrets.combine(decoded.map(item=>item.secret));
 
 //convert back to UTF string:
 comb = secrets.hex2str(comb);

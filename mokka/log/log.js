@@ -3,7 +3,9 @@ const encode = require('encoding-down'),
   semaphore = require('semaphore')(1),
   crypto = require('crypto'),
   MerkleTools = require('merkle-tools'),
-  levelup = require('levelup');
+  levelup = require('levelup'),
+  bunyan = require('bunyan'),
+  log = bunyan.createLogger({name: 'node.log.log'});
 
 
 class Log {
@@ -118,13 +120,21 @@ class Log {
     let firstEntryByTerm = await this.getFirstEntryByTerm(entry.term);
 
     if (!firstEntryByTerm.index) {
+      let proof = await this.getProof(entry.term);
 
-      firstEntryByTerm.term = entry.term;
-      firstEntryByTerm.hash = entry.hash;
-      firstEntryByTerm.index = entry.index;
+      if(!proof){
+        log.info(entry);
+        process.exit(0)
+
+      }
 
 
-      await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(entry.term)}`, firstEntryByTerm);
+
+
+      proof.hash = entry.hash;
+      proof.index = entry.index;
+
+      await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(entry.term)}`, proof);
     }
 
     return await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
@@ -138,7 +148,7 @@ class Log {
 
     const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
-    await this.db.put(`${this.prefixes.pending}:${hash}`, record);//todo hash
+    await this.db.put(`${this.prefixes.pending}:${hash}`, record);
 
     return {
       command: command,
@@ -161,37 +171,6 @@ class Log {
       return null;
     }
   }
-
-  /*
-
-    async getLastPending () {
-
-      return await new Promise((resolve, reject) => {
-
-        let item = {
-          index: -1,
-          command: null
-        };
-
-        this.db.createReadStream({
-          reverse: true,
-          limit: 1,
-          lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
-          gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
-        })
-          .on('data', data => {
-            item = data.value;
-          })
-          .on('error', err => {
-            reject(err);
-          })
-          .on('end', () => {
-            resolve(item);
-          });
-      });
-
-    }
-  */
 
   async getFirstPending () {
 
@@ -218,51 +197,13 @@ class Log {
           resolve(item);
         });
     });
-
   }
 
-  /*
-    async getPendings (limit) { //todo remove
-
-      return await new Promise((resolve, reject) => {
-
-        let items = [];
-
-        this.db.createReadStream({
-          lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
-          gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
-        })
-          .on('data', data => {
-            let item = data.value;
-            item.hash = data.key.toString().replace(`${this.prefixes.pending}:`, '');
-            items.push(item);
-          })
-          .on('error', err => {
-            reject(err);
-          })
-          .on('end', () => {
-            resolve(items);
-          });
-      });
-
-    }
-
-
-  */
-
-  async addProof (term, proof) {
-
-    let firstEntryByTerm = await this.getFirstEntryByTerm(term);
-
-    if (firstEntryByTerm.proof)
-      return;
-
-
+  async addProof (term, proof) { //do we need to
     return await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(term)}`, proof);
   }
 
   async getProof (term) {
-
     try {
       return await this.db.get(`${this.prefixes.term}:${Log._getBnNumber(term)}`);
     } catch (e) {
@@ -271,9 +212,10 @@ class Log {
 
   }
 
-  async getFirstEntryByTerm (term) {
+  async getFirstEntryByTerm (term) { //todo fix
     try {
-      return await this.db.get(`${this.prefixes.term}:${Log._getBnNumber(term)}`);
+      let item = await this.db.get(`${this.prefixes.term}:${Log._getBnNumber(term)}`);
+      return await this.db.get(`${this.prefixes.logs}:${Log._getBnNumber(item.index)}`);
     } catch (err) {
       return {
         index: 0,
@@ -518,7 +460,7 @@ class Log {
   }
 
 
-  getLastAcked (publicKey) {
+ /* getLastAcked () {
     const defaultInfo = {
       index: 0,
       term: this.node.term,
@@ -531,12 +473,13 @@ class Log {
 
       this.db.createReadStream({
         reverse: true,
+        limit: this.node.nodes.length,
         lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`,
         gt: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
       })
         .on('data', (data) => {
 
-          if (hasResolved || data.value.responses.findIndex(resp => resp.publicKey === publicKey) === -1)
+          if (hasResolved || data.value.responses.length >= this.node.majority())
             return;
 
           hasResolved = true;
@@ -552,7 +495,7 @@ class Log {
 
         });
     });
-  }
+  }*/
 
 
   /**

@@ -38,7 +38,7 @@ class TaskProcessor {
         continue;
       }
 
-      let lastEntry = await this.mokka.log.getLastEntry();//todo
+      let lastEntry = await this.mokka.log.getLastEntry();
 
       if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {
 
@@ -78,8 +78,6 @@ class TaskProcessor {
         if (this.mokka.state !== states.LEADER)
           await this._lock();
 
-        //todo check here the pending task is still exist!!
-
         let checkPending = await this.mokka.log.getPending(hash);
 
         if(!checkPending){
@@ -110,7 +108,7 @@ class TaskProcessor {
 
 
     log.info('promoting by propose');
-    await this.mokka.actions.node.promote(2); //todo decide about promote
+    await this.mokka.actions.node.promote(2);
 
     this.mokka.timers.clear('heartbeat');
     await new Promise(res => this.mokka.once(eventTypes.LEADER, res)).timeout(this.mokka.election.max).catch(() => {
@@ -119,8 +117,8 @@ class TaskProcessor {
 
     if (this.mokka.state !== states.LEADER) {
       log.info('trying to propose task again');
-      let timeout = this.mokka.timeout();//todo test max skip rounds for voting
-      const {createdAt} = await this.mokka.log.getLastInfo(); //todo replace with blacklist response
+      let timeout = this.mokka.timeout();
+      const {createdAt} = await this.mokka.log.getLastInfo();
       const delta = Date.now() - createdAt;
 
       if (delta < this.mokka.election.max)
@@ -150,7 +148,6 @@ class TaskProcessor {
       return entry;
 
     let followers = _.chain(this.mokka.nodes)
-    // .filter(node => node.state === states.FOLLOWER) //todo add event when all nodes move from child->follower
       .reject(node => _.find(entry.responses, {publicKey: node.publicKey}))
       .value();
 

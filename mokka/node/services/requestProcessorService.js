@@ -1,9 +1,8 @@
 const _ = require('lodash'),
   states = require('../factories/stateFactory'),
   messageTypes = require('../factories/messageTypesFactory'),
-  validateSecretUtil = require('../../utils/validateSecret'),
   bunyan = require('bunyan'),
-  Promise = require('bluebird'),
+  ProofValidationService = require('./proofValidationService'),
   log = bunyan.createLogger({name: 'node.services.requestProcessor'});
 
 
@@ -11,6 +10,7 @@ class RequestProcessor {
 
   constructor (mokka) {
     this.mokka = mokka;
+    this.proofValidation = new ProofValidationService(mokka);
   }
 
 
@@ -28,10 +28,10 @@ class RequestProcessor {
       };
     }
 
-    if (states.LEADER === packet.state && packet.type === messageTypes.APPEND) {
+    if (packet.type === messageTypes.APPEND) {
 
 
-      if (!_.has(packet, 'proof.index') && !_.has(packet, 'proof.shares')) {
+      if (!packet.proof) {
         log.info('proof is not provided!');
 
         let reply = await this.mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
@@ -41,48 +41,18 @@ class RequestProcessor {
         };
       }
 
+      log.info('before validation');
+      let validated = await this.proofValidation.validate(packet.term, packet.proof);
 
-      let pubKeys = this.mokka.nodes.map(node => node.publicKey);
-      pubKeys.push(this.mokka.publicKey);
+      log.info('super valid', validated);
 
-      if (packet.proof.index && _.has(packet, 'proof.shares')) {
-
-        let proofEntry = await this.mokka.log.get(packet.proof.index);
-
-        let validated = validateSecretUtil(
-          this.mokka.networkSecret,
-          this.mokka.election.max,
-          pubKeys,
-          packet.proof.secret,
-          _.get(proofEntry, 'createdAt', Date.now()),
-          //packet.proof.time,
-          packet.proof.shares);
-
-        if (!validated) {
-          log.error('the initial proof validation failed');
-          let reply = await this.mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
-          return {
-            reply: reply,
-            who: packet.publicKey
-          };
-        }
-
-        await this.mokka.log.addProof(packet.term, packet.proof);
-      }
-
-
-      if (packet.proof.index && !_.has(packet, 'proof.shares')) { //todo send initial proof on fail
-
-        let proofEntryShare = await this.mokka.log.getProof(packet.term);
-
-        if (!proofEntryShare) {
-          log.error('the secondary proof validation failed');
-          let reply = await this.mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
-          return {
-            reply: reply,
-            who: packet.publicKey
-          };
-        }
+      if (!validated) {
+        log.error('the initial proof validation failed');
+        let reply = await this.mokka.actions.message.packet(messageTypes.ERROR, 'validation failed');
+        return {
+          reply: reply,
+          who: packet.publicKey
+        };
       }
 
       this.mokka.change({
@@ -138,7 +108,7 @@ class RequestProcessor {
 
     let validateLogSent = this.mokka.cache.get(`requests.${packet.publicKey}.${packet.last.index + 1}`);
 
-    if (!validateLogSent && this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat){
+    if (!validateLogSent && this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat) {
       reply = await this.mokka.actions.append.obtain(packet);
       log.info(`obtained a new log with index ${reply.reply.data.index} for follower`);
       this.mokka.cache.set(`requests.${packet.publicKey}.${packet.last.index + 1}`, true, this.mokka.election.max);

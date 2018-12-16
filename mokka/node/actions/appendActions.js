@@ -5,7 +5,7 @@ const _ = require('lodash'),
   log = bunyan.createLogger({name: 'node.actions.append'}),
   states = require('../factories/stateFactory');
 
-const append = async function (packet) { //todo move write to index.js
+const append = async function (packet) {
 
   if (packet.leader !== this.leader) {
     log.error('can\'t append logs not from leader');
@@ -14,7 +14,7 @@ const append = async function (packet) { //todo move write to index.js
 
   const {index, hash} = await this.log.getLastInfo();
 
-  if ((packet.last.hash !== hash && packet.last.index === index) || (packet.last.hash === hash && packet.last.index !== index)) {//todo make rule for controlling alter-history (orphaned blocks)
+  if ((packet.last.hash !== hash && packet.last.index === index) || (packet.last.hash === hash && packet.last.index !== index)) {
 
     log.error('found another history root!');
 
@@ -44,8 +44,6 @@ const append = async function (packet) { //todo move write to index.js
     let {index: indexAfter} = await this.log.getLastInfo();
     log.info(`after: ${indexAfter}`);
 
-    //todo add to pending
-
     return null;
   }
 
@@ -58,7 +56,7 @@ const append = async function (packet) { //todo move write to index.js
       return null;
 
 
-    if(index === packet.data.index){
+    if (index === packet.data.index) {
 
       let record = await this.log.get(packet.data.index);
 
@@ -77,12 +75,11 @@ const append = async function (packet) { //todo move write to index.js
     }
 
 
-
     if (index >= packet.data.index) {
 
       log.info(`the leader has another history. Rewrite mine ${index} -> ${packet.data.index - 1}`);
 
-      for (let logIndex = packet.data.index; logIndex <= index; logIndex++) { //todo
+      for (let logIndex = packet.data.index; logIndex <= index; logIndex++) {
         let entry = await this.log.get(logIndex);
 
         if (entry.owner !== this.publicKey) {
@@ -90,17 +87,12 @@ const append = async function (packet) { //todo move write to index.js
           continue;
         }
 
-        if(_.find(entry.responses, {publicKey: packet.publicKey})){
+        if (_.find(entry.responses, {publicKey: packet.publicKey}))
           log.info(`trying to rewrite existent log ${entry.command.task}`);
-//          continue;
-        }
 
 
-        if(entry.responses.length >= this.majority()){ //todo test
+        if (entry.responses.length >= this.majority())
           log.info(`trying to rewrite majority log ${entry.command.task}`);
-  //        continue;
-        }
-
 
 
         const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
@@ -113,12 +105,9 @@ const append = async function (packet) { //todo move write to index.js
     }
 
 
-  //  if(packet.data.owner === this.publicKey){ //todo validate all packets from
-      const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
-      //log.info(`the leader tries to apply my own log! ${packet.data.command.task} with hash ${taskHash}`);
-      log.info(`pulling possible task ${packet.data.command.task} with hash ${taskHash}`);
-      await this.log.pullPending(taskHash);
-  //  }
+    const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
+    log.info(`validating and pulling duplicate task ${packet.data.command.task} with hash ${taskHash} from pending`);
+    await this.log.pullPending(taskHash);
 
 
     try {

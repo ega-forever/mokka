@@ -111,12 +111,11 @@ const promote = async function (priority = 1) {
       }
 
       let {term: currentTerm} = await this.log.getLastInfo();
-      let {hash: prevTermHash} = await this.log.getFirstEntryByTerm(this.term - 1);
 
       this.change({
-        state: states.CANDIDATE,  // We're now a candidate,
-        term: currentTerm + 1,    // but only for this term. //todo check
-        leader: ''              // We no longer have a leader.
+        state: states.CANDIDATE,
+        term: currentTerm + 1,
+        leader: ''
       });
 
       this.votes.for = this.publicKey;
@@ -126,7 +125,7 @@ const promote = async function (priority = 1) {
       let token = speakeasy.totp({
         secret: this.networkSecret,
         //step: this.election.max / 1000
-        step: 30,
+        step: 30, //todo resolve timing calculation
         window: 2
       });
 
@@ -134,7 +133,7 @@ const promote = async function (priority = 1) {
       this.votes.shares = [];
 
 
-      let shares = secrets.share(this.votes.secret, this.nodes.length + 1, Math.ceil((this.nodes.length + 1) / 2) + 1); //todo include my vote
+      let shares = secrets.share(this.votes.secret, this.nodes.length + 1, Math.ceil((this.nodes.length + 1) / 2) + 1);
 
       for (let index = 0; index < this.nodes.length; index++) {
         this.votes.shares.push({
@@ -143,17 +142,9 @@ const promote = async function (priority = 1) {
           voted: false
         });
 
-
-        let {index: peerIndex, hash: peerHash} = await this.log.getLastAcked(this.nodes[index].publicKey);
-
         const packet = await this.actions.message.packet(messageTypes.VOTE, {
           share: shares[index],
-          priority: priority,
-          prevTermHash: prevTermHash,
-          peerLog: { //todo implement in voting
-            index: peerIndex,
-            hash: peerHash
-          }
+          priority: priority
         });
 
         log.info(`sending vote to ${this.nodes[index].publicKey}`);

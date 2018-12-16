@@ -50,23 +50,23 @@ const message = async function (who, what) {
 
   }
 
-  for(let client of nodes)
+  for (let client of nodes)
     client.write(what);
 
 
- // _timing.call(mokka, latency); //todo implement timing
+  // _timing.call(mokka, latency); //todo implement timing
 
 };
 
 const packet = async function (type, data) {
 
-    const wrapped = {
-      state: this.state,
-      term: this.term,
-      publicKey: this.publicKey,
-      type: type,
-      leader: this.leader
-    };
+  const wrapped = {
+    state: this.state,
+    term: this.term,
+    publicKey: this.publicKey,
+    type: type,
+    leader: this.leader
+  };
 
 
   wrapped.last = await this.log.getLastInfo();
@@ -78,29 +78,26 @@ const packet = async function (type, data) {
 };
 
 const appendPacket = async function (entry) {
-  const mokka = this;
-  const last = await mokka.log.getEntryInfoBefore(entry);
-  const proofEntry = await this.log.getFirstEntryByTerm(entry.term);
 
+  const {proof} = await this.log.getProof(entry ? entry.term : this.term);
 
-  let proof = {
-    index: proofEntry.index,
-    hash: proofEntry.hash
-  };
-
-  if (entry.index === proofEntry.index)
-    _.merge(proof, proofEntry);
-
-  return {
-    state: mokka.state,
-    term: mokka.term,
-    publicKey: mokka.publicKey,
+  let payload = {
+    state: this.state,
+    term: this.term,
+    publicKey: this.publicKey,
     type: messageTypes.APPEND,
-    leader: mokka.leader,
-    proof: proof,
-    data: entry,
-    last
+    leader: this.leader,
+    proof: proof
   };
+
+  if(entry){
+    payload.data = entry;
+    payload.last = await this.log.getEntryInfoBefore(entry);
+  }else {
+    payload.last = await this.log.getLastEntry();
+  }
+
+  return payload;
 };
 
 module.exports = (instance) => {
