@@ -111,7 +111,7 @@ const append = async function (packet) {
 
 
     try {
-      await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.index, packet.data.hash, packet.data.owner);
+      await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash, packet.data.owner);
       log.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
       let {index: lastIndex} = await this.log.getLastInfo();

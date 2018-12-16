@@ -165,7 +165,6 @@ const vote = async function (packet) {
   */
 
 
-  // if(this.votes.for && this.votes.for !== this.publicKey){
   if (this.votes.for && (this.votes.started && Date.now() - this.votes.started < this.election.max)) {
 
     log.info(`current voting: ${this.votes.for}`);
@@ -186,26 +185,7 @@ const vote = async function (packet) {
       reply: reply,
       who: packet.publicKey
     };
-
   }
-
-
-  //if ((this.votes.for && this.votes.for !== this.publicKey) || (this.votes.priority >= packet.data.priority || ((this.votes.started && Date.now() - this.votes.started < this.election.max) || !this.votes.started))) {
-  /*  if (this.votes.priority >= packet.data.priority || ((this.votes.started && Date.now() - this.votes.started < this.election.max) || !this.votes.started)) {
-      this.emit(messageTypes.VOTE, packet, false);
-
-      let reply = await this.actions.message.packet(messageTypes.VOTED, {
-        granted: false,
-        signed: signedShare,
-        reason: 'already voted for another candidate',
-        code: 2
-      });
-      return {
-        reply: reply,
-        who: packet.publicKey
-      };
-    }*/
-
 
   this.votes.for = packet.publicKey;
   this.votes.started = Date.now();
@@ -265,7 +245,7 @@ const voted = async function (packet) {
     };
   }
 
-  const restoredPublicKey = EthUtil.ecrecover(
+  const restoredPublicKey = EthUtil.ecrecover(//todo replace with signature
     Buffer.from(packet.data.signed.messageHash.replace('0x', ''), 'hex'),
     parseInt(packet.data.signed.v),
     Buffer.from(packet.data.signed.r.replace('0x', ''), 'hex'),

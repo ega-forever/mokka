@@ -3,6 +3,8 @@ const Promise = require('bluebird'),
   states = require('../factories/stateFactory'),
   eventTypes = require('../factories/eventFactory'),
   bunyan = require('bunyan'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
   log = bunyan.createLogger({name: 'node.api'}),
   _ = require('lodash');
 
@@ -33,7 +35,7 @@ class TaskProcessor {
     while (this.run) {
 
 
-      if(!this.sem.available()){
+      if (!this.sem.available()) {
         await Promise.delay(this.mokka.timeout());
         continue;
       }
@@ -80,7 +82,7 @@ class TaskProcessor {
 
         let checkPending = await this.mokka.log.getPending(hash);
 
-        if(!checkPending){
+        if (!checkPending) {
           this.sem.leave();
           return res();
         }
@@ -132,7 +134,11 @@ class TaskProcessor {
   }
 
   async _save (task) {
-    return await this.mokka.log.saveCommand({task: task}, this.mokka.term);
+
+    const command = {task: task};
+
+    const {signature} = web3.eth.accounts.sign(JSON.stringify(command), `0x${this.mokka.privateKey}`);
+    return await this.mokka.log.saveCommand(command, this.mokka.term, signature);
   }
 
   async _broadcast (index, hash) {
