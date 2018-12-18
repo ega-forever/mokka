@@ -156,11 +156,8 @@ const appendAck = async function (packet) {
     await this.commitEntries(entries);
   }
 
-  this.emit(states.APPEND_ACK, entry.index);
-
   if (this.state !== states.LEADER)
     return;
-
 
   let peers = _.chain(entry.responses).map(item => item.publicKey).pullAll([this.publicKey, packet.publicKey]).value();
 

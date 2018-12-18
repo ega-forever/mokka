@@ -81,5 +81,5 @@ const getLogs = async () => {
       items.push(log);
   }
 
-  process.send({command: 'logs', data: items});
+  process.send({command: 'logs', data: items });
 };

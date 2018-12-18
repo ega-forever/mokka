@@ -137,6 +137,8 @@ const promote = async function (priority = 1) {
 
       shares = _.sortBy(shares);
 
+      log.info(shares);
+
       for (let index = 0; index < this.nodes.length; index++) {
         this.votes.shares.push({
           share: shares[index],

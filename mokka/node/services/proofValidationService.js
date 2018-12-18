@@ -26,8 +26,11 @@ class ProofValidation {
       let item = _.chain(extracted.items).sortBy('secret').last().value();
       const restoredPublicKey = restorePubKey(item.secret, _.pick(item, ['r', 's', 'v']));
 
-      if (entry.owner !== restoredPublicKey)
+      if (entry.owner !== restoredPublicKey) {
+        log.info(item);
+        log.info(`wrong proof sig (by owner) ${entry.owner} vs ${restoredPublicKey}`);
         return false;
+      }
     }
 
     if (savedProof && savedProof.proof === proof)
@@ -57,8 +60,10 @@ class ProofValidation {
       window: 2
     });
 
-    if (!verified)
+    if (!verified) {
+      log.info('wrong time token provided!');
       return false;
+    }
 
     log.info(`saving proof at term ${term}`);
 

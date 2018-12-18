@@ -16,6 +16,9 @@ class RequestProcessor {
 
   async process (packet) {
 
+    if (packet.type !== 'ack')
+      log.info(`received new packet with type ${packet.type}`);
+
     let reply;
 
     if (!_.isObject(packet)) {
@@ -107,6 +110,12 @@ class RequestProcessor {
 
 
     let validateLogSent = this.mokka.cache.get(`requests.${packet.publicKey}.${packet.last.index + 1}`);
+
+    if (validateLogSent && packet.last) {
+
+      log.info(`already sent a log to node whose current index ${packet.last.index} ${validateLogSent}, mokka is leader: ${this.mokka.state === states.LEADER}, packet type is ack ${packet.type === messageTypes.ACK}`)
+
+    }
 
     if (!validateLogSent && this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat) {
       reply = await this.mokka.actions.append.obtain(packet);
