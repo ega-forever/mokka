@@ -30,6 +30,9 @@ class ProofValidation {
         return false;
     }
 
+    if (savedProof && savedProof.proof === proof)
+      return true;
+
 
     let pubKeys = this.mokka.nodes.map(node => node.publicKey);
     pubKeys.push(this.mokka.publicKey);

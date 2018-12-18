@@ -82,7 +82,7 @@ const appendPacket = async function (entry) {
 
   let payload = {
     state: this.state,
-    term: this.term,
+    term: entry ? entry.term : this.term,
     publicKey: this.publicKey,
     type: messageTypes.APPEND,
     leader: this.leader,

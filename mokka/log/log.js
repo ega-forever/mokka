@@ -132,6 +132,8 @@ class Log {
     if (!firstEntryByTerm.index) {
       let proof = await this.getProof(entry.term);
 
+      log.info(`proof ${proof} and first term ${firstEntryByTerm}`)
+
       proof.hash = entry.hash;
       proof.index = entry.index;
 

@@ -42,7 +42,7 @@ class RequestProcessor {
       }
 
       log.info('before validation');
-      let validated = await this.proofValidation.validate(packet.term, packet.proof, packet.data);
+      let validated = await this.proofValidation.validate(packet.term, packet.proof, packet.data); //todo fix
 
       log.info('super valid', validated);
 

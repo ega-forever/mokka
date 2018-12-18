@@ -67,7 +67,7 @@ const sendCommand = async (command) => {
 
 const getStatus = async () => {
   const info = await mokka.log.getLastInfo();
-  process.send({command: 'status', info: info})
+  process.send({command: 'status', info: info, pid: process.pid})
 };
 
 const getLogs = async () => {

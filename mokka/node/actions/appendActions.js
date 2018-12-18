@@ -111,6 +111,7 @@ const append = async function (packet) {
 
 
     try {
+      log.info(`trying to save packet ${JSON.stringify(packet.data)}`);
       await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash, packet.data.owner);
       log.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
