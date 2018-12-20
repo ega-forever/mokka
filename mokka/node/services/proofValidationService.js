@@ -19,16 +19,24 @@ class ProofValidation {
     if (savedProof && savedProof.proof === proof && !entry)
       return true;
 
+    if(savedProof && savedProof.proof !== proof){
+      log.info(`going to rewrite proof for term ${term}`);
+      let entry = await this.mokka.log.getFirstEntryByTerm(term);
+      log.info(`first entry by term ${JSON.stringify(entry)}`);
+    }
+
     let extracted = ProofValidation._extract(proof);
 
-    if (entry) {
+    if (entry && entry.index > 0) {
 
-      let item = _.chain(extracted.items).sortBy('secret').last().value();
+      const item = _.chain(extracted.items).sortBy('secret').last().value();
       const restoredPublicKey = restorePubKey(item.secret, _.pick(item, ['r', 's', 'v']));
 
       if (entry.owner !== restoredPublicKey) {
+        const owner = restorePubKey(entry.command, entry.signature);
+
         log.info(item);
-        log.info(`wrong proof sig (by owner) ${entry.owner} vs ${restoredPublicKey}`);
+        log.info(`wrong proof sig entry owner - ${entry.owner}, restored from share - ${restoredPublicKey}, restored from record ${owner}`);
         return false;
       }
     }
@@ -81,18 +89,23 @@ class ProofValidation {
 
     let items = [];
 
-    let offset = 35 + 64 + 64 + 2; //todo obtain first value (i.e. 35)
+    const splitProof = proof.split('x');
+    const itemsAmount = splitProof[0];
+    proof = splitProof[1];
+   // let offset = 35 + 64 + 64 + 2; //todo obtain first value (i.e. 35)
 
-    let time = proof.substr(proof.length - 13, proof.length);
+    const time = proof.substr(proof.length - 13, proof.length);
     proof = proof.substr(0, proof.length - 13);
+    const offset = proof.length / itemsAmount;
+    const secretSize = offset - 130;
 
     for (let index = 0; index < proof.length; index += offset) {
       let item = proof.substr(index, index + offset);
 
-      let secret = item.substr(0, 35);
-      let r = `0x${item.substr(35, 64)}`;
-      let s = `0x${item.substr(99, 64)}`;
-      let v = `0x${item.substr(163, 2)}`;
+      let secret = item.substr(0, secretSize);
+      let r = `0x${item.substr(secretSize, 64)}`;
+      let s = `0x${item.substr(secretSize + 64, 64)}`;
+      let v = `0x${item.substr(secretSize + 128, 2)}`;
 
       items.push({secret, r, s, v});
     }

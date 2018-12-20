@@ -25,6 +25,7 @@ module.exports = (ctx) => {
   });
 
 
+/*
   it('run tasks serially (100 tasks per each node)', async () => {
 
     ctx.nodes = [];
@@ -233,6 +234,7 @@ module.exports = (ctx) => {
 
   });
 
+*/
 
   it('run tasks concurrently (50 tasks per each node, kill one node during sync and restart)', async () => {
 
@@ -243,6 +245,8 @@ module.exports = (ctx) => {
 
     let privKeys = _.chain(new Array(ctx.ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
     let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
+
+    console.log(require('util').inspect(pubKeys, null, 3));
 
     const killCb = () => {
       console.log('killed by child!');

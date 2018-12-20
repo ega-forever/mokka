@@ -29,7 +29,7 @@ class Log {
   }
 
 
-  async saveCommand (command, term, signature, index, checkHash, owner) {
+  async saveCommand (command, term, signature, index, checkHash) {
 
     return await new Promise((res, rej) => {
       semaphore.take(async () => {
@@ -39,14 +39,8 @@ class Log {
           return rej({code: 0, message: 'task can\'t be empty'});
         }
 
-        if (owner) {
-          const restoredPublicKey = restorePubKey(command, signature);
 
-          if (restoredPublicKey !== owner) {
-            semaphore.leave();
-            return rej({code: 1, message: 'wrong signature provided'});
-          }
-        }
+        const owner = restorePubKey(command, signature);
 
         const {index: lastIndex, hash: lastHash} = await this.getLastInfo();
 
@@ -87,22 +81,24 @@ class Log {
           hash: generatedHash,
           createdAt: Date.now(),
           committed: false,
-          owner: owner || this.node.publicKey,
-          responses: [{
-            publicKey: this.node.publicKey, // start with vote from leader
-            ack: true
-          }],
+          owner: owner,
+          responses: [
+            {
+              publicKey: owner,
+              ack: true
+            }
+          ],
           shares: [],
           minShares: 0,
           signature,
           command
         };
 
-        if (owner)
-          entry.responses = [
-            {publicKey: owner},
-            entry.responses[0]
-          ];
+        if (entry.owner !== this.node.publicKey)
+          entry.responses.push({
+            publicKey: this.node.publicKey, // start with vote from leader
+            ack: true
+          });
 
         await this.put(entry);
         res(entry);

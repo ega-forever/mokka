@@ -97,7 +97,7 @@ const append = async function (packet) {
 
         const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
         log.info(`putting command back: ${JSON.stringify(entry.command.task)} to pending (rewrite mine) with confirmations ${entry.responses.length} with hash: ${taskHash}`);
-        await this.processor.push(entry.command.task);
+        await this.processor.push(entry.command.task); //todo putting command back may change leader of log
 
       }
 
@@ -112,7 +112,7 @@ const append = async function (packet) {
 
     try {
       log.info(`trying to save packet ${JSON.stringify(packet.data)}`);
-      await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash, packet.data.owner);
+      await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash, packet.data.owner); //todo replace entry owner with extract from signature
       log.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
       let {index: lastIndex} = await this.log.getLastInfo();

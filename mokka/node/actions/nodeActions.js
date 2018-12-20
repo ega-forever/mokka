@@ -161,7 +161,7 @@ const promote = async function (priority = 1) {
       const {signature} = web3.eth.accounts.sign(myShare, `0x${this.privateKey}`);
 
       this.votes.shares.push({
-        share: _.last(shares),
+        share: myShare,
         publicKey: this.publicKey,
         signature: signature,
         voted: true

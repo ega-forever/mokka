@@ -384,9 +384,12 @@ const voted = async function (packet) {
 
   this.change({leader: this.publicKey, state: states.LEADER});
 
-  const compacted = _.chain(this.votes.shares).compact().filter(vote=>vote.signature).reduce((result, item) => {
-    return `${result}${item.share}${item.signature.replace('0x', '')}`;
-  }, '').thru(item => `${item}${this.votes.started}`).value();
+  const votedShares = _.chain(this.votes.shares).compact().filter(vote => vote.voted).value();
+
+  const compacted = _.chain(votedShares).sortBy('share')
+    .reverse().reduce((result, item) => {
+      return `${result}${item.share}${item.signature.replace('0x', '')}`;
+    }, '').thru(item => `${votedShares.length.toString(16)}x${item}${this.votes.started}`).value();
 
   await this.log.addProof(this.term, {
     index: -1,
