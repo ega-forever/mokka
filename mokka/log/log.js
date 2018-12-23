@@ -4,9 +4,7 @@ const encode = require('encoding-down'),
   crypto = require('crypto'),
   MerkleTools = require('merkle-tools'),
   levelup = require('levelup'),
-  bunyan = require('bunyan'),
-  restorePubKey = require('../utils/restorePubKey'),
-  log = bunyan.createLogger({name: 'node.log.log'});
+  restorePubKey = require('../utils/restorePubKey');
 
 
 class Log {
@@ -128,8 +126,6 @@ class Log {
     if (!firstEntryByTerm.index) {
       let proof = await this.getProof(entry.term);
 
-      log.info(`proof ${proof} and first term ${firstEntryByTerm}`)
-
       proof.hash = entry.hash;
       proof.index = entry.index;
 
@@ -208,37 +204,6 @@ class Log {
     } catch (e) {
       return null;
     }
-
-  }
-
-
-  async getLastProof () { //todo implement
-    return await new Promise((resolve, reject) => {
-      let entry = {
-        index: -1,
-        hash: null,
-        term: -1,
-        proof: null
-      };
-
-
-      this.db.createReadStream({
-        reverse: true,
-        limit: 1,
-        lt: `${this.prefixes.term + 1}:${Log._getBnNumber(0)}`,
-        gte: `${this.prefixes.term}:${Log._getBnNumber(0)}`
-      })
-        .on('data', data => {
-          entry = data.value;
-          entry.term = parseInt(data.key.toString().replace(`${this.prefixes.term}:`, ''), 2);
-        })
-        .on('error', err => {
-          reject(err);
-        })
-        .on('end', () => {
-          resolve(entry);
-        });
-    });
 
   }
 
@@ -323,9 +288,6 @@ class Log {
    */
   async removeEntriesAfter (index) { //todo implement keep last term
     const entries = await this.getEntriesAfter(index);
-
-    log.info(`removing entities after index ${index}`);
-
 
     for (let entry of entries)
       await this.db.del(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`);

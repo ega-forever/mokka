@@ -2,10 +2,8 @@ const Promise = require('bluebird'),
   semaphore = require('semaphore'),
   states = require('../factories/stateFactory'),
   eventTypes = require('../factories/eventFactory'),
-  bunyan = require('bunyan'),
   Web3 = require('web3'),
   web3 = new Web3(),
-  log = bunyan.createLogger({name: 'node.api'}),
   _ = require('lodash');
 
 class TaskProcessor {
@@ -65,7 +63,7 @@ class TaskProcessor {
 
 
       await this._commit(pending.command, pending.hash);
-      log.info(`pulling pending task ${pending.command} with hash ${pending.hash}`);
+      this.mokka.logger.trace(`pulling pending task ${pending.command} with hash ${pending.hash}`);
       await this.mokka.log.pullPending(pending.hash);
     }
 
@@ -89,7 +87,7 @@ class TaskProcessor {
 
         let entry = await this._save(task);
         await this._broadcast(entry.index, entry.hash);
-        log.info(`task has been broadcasted ${task}`);
+        this.mokka.logger.trace(`task has been broadcasted ${task}`);
 
         this.sem.leave();
         res(entry);
@@ -104,21 +102,22 @@ class TaskProcessor {
     if (Date.now() - createdAt < this.mokka.election.max && index !== 0) {
       this.mokka.heartbeat(this.mokka.election.max);
       await Promise.delay(this.mokka.election.max - (Date.now() - createdAt));
-      log.info('going to await for the current leader');
+      this.mokka.logger.trace('going to await for the current leader');
       return await this._lock();
     }
 
 
-    log.info('promoting by propose');
+    this.mokka.logger.info('promoting by propose'); //todo remove
+    this.mokka.logger.trace('promoting by propose');
+    this.mokka.timers.clear('heartbeat');
     await this.mokka.actions.node.promote(2);
 
-    this.mokka.timers.clear('heartbeat');
-    await new Promise(res => this.mokka.once(eventTypes.LEADER, res)).timeout(this.mokka.election.max).catch(() => {
-    });
-    this.mokka.heartbeat(this.mokka.timeout());
+    this.mokka.heartbeat(this.mokka.timeout() + this.mokka.election.max);
+
+    await Promise.delay(this.mokka.election.max);
 
     if (this.mokka.state !== states.LEADER) {
-      log.info('trying to propose task again');
+      this.mokka.logger.trace('trying to propose task again');
       let timeout = this.mokka.timeout();
       const {createdAt} = await this.mokka.log.getLastInfo();
       const delta = Date.now() - createdAt;
@@ -146,9 +145,10 @@ class TaskProcessor {
     let entry = await this.mokka.log.get(index);
 
     if (!entry || entry.hash !== hash)
-      return log.info(`can't broadcast entry at index ${index}`);
+      return this.mokka.logger.trace(`can't broadcast entry at index ${index}`);
 
-    log.info(`broadcasting task ${entry.command.task} at index ${index}`);
+    this.mokka.logger.trace(`broadcasting task ${entry.command.task} at index ${index}`);
+    this.mokka.logger.info(`broadcasting task ${entry.command.task} at index ${index}, entry ${entry.term} vs ${this.mokka.term} and state ${this.mokka.state}`);//todo remove
 
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;

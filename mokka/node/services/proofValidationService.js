@@ -1,8 +1,6 @@
 const speakeasy = require('speakeasy'),
   _ = require('lodash'),
-  bunyan = require('bunyan'),
   restorePubKey = require('../../utils/restorePubKey'),
-  log = bunyan.createLogger({name: 'node.services.proofValidation'}),
   secrets = require('secrets.js-grempe');
 
 class ProofValidation {
@@ -20,9 +18,9 @@ class ProofValidation {
       return true;
 
     if(savedProof && savedProof.proof !== proof){
-      log.info(`going to rewrite proof for term ${term}`);
+      this.mokka.logger.trace(`going to rewrite proof for term ${term}`);
       let entry = await this.mokka.log.getFirstEntryByTerm(term);
-      log.info(`first entry by term ${JSON.stringify(entry)}`);
+      this.mokka.logger.trace(`first entry by term ${JSON.stringify(entry)}`);
     }
 
     let extracted = ProofValidation._extract(proof);
@@ -35,8 +33,8 @@ class ProofValidation {
       if (entry.owner !== restoredPublicKey) {
         const owner = restorePubKey(entry.command, entry.signature);
 
-        log.info(item);
-        log.info(`wrong proof sig entry owner - ${entry.owner}, restored from share - ${restoredPublicKey}, restored from record ${owner}`);
+        this.mokka.logger.trace(item);
+        this.mokka.logger.trace(`wrong proof sig entry owner - ${entry.owner}, restored from share - ${restoredPublicKey}, restored from record ${owner}`);
         return false;
       }
     }
@@ -69,11 +67,11 @@ class ProofValidation {
     });
 
     if (!verified) {
-      log.info('wrong time token provided!');
+      this.mokka.logger.trace('wrong time token provided!');
       return false;
     }
 
-    log.info(`saving proof at term ${term}`);
+    this.mokka.logger.trace(`saving proof at term ${term}`);
 
     await this.mokka.log.addProof(term, {
       proof: proof,

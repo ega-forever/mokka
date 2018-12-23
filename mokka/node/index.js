@@ -16,8 +16,7 @@ const EventEmitter = require('events'),
   MessageActions = require('./actions/messageActions'),
   RequestProcessor = require('./services/requestProcessorService'),
   bunyan = require('bunyan'),
-  TaskProcessor = require('./api/taskProcessor'),
-  log = bunyan.createLogger({name: 'node'});
+  TaskProcessor = require('./api/taskProcessor');
 
 const change = require('modification')(' change');
 
@@ -49,6 +48,9 @@ class Mokka extends EventEmitter {
     this.threshold = options.threshold || 0.8;
     this.timers = new Tick(this);
     this.Log = options.Log;
+
+    this.logger = bunyan.createLogger({name: 'mokka.logger', level: options.logLevel || 3});
+
     this.change = change;
     this.networkSecret = options.networkSecret || '1234567';
     this.latency = 0;
@@ -86,7 +88,7 @@ class Mokka extends EventEmitter {
     let mokka = this;
 
     mokka.on('term change', function change () {
-      log.info('clear vote by term change');
+      mokka.logger.trace('clear vote by term change');
       mokka.votes.for = null;
       mokka.votes.granted = 0;
       mokka.votes.shares = [];
@@ -95,14 +97,15 @@ class Mokka extends EventEmitter {
     });
 
     mokka.on('state change', function change (state) {
-      log.info(`state changed: ${_.invert(states)[state]}`);
+      mokka.logger.trace(`state changed: ${_.invert(states)[state]}`);
+      mokka.logger.info(`state changed: ${_.invert(states)[state]}`); //todo remove
       mokka.heartbeat(mokka.beat);
       mokka.emit(Object.keys(states)[state].toLowerCase());
     });
 
     this.on('threshold', async () => {
       if (this.state === states.LEADER) {
-        log.info('restarting vote by threshold');
+        mokka.logger.trace('restarting vote by threshold');
         this.change({state: states.FOLLOWER, leader: ''});
         this.timers.clear('heartbeat');
         await Promise.delay(this.window());
@@ -110,11 +113,39 @@ class Mokka extends EventEmitter {
       }
     });
 
+    let a = _.debounce(() => { //todo remove
+
+      console.log('long delay!', this.state);
+      process.exit(0);
+
+    }, 5000);
+
     mokka.on('data', async (packet) => {
+
+      if (this.state === states.LEADER) {
+        let queue = semaphore.queue.length;
+        console.log(`leader queue: ${queue}`);
+
+        if(queue > 0)
+          console.log(`packet type with delay ${packet.type}`);
+
+        if (queue > 100) {
+          process.exit(0)
+        }
+      }
 
       semaphore.take(async () => {
 
+        let start = Date.now();
+        // a();
         let data = await this.requestProcessor.process(packet);
+
+/*        if(mokka.state === states.LEADER && Date.now() - start > 500){ //todo remove
+          console.log(require('util').inspect(packet, null, 10));
+          console.log('my state', this.state);
+          process.exit(0);
+        }*/
+
 
         if (!_.has(data, 'who') && !_.has(data, '0.who'))
           return semaphore.leave();
@@ -129,6 +160,7 @@ class Mokka extends EventEmitter {
         }
 
         this.actions.message.message(data.who, data.reply);
+
         semaphore.leave();
       });
 
@@ -178,25 +210,35 @@ class Mokka extends EventEmitter {
 
     duration = duration || mokka.beat;
 
-    if (mokka.timers.active('heartbeat')) {
+    if (mokka.timers.active('heartbeat') && mokka.state !== states.LEADER) {
       mokka.timers.adjust('heartbeat', duration);
-
       return mokka;
+    }
+
+    if(mokka.timers.active('heartbeat')){
+      mokka.timers.clear('heartbeat');
     }
 
     mokka.timers.setTimeout('heartbeat', async () => {
 
       if (states.LEADER !== mokka.state) {
+        //if pendings - the miss
+        let pending = await mokka.log.getFirstPending();
+
+        if (pending.hash)
+          return;
+
         mokka.emit('heartbeat timeout');
 
-        log.info('promoting by timeout');
+        mokka.logger.trace('promoting by timeout');
         return mokka.actions.node.promote();
       }
 
 
       let packet = await mokka.actions.message.packet(messageTypes.ACK);
 
-      log.info('send append request by timeout');
+      mokka.logger.trace('send append request by timeout');
+      mokka.logger.info('send append request by timeout');//todo remove
       mokka.emit(messageTypes.ACK, packet);
       await mokka.actions.message.message(states.FOLLOWER, packet);
       mokka.heartbeat(mokka.beat);

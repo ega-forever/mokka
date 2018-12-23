@@ -1,14 +1,12 @@
 const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
-  bunyan = require('bunyan'),
   crypto = require('crypto'),
-  log = bunyan.createLogger({name: 'node.actions.append'}),
   states = require('../factories/stateFactory');
 
 const append = async function (packet) {
 
   if (packet.leader !== this.leader) {
-    log.error('can\'t append logs not from leader');
+    this.logger.error('can\'t append logs not from leader');
     return null;
   }
 
@@ -16,7 +14,7 @@ const append = async function (packet) {
 
   if ((packet.last.hash !== hash && packet.last.index === index) || (packet.last.hash === hash && packet.last.index !== index)) {
 
-    log.error('found another history root!');
+    this.logger.error('found another history root!');
 
     let term = packet.term > this.term ? this.term - 1 : packet.term - 1;
 
@@ -27,23 +25,19 @@ const append = async function (packet) {
       let entry = await this.log.get(logIndex);
 
       if (entry.owner !== this.publicKey) {
-        log.info(`can't put command to orphan, as i am not a leader ${entry.owner} vs ${this.publicKey}`);
+        this.logger.trace(`can't put command to orphan, as i am not a leader ${entry.owner} vs ${this.publicKey}`);
         continue;
       }
 
-      log.info(`putting command back: ${JSON.stringify(entry.command.task)} to pending (by another root)`);
+      this.logger.trace(`putting command back: ${JSON.stringify(entry.command.task)} to pending (by another root)`);
       await this.processor.push(entry.command.task);
 
     }
 
 
-    log.info(`should drop ${index - prevTerm.index}, with current index ${index}, current term: ${term} and leader term ${packet.term}`);
+    this.logger.trace(`should drop ${index - prevTerm.index}, with current index ${index}, current term: ${term} and leader term ${packet.term}`);
     await this.log.removeEntriesAfter(prevTerm.index); //this clean up term
     this.term--; // todo check
-
-    let {index: indexAfter} = await this.log.getLastInfo();
-    log.info(`after: ${indexAfter}`);
-
     return null;
   }
 
@@ -51,6 +45,8 @@ const append = async function (packet) {
   let reply = null;
 
   if (packet.data) {
+
+    this.logger.info('going to append the data');//todo remove
 
     if (packet.data.index > index + 1)
       return null;
@@ -77,26 +73,26 @@ const append = async function (packet) {
 
     if (index >= packet.data.index) {
 
-      log.info(`the leader has another history. Rewrite mine ${index} -> ${packet.data.index - 1}`);
+      this.logger.trace(`the leader has another history. Rewrite mine ${index} -> ${packet.data.index - 1}`);
 
       for (let logIndex = packet.data.index; logIndex <= index; logIndex++) {
         let entry = await this.log.get(logIndex);
 
         if (entry.owner !== this.publicKey) {
-          log.info(`can't put command to orphan, as i am not a leader ${entry.owner} vs ${this.publicKey}`);
+          this.logger.trace(`can't put command to orphan, as i am not a leader ${entry.owner} vs ${this.publicKey}`);
           continue;
         }
 
         if (_.find(entry.responses, {publicKey: packet.publicKey}))
-          log.info(`trying to rewrite existent log ${entry.command.task}`);
+          this.logger.trace(`trying to rewrite existent log ${entry.command.task}`);
 
 
         if (entry.responses.length >= this.majority())
-          log.info(`trying to rewrite majority log ${entry.command.task}`);
+          this.logger.trace(`trying to rewrite majority log ${entry.command.task}`);
 
 
         const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
-        log.info(`putting command back: ${JSON.stringify(entry.command.task)} to pending (rewrite mine) with confirmations ${entry.responses.length} with hash: ${taskHash}`);
+        this.logger.trace(`putting command back: ${JSON.stringify(entry.command.task)} to pending (rewrite mine) with confirmations ${entry.responses.length} with hash: ${taskHash}`);
         await this.processor.push(entry.command.task); //todo putting command back may change leader of log
 
       }
@@ -106,17 +102,17 @@ const append = async function (packet) {
 
 
     const taskHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command.task)).digest('hex');
-    log.info(`validating and pulling duplicate task ${packet.data.command.task} with hash ${taskHash} from pending`);
+    this.logger.trace(`validating and pulling duplicate task ${packet.data.command.task} with hash ${taskHash} from pending`);
     await this.log.pullPending(taskHash);
 
 
     try {
-      log.info(`trying to save packet ${JSON.stringify(packet.data)}`);
+      this.logger.trace(`trying to save packet ${JSON.stringify(packet.data)}`);
       await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash, packet.data.owner); //todo replace entry owner with extract from signature
-      log.info(`the ${packet.data.index} has been saved`);
+      this.logger.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
       let {index: lastIndex} = await this.log.getLastInfo();
-      log.error(`error during save log: ${JSON.stringify(err)}`);
+      this.logger.error(`error during save log: ${JSON.stringify(err)}`);
 
       if (err.code === 2 || err.code === 3)
         return;
@@ -129,6 +125,7 @@ const append = async function (packet) {
       };
     }
 
+    this.logger.info('send append_ack packet');//todo remove
     reply = await this.actions.message.packet(messageTypes.APPEND_ACK, {
       term: packet.data.term,
       index: packet.data.index
@@ -149,7 +146,7 @@ const appendAck = async function (packet) {
 
   const entry = await this.log.commandAck(packet.data.index, packet.publicKey);
 
-  log.info(`append ack: ${packet.data.index} / ${entry.responses.length}`);
+  this.logger.info(`append ack: ${packet.data.index} / ${entry.responses.length}`);
 
   if (this.quorum(entry.responses.length) && !entry.committed) {
     const entries = await this.log.getUncommittedEntriesUpToIndex(packet.data.index, packet.data.term);

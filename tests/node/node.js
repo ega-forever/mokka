@@ -42,6 +42,7 @@ const initMokka = (options) => {
     electionMax: options.electionMax || 1000,
     heartbeat: options.heartbeat || 100,
     Log: Log,
+    logLevel: options.logLevel || 10,
     privateKey: options.privateKey,
     peers: pubKeys
   });
@@ -56,18 +57,26 @@ const initMokka = (options) => {
   });
 
 
-};
+  mokka.on('state change', function (state) {
+    console.log(`state changed: ${state}`);
+    getState();
+  });
 
+
+};
 
 const sendCommand = async (command) => {
   mokka.processor.push(command);
   process.send({command: 'pushed', data: command});
 };
 
-
 const getStatus = async () => {
   const info = await mokka.log.getLastInfo();
   process.send({command: 'status', info: info, pid: process.pid})
+};
+
+const getState = () => {
+  process.send({command: 'state', state: mokka.state, pid: process.pid})
 };
 
 const getLogs = async () => {

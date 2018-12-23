@@ -4,11 +4,9 @@ const _ = require('lodash'),
   speakeasy = require('speakeasy'),
   secrets = require('secrets.js-grempe'),
   messageTypes = require('../factories/messageTypesFactory'),
-  bunyan = require('bunyan'),
   Web3 = require('web3'),
   web3 = new Web3(),
   sem = require('semaphore')(1),
-  log = bunyan.createLogger({name: 'node.actions.node'}),
   states = require('../factories/stateFactory');
 
 const join = function (multiaddr, write) {
@@ -91,7 +89,7 @@ const promote = async function (priority = 1) {
       let blackListed = this.cache.get(`blacklist.${this.publicKey}`);
 
       if (blackListed) {
-        log.error('awaiting for next rounds');
+        this.logger.trace('awaiting for next rounds');
         sem.leave();
         return res();
       }
@@ -99,13 +97,13 @@ const promote = async function (priority = 1) {
       let locked = this.cache.get('commit.locked');
 
       if (locked) {
-        log.error('awaiting for new possible leader');
+        this.logger.trace('awaiting for new possible leader');
         sem.leave();
         return res();
       }
 
       if (this.votes.for && this.votes.for === this.publicKey) {
-        log.error('already promoted myself');
+        this.logger.trace('already promoted myself');
         sem.leave();
         return res();
       }
@@ -137,8 +135,6 @@ const promote = async function (priority = 1) {
 
       shares = _.sortBy(shares);
 
-      log.info(shares);
-
       for (let index = 0; index < this.nodes.length; index++) {
         this.votes.shares.push({
           share: shares[index],
@@ -150,8 +146,6 @@ const promote = async function (priority = 1) {
           share: shares[index],
           priority: priority
         });
-
-        log.info(`sending vote to ${this.nodes[index].publicKey}`);
 
         this.actions.message.message(this.nodes[index].publicKey, packet);
       }
@@ -172,7 +166,7 @@ const promote = async function (priority = 1) {
         this.timers.clear('term_change');
 
       this.timers.setTimeout('term_change', async () => {
-        log.info('clean up passed voting');
+        this.logger.trace('clean up passed voting');
         this.votes.for = null;
         this.votes.granted = 0;
         this.votes.shares = [];
