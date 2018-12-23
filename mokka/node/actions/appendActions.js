@@ -46,8 +46,6 @@ const append = async function (packet) {
 
   if (packet.data) {
 
-    this.logger.info('going to append the data');//todo remove
-
     if (packet.data.index > index + 1)
       return null;
 
@@ -125,7 +123,6 @@ const append = async function (packet) {
       };
     }
 
-    this.logger.info('send append_ack packet');//todo remove
     reply = await this.actions.message.packet(messageTypes.APPEND_ACK, {
       term: packet.data.term,
       index: packet.data.index

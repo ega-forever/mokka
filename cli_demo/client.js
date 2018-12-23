@@ -75,7 +75,7 @@ const initMokka = async () => {
       adapter: require('leveldown'),
       path: path.join('./', 'dump', `test.${index}.db`)
     },
-    logLevel: 10,
+    logLevel: 30,
     privateKey: keys[index],
     peers: peers
   });

@@ -26,6 +26,8 @@ class RequestProcessor {
       };
     }
 
+    this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
+
     if (packet.type === messageTypes.APPEND) {
 
       if (!packet.proof) {
@@ -52,10 +54,7 @@ class RequestProcessor {
         state: states.FOLLOWER,
         term: packet.term
       });
-
     }
-
-    this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
 
     if (packet.type === messageTypes.VOTE)  //add rule - don't vote for node, until this node receive the right history (full history)
       reply = await this.mokka.actions.vote.vote(packet);
@@ -73,13 +72,14 @@ class RequestProcessor {
       reply = await this.mokka.actions.append.append(packet);
 
 
-    if (packet.type === messageTypes.APPEND_ACK) {
-      this.mokka.logger.info(`received append_ack`);
+    if (packet.type === messageTypes.APPEND_ACK)
       reply = await this.mokka.actions.append.appendAck(packet);
-    }
 
     if (packet.type === messageTypes.APPEND_FAIL)
       reply = await this.mokka.actions.append.appendFail(packet);
+
+    if (packet.type === messageTypes.RE_APPEND)
+      reply = await this.mokka.actions.append.obtain(packet);
 
 
     if (!Object.values(messageTypes).includes(packet.type)) {
@@ -93,51 +93,20 @@ class RequestProcessor {
     this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
 
 
+    let {index} = await this.mokka.log.getLastInfo();
 
+    //let validateLogSent = this.mokka.cache.get(`requests.${packet.publicKey}.${packet.last.index + 1}`);
+    //if (!validateLogSent && this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > index && packet.last.createdAt < Date.now() - this.mokka.beat) {
+    if (this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > index && packet.last.createdAt < Date.now() - this.mokka.beat) {
 
+      this.mokka.logger.info(`asking to reappend ${packet.state}`);
 
-
-/*    let {index} = await this.mokka.log.getLastInfo();
-
-    let entry = await this.mokka.log.getLastEntry();
-
-    let validateLogSent = this.mokka.cache.get(`requests.${packet.publicKey}.${packet.last.index + 1}`);
-
-
-    if (!validateLogSent && this.mokka.state === states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index < index && entry.createdAt < Date.now() - this.mokka.beat) {
-      reply = await this.mokka.actions.append.obtain(packet);
-      this.mokka.logger.trace(`obtained a new log with index ${reply.reply.data.index} for follower`);
-      console.log(`requests.${packet.publicKey}.${packet.last.index + 1}`)
-      this.mokka.cache.set(`requests.${packet.publicKey}.${packet.last.index + 1}`, true, this.mokka.election.max);
-    }*/
-
-    if (!reply && this.mokka.state === states.LEADER)
-      return;
-
-
-/*    if (!reply && packet.type === messageTypes.ACK && index < packet.last.index && packet.last.createdAt < Date.now() - this.mokka.election.max) {//todo add ack case for missed logs
-
-      this.mokka.logger.info(`going to ask for missed logs: ${index} vs ${packet.last.index}`);
-      console.log(packet.last)
-      let response = await this.mokka.actions.message.packet(messageTypes.ACK);
-      response.requestLogs = 1;
+      let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
       reply = {
         reply: response,
         who: packet.publicKey
       };
-    }*/
-
-
- /*   if (!reply && packet.type !== messageTypes.ACK) {//todo add ack case for missed logs
-
-      this.mokka.logger.info(`prepare ack packet under state ${this.mokka.state} and packet ${packet.type}`);
-      let response = await this.mokka.actions.message.packet(messageTypes.ACK);
-      reply = {
-        reply: response,
-        who: packet.publicKey
-      };
-    }*/
-
+    }
 
     return reply;
 

@@ -90,7 +90,6 @@ class ProofValidation {
     const splitProof = proof.split('x');
     const itemsAmount = splitProof[0];
     proof = splitProof[1];
-   // let offset = 35 + 64 + 64 + 2; //todo obtain first value (i.e. 35)
 
     const time = proof.substr(proof.length - 13, proof.length);
     proof = proof.substr(0, proof.length - 13);

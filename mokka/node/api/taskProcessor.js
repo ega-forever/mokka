@@ -107,7 +107,6 @@ class TaskProcessor {
     }
 
 
-    this.mokka.logger.info('promoting by propose'); //todo remove
     this.mokka.logger.trace('promoting by propose');
     this.mokka.timers.clear('heartbeat');
     await this.mokka.actions.node.promote(2);
@@ -148,7 +147,6 @@ class TaskProcessor {
       return this.mokka.logger.trace(`can't broadcast entry at index ${index}`);
 
     this.mokka.logger.trace(`broadcasting task ${entry.command.task} at index ${index}`);
-    this.mokka.logger.info(`broadcasting task ${entry.command.task} at index ${index}, entry ${entry.term} vs ${this.mokka.term} and state ${this.mokka.state}`);//todo remove
 
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;

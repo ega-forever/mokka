@@ -53,7 +53,7 @@ class Mokka extends EventEmitter {
 
     this.change = change;
     this.networkSecret = options.networkSecret || '1234567';
-    this.latency = 0;
+    //this.latency = 0;//todo implement
     this.voteTimeoutRandomFactor = options.voteTimeoutRandomFactor || 10;
     this.log = null;
     this.nodes = [];
@@ -113,58 +113,31 @@ class Mokka extends EventEmitter {
       }
     });
 
-    let a = _.debounce(() => { //todo remove
-
-      console.log('long delay!', this.state);
-      process.exit(0);
-
-    }, 5000);
-
     mokka.on('data', async (packet) => {
 
-      if (this.state === states.LEADER) {
-        let queue = semaphore.queue.length;
-        console.log(`leader queue: ${queue}`);
+      let data = packet.type === messageTypes.ACK ?
+        await this.requestProcessor.process(packet) :
+        await new Promise(res => {
+          semaphore.take(async () => {
+            let data = await this.requestProcessor.process(packet);
+            res(data);
+            semaphore.leave();
+          });
+        });
 
-        if(queue > 0)
-          console.log(`packet type with delay ${packet.type}`);
 
-        if (queue > 100) {
-          process.exit(0)
-        }
+      if (!_.has(data, 'who') && !_.has(data, '0.who'))
+        return;
+
+      if (_.isArray(data)) {
+
+        for (let item of data)
+          this.actions.message.message(item.who, item.reply);
+
+        return;
       }
 
-      semaphore.take(async () => {
-
-        let start = Date.now();
-        // a();
-        let data = await this.requestProcessor.process(packet);
-
-/*        if(mokka.state === states.LEADER && Date.now() - start > 500){ //todo remove
-          console.log(require('util').inspect(packet, null, 10));
-          console.log('my state', this.state);
-          process.exit(0);
-        }*/
-
-
-        if (!_.has(data, 'who') && !_.has(data, '0.who'))
-          return semaphore.leave();
-
-        if (_.isArray(data)) {
-
-          for (let item of data)
-            this.actions.message.message(item.who, item.reply);
-
-
-          return semaphore.leave();
-        }
-
-        this.actions.message.message(data.who, data.reply);
-
-        semaphore.leave();
-      });
-
-
+      this.actions.message.message(data.who, data.reply);
     });
 
 
@@ -215,7 +188,7 @@ class Mokka extends EventEmitter {
       return mokka;
     }
 
-    if(mokka.timers.active('heartbeat')){
+    if (mokka.timers.active('heartbeat')) {
       mokka.timers.clear('heartbeat');
     }
 
@@ -238,7 +211,6 @@ class Mokka extends EventEmitter {
       let packet = await mokka.actions.message.packet(messageTypes.ACK);
 
       mokka.logger.trace('send append request by timeout');
-      mokka.logger.info('send append request by timeout');//todo remove
       mokka.emit(messageTypes.ACK, packet);
       await mokka.actions.message.message(states.FOLLOWER, packet);
       mokka.heartbeat(mokka.beat);
@@ -254,7 +226,8 @@ class Mokka extends EventEmitter {
    * @private
    */
   timeout () {
-    return _.random(this.beat, parseInt(this.beat * 1.5));
+    //return _.random(this.beat, parseInt(this.beat * 1.5)); //todo use latency
+    return _.random(this.beat, parseInt(this.beat * 1.5)) + 200;
   }
 
   window () {

@@ -224,7 +224,6 @@ const vote = async function (packet) {
     this.cache.del(`blacklist.${packet.publicKey}`);
 
   if (packet.last.index > index) {
-    console.log('has more higher height')
     this.emit(messageTypes.VOTE, packet, true);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: true, signature: signature,
