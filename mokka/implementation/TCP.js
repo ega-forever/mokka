@@ -11,8 +11,8 @@ class TCPMokka extends Mokka {
     this.socket = msg.socket('rep');
 
     this.socket.bind(this.address);
-    this.socket.on('message', (data, fn) => {
-      this.emit('data', data, fn);
+    this.socket.on('message', (data) => {
+      this.emit('data', data);
     });
 
     this.socket.on('error', () => {

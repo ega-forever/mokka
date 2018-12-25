@@ -1,5 +1,6 @@
 const _ = require('lodash'),
   states = require('../factories/stateFactory'),
+  encodePacketUtils = require('../../utils/encodePacket'),
   messageTypes = require('../factories/messageTypesFactory');
 
 
@@ -50,7 +51,7 @@ const message = async function (who, what) {
   }
 
   for (let client of nodes)
-    client.write(what);
+    client.write(encodePacketUtils(what));
 
 
   // _timing.call(mokka, latency); //todo implement timing
@@ -62,9 +63,8 @@ const packet = async function (type, data) {
   const wrapped = {
     state: this.state,
     term: this.term,
-    publicKey: this.publicKey,
-    type: type,
-    leader: this.leader
+    publicKey: this.publicKey,//todo remove
+    type: type
   };
 
 
@@ -83,17 +83,17 @@ const appendPacket = async function (entry) {
   let payload = {
     state: this.state,
     term: entry ? entry.term : this.term,
-    publicKey: this.publicKey,
+    publicKey: this.publicKey,//todo remove
     type: messageTypes.APPEND,
-    leader: this.leader,
     proof: proof
   };
 
+
   if(entry){
-    payload.data = entry;
+    payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash']);
     payload.last = await this.log.getEntryInfoBefore(entry);
   }else 
-    payload.last = await this.log.getLastEntry();
+    payload.last = await this.log.getLastInfo();
   
 
   return payload;

@@ -14,7 +14,7 @@ let mokka = null;
 process.on('unhandledRejection', function (reason, p) {
   console.log('Possibly Unhandled Rejection at: Promise ', p, ' reason: ', reason);
   // application specific logging here
-  process.exit(0)
+  process.exit(0);
 });
 
 
@@ -28,10 +28,10 @@ const keys = [
 
 
 const hosts = [
-  {host: '52.15.183.149', port: 12820},
-  {host: '52.15.183.149', port: 19873},
-  {host: '52.15.183.149', port: 13874},
-  {host: '52.15.183.149', port: 19187}
+  {host: '52.15.183.149', port: 19742},
+  {host: '52.15.183.149', port: 17244},
+  {host: '52.15.183.149', port: 12764},
+  {host: '52.15.183.149', port: 14898}
 ];
 
 const pubKeys = keys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
@@ -57,7 +57,7 @@ const initMokka = async () => {
   for (let index1 = 0; index1 < keys.length; index1++) {
     if (index === index1)
       continue;
-        uris.push(`/ip4/127.0.0.1/tcp/${startPort + index1}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
+    uris.push(`/ip4/127.0.0.1/tcp/${startPort + index1}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
 
     //uris.push(`/ip4/${hosts[index1].host}/tcp/${hosts[index1].port}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
   }
@@ -67,9 +67,9 @@ const initMokka = async () => {
 
   mokka = new TCPMokka({
     address: `/ip4/127.0.0.1/tcp/${startPort + index}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
-    electionMin: 200,
+    electionMin: 300,
     electionMax: 1000,
-    heartbeat: 100,
+    heartbeat: 200,
     Log: Log,
     log_options: {
       adapter: require('leveldown'),
@@ -108,7 +108,7 @@ const askCommand = (rl, mokka) => {
 
     if (command.indexOf('generate ') === 0) {
       let amount = parseInt(command.replace('generate', '').trim());
-      await generateTxs(mokka, amount)
+      await generateTxs(mokka, amount);
     }
 
     if(command.indexOf('generate_as_single') === 0){

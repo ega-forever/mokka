@@ -99,8 +99,6 @@ class RequestProcessor {
     //if (!validateLogSent && this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > index && packet.last.createdAt < Date.now() - this.mokka.beat) {
     if (this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > index && packet.last.createdAt < Date.now() - this.mokka.beat) {
 
-      this.mokka.logger.info(`asking to reappend ${packet.state}`);
-
       let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
       reply = {
         reply: response,

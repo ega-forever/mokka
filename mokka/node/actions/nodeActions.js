@@ -143,8 +143,7 @@ const promote = async function (priority = 1) {
         });
 
         const packet = await this.actions.message.packet(messageTypes.VOTE, {
-          share: shares[index],
-          priority: priority
+          share: shares[index]
         });
 
         this.actions.message.message(this.nodes[index].publicKey, packet);

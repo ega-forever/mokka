@@ -6,7 +6,8 @@ const EventEmitter = require('events'),
   states = require('./factories/stateFactory'),
   Multiaddr = require('multiaddr'),
   messageTypes = require('./factories/messageTypesFactory'),
-  hashUils = require('../utils/hashes'),
+  hashUtils = require('../utils/hashes'),
+  decodePacketUtils = require('../utils/decodePacket'),
   //NodeCache = require('node-cache'),
   NodeCache = require('ttl-mem-cache'),
   VoteActions = require('./actions/voteActions'),
@@ -68,10 +69,10 @@ class Mokka extends EventEmitter {
       const mOptions = multiaddr.toOptions();
       this.address = `${mOptions.transport}://${mOptions.host}:${mOptions.port}`;
       this.id = multiaddr.getPeerId();
-      this.publicKey = hashUils.getHexFromIpfsHash(multiaddr.getPeerId());
+      this.publicKey = hashUtils.getHexFromIpfsHash(multiaddr.getPeerId());
     } catch (e) {
       this.address = options.address;
-      this.id = hashUils.getIpfsHashFromHex(this.publicKey);
+      this.id = hashUtils.getIpfsHashFromHex(this.publicKey);
     }
 
 
@@ -103,7 +104,7 @@ class Mokka extends EventEmitter {
       mokka.emit(Object.keys(states)[state].toLowerCase());
     });
 
-    this.on('threshold', async () => {
+    /*    this.on('threshold', async () => {//todo implement
       if (this.state === states.LEADER) {
         mokka.logger.trace('restarting vote by threshold');
         this.change({state: states.FOLLOWER, leader: ''});
@@ -111,9 +112,11 @@ class Mokka extends EventEmitter {
         await Promise.delay(this.window());
         mokka.actions.node.promote();
       }
-    });
+    });*/
 
-    mokka.on('data', async (packet) => {
+    mokka.on('data', async (packet) => { //todo implement decoding and encoding for data
+
+      packet = decodePacketUtils(packet);
 
       let data = packet.type === messageTypes.ACK ?
         await this.requestProcessor.process(packet) :
@@ -188,9 +191,9 @@ class Mokka extends EventEmitter {
       return mokka;
     }
 
-    if (mokka.timers.active('heartbeat')) {
+    if (mokka.timers.active('heartbeat')) 
       mokka.timers.clear('heartbeat');
-    }
+    
 
     mokka.timers.setTimeout('heartbeat', async () => {
 
@@ -264,17 +267,6 @@ class Mokka extends EventEmitter {
     return new mokka.constructor(options);
   }
 
-
-  /**
-   * commitEntries - Commites entries in log and emits commited entries
-   *
-   * @param {Entry[]} entries Entries to commit
-   * @return {Promise<void>}
-   */
-  async commitEntries (entries) {
-    for (let entry of entries)
-      await this.log.commit(entry.index);
-  }
 }
 
 

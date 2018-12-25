@@ -5,11 +5,6 @@ const _ = require('lodash'),
 
 const append = async function (packet) {
 
-  if (packet.leader !== this.leader) {
-    this.logger.error('can\'t append logs not from leader');
-    return null;
-  }
-
   const {index, hash} = await this.log.getLastInfo();
 
   if ((packet.last.hash !== hash && packet.last.index === index) || (packet.last.hash === hash && packet.last.index !== index)) {
@@ -106,7 +101,7 @@ const append = async function (packet) {
 
     try {
       this.logger.trace(`trying to save packet ${JSON.stringify(packet.data)}`);
-      await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash, packet.data.owner); //todo replace entry owner with extract from signature
+      await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash);
       this.logger.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
       let {index: lastIndex} = await this.log.getLastInfo();
@@ -147,7 +142,8 @@ const appendAck = async function (packet) {
 
   if (this.quorum(entry.responses.length) && !entry.committed) {
     const entries = await this.log.getUncommittedEntriesUpToIndex(packet.data.index, packet.data.term);
-    await this.commitEntries(entries);
+    for (let entry of entries)
+      await this.log.commit(entry.index);
   }
 
   if (this.state !== states.LEADER)

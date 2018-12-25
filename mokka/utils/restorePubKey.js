@@ -13,5 +13,9 @@ module.exports = (message, signature) => {
   const r = _.isObject(signature) ? Buffer.from(signature.r.replace('0x', ''), 'hex') : Buffer.from(signature.replace('0x', '').substr(0, 64), 'hex');
   const s = _.isObject(signature) ? Buffer.from(signature.s.replace('0x', ''), 'hex') : Buffer.from(signature.replace('0x', '').substr(64, 64), 'hex');
 
-  return EthUtil.ecrecover(messageBuffer, v, r, s).toString('hex');
+  try {
+    return EthUtil.ecrecover(messageBuffer, v, r, s).toString('hex');
+  } catch (e) {
+    return null;
+  }
 };

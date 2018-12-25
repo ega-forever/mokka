@@ -30,11 +30,11 @@ class ProofValidation {
       const item = _.chain(extracted.items).sortBy('secret').last().value();
       const restoredPublicKey = restorePubKey(item.secret, _.pick(item, ['r', 's', 'v']));
 
-      if (entry.owner !== restoredPublicKey) {
-        const owner = restorePubKey(entry.command, entry.signature);
+      const entryOwnerRestoredPublicKey = restorePubKey(entry.command, entry.signature);
 
+      if (entryOwnerRestoredPublicKey !== restoredPublicKey) {//todo replace entry owner with signature
         this.mokka.logger.trace(item);
-        this.mokka.logger.trace(`wrong proof sig entry owner - ${entry.owner}, restored from share - ${restoredPublicKey}, restored from record ${owner}`);
+        this.mokka.logger.trace(`wrong proof sig entry owner - ${entryOwnerRestoredPublicKey}, restored from share - ${restoredPublicKey}`);
         return false;
       }
     }
