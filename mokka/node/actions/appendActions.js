@@ -1,5 +1,6 @@
 const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
+  eventTypes = require('../factories/eventTypesFactory'),
   crypto = require('crypto'),
   states = require('../factories/stateFactory');
 
@@ -142,8 +143,10 @@ const appendAck = async function (packet) {
 
   if (this.quorum(entry.responses.length) && !entry.committed) {
     const entries = await this.log.getUncommittedEntriesUpToIndex(packet.data.index, packet.data.term);
-    for (let entry of entries)
+    for (let entry of entries) {
       await this.log.commit(entry.index);
+      this.emit(eventTypes.ENTRY_COMMITTED, entry.index);
+    }
   }
 
   if (this.state !== states.LEADER)

@@ -4,24 +4,9 @@ const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory');
 
 
-const _timing = function (latency = []) {
-
-  if (states.STOPPED === this.state)
-    return false;
-
-  this.latency = Math.floor(_.sum(latency) / latency.length);
-
-  if (this.latency > this.election.min * this.threshold)
-    this.emit('threshold');
-
-
-  return true;
-};
-
 const message = async function (who, what) {
 
-  let latency = [],
-    mokka = this,
+  let mokka = this,
     nodes = [];
 
   switch (who) {

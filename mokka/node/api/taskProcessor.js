@@ -1,14 +1,16 @@
 const Promise = require('bluebird'),
   semaphore = require('semaphore'),
   states = require('../factories/stateFactory'),
-  eventTypes = require('../factories/eventFactory'),
   Web3 = require('web3'),
   web3 = new Web3(),
-  _ = require('lodash');
+  _ = require('lodash'),
+  eventTypes = require('../factories/eventTypesFactory'),
+  eventEmitter = require('events');
 
-class TaskProcessor {
+class TaskProcessor extends eventEmitter {
 
   constructor (mokka) {
+    super();
     this.semPending = semaphore(1);
     this.sem = semaphore(1);
     this.mokka = mokka;
@@ -34,7 +36,8 @@ class TaskProcessor {
 
 
       if (!this.sem.available()) {
-        await Promise.delay(this.mokka.timeout());
+        //await Promise.delay(this.mokka.timeout()); //todo replace
+        await new Promise(res=> this.once(eventTypes.QUEUE_AVAILABLE, res));
         continue;
       }
 
@@ -49,7 +52,8 @@ class TaskProcessor {
         const minConfirmations = Math.floor(followers.length / 2) + 1;
 
         if (lastEntry.responses.length - 1 < minConfirmations) {
-          await Promise.delay(this.mokka.timeout());
+          //await Promise.delay(this.mokka.timeout()); //todo replace
+          await new Promise(res=> this.mokka.once(eventTypes.ENTRY_COMMITTED, res));
           continue;
         }
       }
@@ -82,6 +86,7 @@ class TaskProcessor {
 
         if (!checkPending) {
           this.sem.leave();
+          this.emit(eventTypes.QUEUE_AVAILABLE);
           return res();
         }
 
@@ -90,6 +95,7 @@ class TaskProcessor {
         this.mokka.logger.trace(`task has been broadcasted ${task}`);
 
         this.sem.leave();
+        this.emit(eventTypes.QUEUE_AVAILABLE);
         res(entry);
       })
     );

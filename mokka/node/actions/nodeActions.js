@@ -79,7 +79,7 @@ const end = function () {
   return true;
 };
 
-const promote = async function (priority = 1) {
+const promote = async function () {
 
   return await new Promise(res => {
 
