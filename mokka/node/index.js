@@ -82,11 +82,16 @@ class Mokka extends EventEmitter {
     this.leadershipStarted = null;                  //leader start time
     this.requestProcessor = new RequestProcessor(this);
 
+    this.lastInfo = null;
+
     this._initialize(options);
   }
 
-  _initialize (options) {
+  async _initialize (options) {
     let mokka = this;
+
+    //todo add listener for info change
+
 
     mokka.on('term change', function change () {
       mokka.logger.trace('clear vote by term change');
@@ -103,16 +108,6 @@ class Mokka extends EventEmitter {
       mokka.heartbeat(mokka.beat);
       mokka.emit(Object.keys(states)[state].toLowerCase());
     });
-
-    /*    this.on('threshold', async () => {//todo implement
-      if (this.state === states.LEADER) {
-        mokka.logger.trace('restarting vote by threshold');
-        this.change({state: states.FOLLOWER, leader: ''});
-        this.timers.clear('heartbeat');
-        await Promise.delay(this.window());
-        mokka.actions.node.promote();
-      }
-    });*/
 
     mokka.on('data', async (packet) => { //todo implement decoding and encoding for data
 
@@ -151,6 +146,11 @@ class Mokka extends EventEmitter {
     if (_.isFunction(mokka.Log))
       mokka.log = new mokka.Log(mokka, options.log_options);
 
+    mokka.lastInfo = await this.log.getLastInfo();
+
+    mokka.log.on(mokka.log.eventTypes.LOGS_UPDATED, async ()=>{
+      mokka.lastInfo = await this.log.getLastInfo();
+    });
 
     mokka.processor.runLoop();
 
@@ -191,9 +191,9 @@ class Mokka extends EventEmitter {
       return mokka;
     }
 
-    if (mokka.timers.active('heartbeat')) 
+    if (mokka.timers.active('heartbeat'))
       mokka.timers.clear('heartbeat');
-    
+
 
     mokka.timers.setTimeout('heartbeat', async () => {
 
@@ -214,7 +214,6 @@ class Mokka extends EventEmitter {
       let packet = await mokka.actions.message.packet(messageTypes.ACK);
 
       mokka.logger.trace('send append request by timeout');
-      mokka.emit(messageTypes.ACK, packet);
       await mokka.actions.message.message(states.FOLLOWER, packet);
       mokka.heartbeat(mokka.beat);
     }, duration);

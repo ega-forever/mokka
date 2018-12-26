@@ -6,9 +6,7 @@ const _ = require('lodash'),
 
 const append = async function (packet) {
 
-  const {index, hash} = await this.log.getLastInfo();
-
-  if ((packet.last.hash !== hash && packet.last.index === index) || (packet.last.hash === hash && packet.last.index !== index)) {
+  if ((packet.last.hash !== this.lastInfo.hash && packet.last.index === this.lastInfo.index) || (packet.last.hash === this.lastInfo.hash && packet.last.index !== this.lastInfo.index)) {
 
     this.logger.error('found another history root!');
 
@@ -17,7 +15,7 @@ const append = async function (packet) {
     let prevTerm = await this.log.getLastEntryByTerm(term);
 
 
-    for (let logIndex = prevTerm.index + 1; logIndex <= index; logIndex++) {
+    for (let logIndex = prevTerm.index + 1; logIndex <= this.lastInfo.index; logIndex++) {
       let entry = await this.log.get(logIndex);
 
       if (entry.owner !== this.publicKey) {
@@ -31,7 +29,7 @@ const append = async function (packet) {
     }
 
 
-    this.logger.trace(`should drop ${index - prevTerm.index}, with current index ${index}, current term: ${term} and leader term ${packet.term}`);
+    this.logger.trace(`should drop ${this.lastInfo.index - prevTerm.index}, with current index ${this.lastInfo.index}, current term: ${term} and leader term ${packet.term}`);
     await this.log.removeEntriesAfter(prevTerm.index); //this clean up term
     this.term--; // todo check
     return null;
@@ -42,11 +40,11 @@ const append = async function (packet) {
 
   if (packet.data) {
 
-    if (packet.data.index > index + 1)
+    if (packet.data.index > this.lastInfo.index + 1)
       return null;
 
 
-    if (index === packet.data.index) {
+    if (this.lastInfo.index === packet.data.index) {
 
       let record = await this.log.get(packet.data.index);
 
@@ -65,11 +63,11 @@ const append = async function (packet) {
     }
 
 
-    if (index >= packet.data.index) {
+    if (this.lastInfo.index >= packet.data.index) {
 
-      this.logger.trace(`the leader has another history. Rewrite mine ${index} -> ${packet.data.index - 1}`);
+      this.logger.trace(`the leader has another history. Rewrite mine ${this.lastInfo.index} -> ${packet.data.index - 1}`);
 
-      for (let logIndex = packet.data.index; logIndex <= index; logIndex++) {
+      for (let logIndex = packet.data.index; logIndex <= this.lastInfo.index; logIndex++) {
         let entry = await this.log.get(logIndex);
 
         if (entry.owner !== this.publicKey) {
@@ -105,13 +103,12 @@ const append = async function (packet) {
       await this.log.saveCommand(packet.data.command, packet.data.term, packet.data.signature, packet.data.index, packet.data.hash);
       this.logger.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
-      let {index: lastIndex} = await this.log.getLastInfo();
       this.logger.error(`error during save log: ${JSON.stringify(err)}`);
 
       if (err.code === 2 || err.code === 3)
         return;
 
-      reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastIndex});
+      reply = await this.actions.message.packet(messageTypes.APPEND_FAIL, {index: this.lastInfo.index});
 
       return {
         reply: reply,
@@ -175,9 +172,7 @@ const obtain = async function (packet) {
 
 const appendFail = async function (packet) {
 
-  let {index} = await this.log.getLastInfo();
-
-  if (packet.data.index > index) {
+  if (packet.data.index > this.lastInfo.index) {
     let reply = await this.actions.message.packet(messageTypes.ERROR, 'wrong index!');
     return {
       reply: reply,

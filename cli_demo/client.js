@@ -69,7 +69,7 @@ const initMokka = async () => {
     address: `/ip4/127.0.0.1/tcp/${startPort + index}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
     electionMin: 300,
     electionMax: 1000,
-    heartbeat: 200,
+    heartbeat: 50,
     Log: Log,
     log_options: {
       adapter: require('leveldown'),

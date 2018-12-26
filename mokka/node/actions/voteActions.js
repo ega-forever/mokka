@@ -17,7 +17,6 @@ const vote = async function (packet) {
   if (blackListed && (blackListed.term < packet.term || blackListed.hash !== packet.last.hash))
     this.cache.del(`blacklist.${packet.publicKey}`);
 
-  const {index, hash, createdAt} = await this.log.getLastInfo();
   const currentTerm = this.state === states.CANDIDATE ? this.term - 1 : this.term;
 
   if (!packet.data.share) {
@@ -55,7 +54,7 @@ const vote = async function (packet) {
   }
 
 
-  if (packet.last.index !== 0 && Date.now() - createdAt < this.beat) {
+  if (packet.last.index !== 0 && Date.now() - this.lastInfo.createdAt < this.beat) {
     this.emit(messageTypes.VOTE, packet, false);
 
     this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
@@ -72,7 +71,7 @@ const vote = async function (packet) {
     };
   }
 
-  if (packet.last.index !== 0 && Date.now() - createdAt < this.election.max) {
+  if (packet.last.index !== 0 && Date.now() - this.lastInfo.createdAt < this.election.max) {
     this.emit(messageTypes.VOTE, packet, false);
 
     this.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
@@ -104,7 +103,7 @@ const vote = async function (packet) {
     };
   }
 
-  if (index > packet.last.index) {
+  if (this.lastInfo.index > packet.last.index) {
     let log = await this.log.get(packet.last.index);
 
     if (log && log.hash === packet.last.hash) {
@@ -127,7 +126,7 @@ const vote = async function (packet) {
   }
 
 
-  if (index === packet.last.index && hash !== packet.last.hash) {
+  if (this.lastInfo.index === packet.last.index && this.lastInfo.hash !== packet.last.hash) {
 
     this.emit(messageTypes.VOTE, packet, false);
 
@@ -174,7 +173,7 @@ const vote = async function (packet) {
   if (blackListed)
     this.cache.del(`blacklist.${packet.publicKey}`);
 
-  if (packet.last.index > index) {
+  if (packet.last.index > this.lastInfo.index) {
     this.emit(messageTypes.VOTE, packet, true);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: true,
@@ -186,7 +185,7 @@ const vote = async function (packet) {
     };
   }
 
-  if (packet.last.index === index && packet.last.hash !== hash) {
+  if (packet.last.index === this.lastInfo.index && packet.last.hash !== this.lastInfo.hash) {
     this.emit(messageTypes.VOTE, packet, true);
     let reply = await this.actions.message.packet(messageTypes.VOTED, {
       granted: true,

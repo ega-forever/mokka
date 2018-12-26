@@ -108,11 +108,9 @@ const promote = async function () {
         return res();
       }
 
-      let {term: currentTerm} = await this.log.getLastInfo();
-
       this.change({
         state: states.CANDIDATE,
-        term: currentTerm + 1,
+        term: this.lastInfo.term + 1,
         leader: ''
       });
 

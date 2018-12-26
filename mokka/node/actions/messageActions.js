@@ -53,7 +53,7 @@ const packet = async function (type, data) {
   };
 
 
-  wrapped.last = await this.log.getLastInfo();
+  wrapped.last = this.lastInfo;
 
   if (data)
     wrapped.data = data;
@@ -78,7 +78,7 @@ const appendPacket = async function (entry) {
     payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash']);
     payload.last = await this.log.getEntryInfoBefore(entry);
   }else 
-    payload.last = await this.log.getLastInfo();
+    payload.last = this.lastInfo;
   
 
   return payload;

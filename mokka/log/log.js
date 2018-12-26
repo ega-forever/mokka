@@ -4,12 +4,14 @@ const encode = require('encoding-down'),
   crypto = require('crypto'),
   MerkleTools = require('merkle-tools'),
   levelup = require('levelup'),
+  EventEmitter = require('events'),
   restorePubKey = require('../utils/restorePubKey');
 
 
-class Log {
+class Log extends EventEmitter {
 
   constructor (node, options = {}) {
+    super();
 
     let _options = _.cloneDeep(options);
 
@@ -22,7 +24,14 @@ class Log {
       pending: 3
     };
 
+    this.eventTypes = {
+      LOGS_UPDATED: 'logs_updated'
+    };
+
     this.node = node;
+
+
+
     this.db = levelup(encode(_options.adapter(`${options.path}_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
   }
 
@@ -132,9 +141,10 @@ class Log {
       await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(entry.term)}`, proof);
     }
 
-    return await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
+    let result = await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
+    this.emit(this.eventTypes.LOGS_UPDATED);
+    return result;
   }
-
 
   async putPending (command) {
 
@@ -296,6 +306,7 @@ class Log {
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
     this.node.term = lastIndex === 0 ? 0 : lastTerm;
 
+    this.emit(this.eventTypes.LOGS_UPDATED);
   }
 
   /**
@@ -452,44 +463,6 @@ class Log {
 
     return entry;
   }
-
-
-  /* getLastAcked () {
-     const defaultInfo = {
-       index: 0,
-       term: this.node.term,
-       hash: _.fill(new Array(32), 0).join('')
-     };
-     // We know it is the first entry, so save the query time
-
-     return new Promise((resolve, reject) => {
-       let hasResolved = false;
-
-       this.db.createReadStream({
-         reverse: true,
-         limit: this.node.nodes.length,
-         lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`,
-         gt: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
-       })
-         .on('data', (data) => {
-
-           if (hasResolved || data.value.responses.length >= this.node.majority())
-             return;
-
-           hasResolved = true;
-           resolve(data.value);
-         })
-         .on('error', (err) => {
-           hasResolved = true;
-           reject(err);
-         })
-         .on('end', () => {
-           if (!hasResolved)
-             resolve(defaultInfo);
-
-         });
-     });
-   }*/
 
 
   /**

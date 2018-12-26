@@ -93,11 +93,7 @@ class RequestProcessor {
     this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
 
 
-    let {index} = await this.mokka.log.getLastInfo();
-
-    //let validateLogSent = this.mokka.cache.get(`requests.${packet.publicKey}.${packet.last.index + 1}`);
-    //if (!validateLogSent && this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > index && packet.last.createdAt < Date.now() - this.mokka.beat) {
-    if (this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > index && packet.last.createdAt < Date.now() - this.mokka.beat) {
+    if (this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > this.mokka.lastInfo.index && packet.last.createdAt < Date.now() - this.mokka.beat) {
 
       let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
       reply = {

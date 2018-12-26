@@ -36,7 +36,6 @@ class TaskProcessor extends eventEmitter {
 
 
       if (!this.sem.available()) {
-        //await Promise.delay(this.mokka.timeout()); //todo replace
         await new Promise(res=> this.once(eventTypes.QUEUE_AVAILABLE, res));
         continue;
       }
@@ -52,7 +51,6 @@ class TaskProcessor extends eventEmitter {
         const minConfirmations = Math.floor(followers.length / 2) + 1;
 
         if (lastEntry.responses.length - 1 < minConfirmations) {
-          //await Promise.delay(this.mokka.timeout()); //todo replace
           await new Promise(res=> this.mokka.once(eventTypes.ENTRY_COMMITTED, res));
           continue;
         }
@@ -124,7 +122,7 @@ class TaskProcessor extends eventEmitter {
     if (this.mokka.state !== states.LEADER) {
       this.mokka.logger.trace('trying to propose task again');
       let timeout = this.mokka.timeout();
-      const {createdAt} = await this.mokka.log.getLastInfo();
+      const {createdAt} = this.mokka.lastInfo;
       const delta = Date.now() - createdAt;
 
       if (delta < this.mokka.election.max)
