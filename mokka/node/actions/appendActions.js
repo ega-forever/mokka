@@ -170,6 +170,24 @@ const obtain = async function (packet) {
   };
 };
 
+const proposed = async function (packet) {//todo add signature check
+
+  let entry = await this.log.putPending(packet.data);
+
+  const reply = await this.actions.message.packet(messageTypes.APPEND_PENDING, entry.hash);
+
+  return {
+    who: packet.publicKey,
+    reply: reply
+  };
+};
+
+
+const appendAckPending = async function (packet) {//todo add signature check
+  await this.log.ackPending(packet.data);
+  this.emit(eventTypes.PENDING_COMMITTED, packet.data);
+};
+
 const appendFail = async function (packet) {
 
   if (packet.data.index > this.lastInfo.index) {
@@ -195,7 +213,9 @@ module.exports = (instance) => {
     append: append.bind(instance),
     appendAck: appendAck.bind(instance),
     appendFail: appendFail.bind(instance),
-    obtain: obtain.bind(instance)
+    obtain: obtain.bind(instance),
+    proposed: proposed.bind(instance),
+    appendAckPending: appendAckPending.bind(instance)
   });
 
 };

@@ -1,6 +1,7 @@
 const Promise = require('bluebird'),
   semaphore = require('semaphore'),
   states = require('../factories/stateFactory'),
+  messageTypes = require('../factories/messageTypesFactory'),
   Web3 = require('web3'),
   web3 = new Web3(),
   _ = require('lodash'),
@@ -26,23 +27,25 @@ class TaskProcessor extends eventEmitter {
         res();
       })
     );
-
-
   }
 
+  async claimLeadership () {
+    if (this.mokka.state !== states.LEADER)
+      await this._lock();
+  }
 
-  async runLoop () { //loop for checking new packets
+  async _runLoop () { //loop for checking new packets
     while (this.run) {
 
 
       if (!this.sem.available()) {
-        await new Promise(res=> this.once(eventTypes.QUEUE_AVAILABLE, res));
+        await new Promise(res => this.once(eventTypes.QUEUE_AVAILABLE, res));
         continue;
       }
 
       let lastEntry = await this.mokka.log.getLastEntry();
 
-      if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {
+      if (this.mokka.state === states.LEADER && lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {//check for leader only
 
         let followers = _.chain(this.mokka.nodes)
           .reject(node => _.find(lastEntry.responses, {publicKey: node.publicKey}))
@@ -51,7 +54,7 @@ class TaskProcessor extends eventEmitter {
         const minConfirmations = Math.floor(followers.length / 2) + 1;
 
         if (lastEntry.responses.length - 1 < minConfirmations) {
-          await new Promise(res=> this.mokka.once(eventTypes.ENTRY_COMMITTED, res));
+          await new Promise(res => this.mokka.once(eventTypes.ENTRY_COMMITTED, res));
           continue;
         }
       }
@@ -65,8 +68,6 @@ class TaskProcessor extends eventEmitter {
 
 
       await this._commit(pending.command, pending.hash);
-      this.mokka.logger.trace(`pulling pending task ${pending.command} with hash ${pending.hash}`);
-      await this.mokka.log.pullPending(pending.hash);
     }
 
 
@@ -77,9 +78,6 @@ class TaskProcessor extends eventEmitter {
     return await new Promise(res =>
       this.sem.take(async () => {
 
-        if (this.mokka.state !== states.LEADER)
-          await this._lock();
-
         let checkPending = await this.mokka.log.getPending(hash);
 
         if (!checkPending) {
@@ -88,13 +86,22 @@ class TaskProcessor extends eventEmitter {
           return res();
         }
 
-        let entry = await this._save(task);
-        await this._broadcast(entry.index, entry.hash);
-        this.mokka.logger.trace(`task has been broadcasted ${task}`);
+        if (this.mokka.state === states.LEADER) {
+          let entry = await this._save(task);
+          await this._broadcast(entry.index, entry.hash);
+          this.mokka.logger.trace(`task has been broadcasted ${task}`);
+          this.mokka.logger.trace(`pulling pending task ${task} with hash ${hash}`);//todo think about pull
+          await this.mokka.log.pullPending(hash);
+        } else {
+          await this._broadcastPending(task, hash);
+
+          await this.mokka.log.pullPending(hash);//todo pull task when leader received it (may be make ack_pending?)
+        }
+
 
         this.sem.leave();
         this.emit(eventTypes.QUEUE_AVAILABLE);
-        res(entry);
+        res();
       })
     );
   }
@@ -168,6 +175,36 @@ class TaskProcessor extends eventEmitter {
     await this.mokka.actions.message.message(pubKeys, appendPacket);
 
   }
+
+  async _broadcastPending (task, hash) {
+
+    if (!this.mokka.leader) {
+      await new Promise(res => this.mokka.once(eventTypes.LEADER, res));
+      return await this._broadcastPending(task, hash);
+    }
+
+    let entry = await this.mokka.log.getPending(hash);
+
+    if (!entry || entry.received)
+      return;
+
+
+    const proposePacket = await this.mokka.actions.message.packet(messageTypes.PROPOSE, task);//todo add validation by signature
+    await this.mokka.actions.message.message(states.LEADER, proposePacket);
+
+    //todo make event about received append_pending task
+    return await new Promise(res =>
+      this.mokka.once(eventTypes.PENDING_COMMITTED, (hash) => {
+          if (hash === entry.hash)
+            res();
+        }
+      ))
+      .timeout(this.mokka.timeout())
+      .catch(async () => await this._broadcastPending(task, hash));
+
+
+  }
+
 
 }
 

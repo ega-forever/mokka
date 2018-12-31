@@ -31,7 +31,6 @@ class Log extends EventEmitter {
     this.node = node;
 
 
-
     this.db = levelup(encode(_options.adapter(`${options.path}_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
   }
 
@@ -149,7 +148,7 @@ class Log extends EventEmitter {
   async putPending (command) {
 
 
-    let record = {command};
+    let record = {command, received: this.node.leader === this.node.publicKey};
 
     const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
@@ -157,8 +156,22 @@ class Log extends EventEmitter {
 
     return {
       command: command,
-      hash: hash
+      hash: hash,
+      received: record.received
     };
+  }
+
+  async ackPending (hash) {
+
+    let entry = await this.db.get(`${this.prefixes.pending}:${hash}`);
+
+    if(!entry)
+      return;
+
+    entry.received = true;
+    await this.db.put(`${this.prefixes.pending}:${hash}`, entry);
+
+    return entry;
   }
 
   async pullPending (hash) {

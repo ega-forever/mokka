@@ -4,5 +4,6 @@ module.exports = {
   LEADER: 'leader',
   VOTE_ERROR: 'vote_error',
   ENTRY_COMMITTED: 'entry_committed',
+  PENDING_COMMITTED: 'pending_committed',
   QUEUE_AVAILABLE: 'queue_available'
 };

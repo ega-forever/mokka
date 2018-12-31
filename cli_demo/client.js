@@ -116,6 +116,9 @@ const askCommand = (rl, mokka) => {
       await generateTxsAsSingle(mokka, amount);
     }
 
+    if(command.indexOf('take_ownership') === 0)
+      await takeOwnership(mokka);
+
 
     askCommand(rl, mokka);
   });
@@ -139,6 +142,11 @@ const generateTxs = async (mokka, amount) => {
 };
 
 
+const takeOwnership = async (mokka) => {
+    await mokka.processor.claimLeadership();
+};
+
+
 const generateTxsAsSingle = async (mokka, amount) => {
 
   let txs = [];
@@ -156,9 +164,7 @@ const generateTxsAsSingle = async (mokka, amount) => {
 
   }
 
-  console.log('size', Buffer.from(JSON.stringify(txs)).length);
   await mokka.processor.push(txs);
-
 
 };
 

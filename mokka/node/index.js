@@ -152,7 +152,7 @@ class Mokka extends EventEmitter {
       mokka.lastInfo = await this.log.getLastInfo();
     });
 
-    mokka.processor.runLoop();
+    mokka.processor._runLoop();
 
     function initialize (err) {
       if (err) return mokka.emit(messageTypes.ERROR, err);

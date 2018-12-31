@@ -34,6 +34,7 @@
     "tick-tock": "^1.0.0",
     "ttl-mem-cache": "^4.0.2",
     "uniqid": "^5.0.3",
+    "vectorclock": "0.0.0",
     "web3": "^1.0.0-beta.36"
   },
   "devDependencies": {
