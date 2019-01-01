@@ -1,5 +1,5 @@
 const EventEmitter = require('events'),
-  Tick = require('tick-tock'),
+  TimerController = require('./controllers/timerController'),
   Promise = require('bluebird'),
   _ = require('lodash'),
   Wallet = require('ethereumjs-wallet'),
@@ -8,7 +8,6 @@ const EventEmitter = require('events'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUtils = require('../utils/hashes'),
   decodePacketUtils = require('../utils/decodePacket'),
-  //NodeCache = require('node-cache'),
   NodeCache = require('ttl-mem-cache'),
   VoteActions = require('./actions/voteActions'),
   NodeActions = require('./actions/nodeActions'),
@@ -16,6 +15,7 @@ const EventEmitter = require('events'),
   AppendActions = require('./actions/appendActions'),
   MessageActions = require('./actions/messageActions'),
   RequestProcessor = require('./services/requestProcessorService'),
+  GossipRequestProcessor = require('./services/gossipRequestProcessorService'),
   bunyan = require('bunyan'),
   TaskProcessor = require('./api/taskProcessor');
 
@@ -47,8 +47,10 @@ class Mokka extends EventEmitter {
     };
 
     this.threshold = options.threshold || 0.8;
-    this.timers = new Tick(this);
+   // this.timers = new Tick(this); //todo move to timecontroller
     this.Log = options.Log;
+
+    this.time = new TimerController(this);
 
     this.logger = bunyan.createLogger({name: 'mokka.logger', level: options.logLevel || 3});
 
@@ -79,8 +81,8 @@ class Mokka extends EventEmitter {
     this.state = options.state || states.FOLLOWER;    // Our current state.
     this.leader = '';                               // Leader in our cluster.
     this.term = 0;                                  // Our current term.
-    this.leadershipStarted = null;                  //leader start time
     this.requestProcessor = new RequestProcessor(this);
+    this.gossipRequestProcessor = new GossipRequestProcessor(this);
 
     this.lastInfo = null;
 
@@ -105,7 +107,7 @@ class Mokka extends EventEmitter {
     mokka.on('state change', function change (state) {
       mokka.logger.trace(`state changed: ${_.invert(states)[state]}`);
       mokka.logger.info(`state changed: ${_.invert(states)[state]}`); //todo remove
-      mokka.heartbeat(mokka.beat);
+      mokka.time.heartbeat(mokka.beat);
       mokka.emit(Object.keys(states)[state].toLowerCase());
     });
 
@@ -158,7 +160,7 @@ class Mokka extends EventEmitter {
       if (err) return mokka.emit(messageTypes.ERROR, err);
 
       mokka.emit('initialize');
-      mokka.heartbeat(_.random(0, mokka.election.max));
+      mokka.time.heartbeat(_.random(0, mokka.election.max));
     }
 
     if (_.isFunction(mokka.initialize)) {
@@ -179,91 +181,6 @@ class Mokka extends EventEmitter {
 
   majority () {
     return Math.ceil(this.nodes.length / 2) + 1;
-  }
-
-  heartbeat (duration) {
-    let mokka = this;
-
-    duration = duration || mokka.beat;
-
-    if (mokka.timers.active('heartbeat') && mokka.state !== states.LEADER) {
-      mokka.timers.adjust('heartbeat', duration);
-      return mokka;
-    }
-
-    if (mokka.timers.active('heartbeat'))
-      mokka.timers.clear('heartbeat');
-
-
-    mokka.timers.setTimeout('heartbeat', async () => {
-
-      if (states.LEADER !== mokka.state) {
-        //if pendings - the miss
-        let pending = await mokka.log.getFirstPending();
-
-        if (pending.hash)
-          return;
-
-        mokka.emit('heartbeat timeout');
-
-        mokka.logger.trace('promoting by timeout');
-        return mokka.actions.node.promote();
-      }
-
-
-      let packet = await mokka.actions.message.packet(messageTypes.ACK);
-
-      mokka.logger.trace('send append request by timeout');
-      await mokka.actions.message.message(states.FOLLOWER, packet);
-      mokka.heartbeat(mokka.beat);
-    }, duration);
-
-    return mokka;
-  }
-
-  /**
-   * Generate the various of timeouts.
-   *
-   * @returns {Number}
-   * @private
-   */
-  timeout () {
-    //return _.random(this.beat, parseInt(this.beat * 1.5)); //todo use latency
-    return _.random(this.beat, parseInt(this.beat * 1.5)) + 200;
-  }
-
-  window () {
-    return Math.floor(Math.random() * (this.election.max - this.election.min + 1) + this.election.min);
-  }
-
-  /**
-   * Create a clone of the current instance with the same configuration. Ideally
-   * for creating connected nodes in a cluster.. And let that be something we're
-   * planning on doing.
-   *
-   * @param {Object} options Configuration that should override the default config.
-   * @returns {mokka} The newly created instance.
-   * @public
-   */
-  clone (options) { //todo replace with lodash
-    options = options || {};
-
-    let mokka = this,
-      node = {
-        Log: mokka.Log,
-        electionMax: mokka.election.max,
-        electionMin: mokka.election.min,
-        heartbeat: mokka.beat,
-        threshold: mokka.threshold
-      }, key;
-
-    for (key in node) {
-      if (key in options || !node.hasOwnProperty(key)) continue;
-
-      options[key] = node[key];
-    }
-
-    return new mokka.constructor(options);
   }
 
 }

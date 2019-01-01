@@ -199,7 +199,7 @@ const vote = async function (packet) {
 
 
   this.emit(messageTypes.VOTE, packet, true);
-  this.heartbeat(this.timeout());
+  this.time.heartbeat(this.time.timeout());
   let reply = await this.actions.message.packet(messageTypes.VOTED, {
     granted: true,
     signature: signature
@@ -287,8 +287,8 @@ const voted = async function (packet) {
     if (this.state === states.CANDIDATE) {
 
       this.change({term: this.term - 1, state: states.FOLLOWER});
-      if (this.timers.active('term_change'))
-        this.timers.clear('term_change');
+      if (this.time.timers.active('term_change'))
+        this.time.timers.clear('term_change');
 
 
       this.logger.trace('clean up passed voting');

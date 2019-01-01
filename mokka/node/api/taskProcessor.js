@@ -62,7 +62,7 @@ class TaskProcessor extends eventEmitter {
 
       let pending = await this.mokka.log.getFirstPending();
       if (!pending.hash) {
-        await Promise.delay(this.mokka.timeout()); //todo delay for next tick or event on new push
+        await Promise.delay(this.mokka.time.timeout()); //todo delay for next tick or event on new push
         continue;
       }
 
@@ -111,7 +111,7 @@ class TaskProcessor extends eventEmitter {
     const {index, createdAt} = await this.mokka.log.getLastEntry();
 
     if (Date.now() - createdAt < this.mokka.election.max && index !== 0) {
-      this.mokka.heartbeat(this.mokka.election.max);
+      this.mokka.time.heartbeat(this.mokka.election.max);
       await Promise.delay(this.mokka.election.max - (Date.now() - createdAt));
       this.mokka.logger.trace('going to await for the current leader');
       return await this._lock();
@@ -119,23 +119,23 @@ class TaskProcessor extends eventEmitter {
 
 
     this.mokka.logger.trace('promoting by propose');
-    this.mokka.timers.clear('heartbeat');
+    this.mokka.time.timers.clear('heartbeat');
     await this.mokka.actions.node.promote(2);
 
-    this.mokka.heartbeat(this.mokka.timeout() + this.mokka.election.max);
+    this.mokka.time.heartbeat(this.mokka.time.timeout() + this.mokka.election.max);
 
     await Promise.delay(this.mokka.election.max);
 
     if (this.mokka.state !== states.LEADER) {
       this.mokka.logger.trace('trying to propose task again');
-      let timeout = this.mokka.timeout();
+      let timeout = this.mokka.time.timeout();
       const {createdAt} = this.mokka.lastInfo;
       const delta = Date.now() - createdAt;
 
       if (delta < this.mokka.election.max)
         timeout += delta;
 
-      this.mokka.heartbeat(timeout);
+      this.mokka.time.heartbeat(timeout);
       await Promise.delay(timeout);
       return await this._lock();
     }
@@ -199,7 +199,7 @@ class TaskProcessor extends eventEmitter {
             res();
         }
       ))
-      .timeout(this.mokka.timeout())
+      .timeout(this.mokka.time.timeout())
       .catch(async () => await this._broadcastPending(task, hash));
 
 

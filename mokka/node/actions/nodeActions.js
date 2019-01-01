@@ -6,6 +6,7 @@ const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
   Web3 = require('web3'),
   web3 = new Web3(),
+  cloneNode = require('../../utils/cloneNode'),
   sem = require('semaphore')(1),
   states = require('../factories/stateFactory');
 
@@ -19,12 +20,12 @@ const join = function (multiaddr, write) {
 
   const mOptions = m.toOptions();
 
-  let node = this.clone({
+  let node = cloneNode({
     write: write,
     publicKey: publicKey,
     address: `${mOptions.transport}://${mOptions.host}:${mOptions.port}`,
     state: states.CHILD
-  });
+  }, this);
 
   node.once('end', () => this.leave(node));
 
@@ -71,11 +72,11 @@ const end = function () {
 
 
   this.emit('end');
-  this.timers.end();
+  this.time.timers.end();
   this.removeAllListeners();
   this.log.end();
 
-  this.timers = this.Log = this.beat = this.election = null;
+  this.time.timers = this.Log = this.beat = this.election = null;
   return true;
 };
 
@@ -159,10 +160,10 @@ const promote = async function () {
       });
 
 
-      if (this.timers.active('term_change'))
-        this.timers.clear('term_change');
+      if (this.time.timers.active('term_change')) //todo move to timerController
+        this.time.timers.clear('term_change');
 
-      this.timers.setTimeout('term_change', async () => {
+      this.time.timers.setTimeout('term_change', async () => {
         this.logger.trace('clean up passed voting');
         this.votes.for = null;
         this.votes.granted = 0;

@@ -27,7 +27,7 @@ class RequestProcessor {
       };
     }
 
-    this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
+    this.mokka.time.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.time.timeout());
 
     if (packet.type === messageTypes.APPEND) {
 
@@ -99,7 +99,7 @@ class RequestProcessor {
       };
     }
 
-    this.mokka.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.timeout());
+    this.mokka.time.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.time.timeout());
 
 
     if (this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > this.mokka.lastInfo.index && packet.last.createdAt < Date.now() - this.mokka.beat) {
