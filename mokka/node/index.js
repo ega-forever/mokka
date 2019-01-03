@@ -1,19 +1,19 @@
 const EventEmitter = require('events'),
   TimerController = require('./controllers/timerController'),
-  Promise = require('bluebird'),
+  GossipController = require('./controllers/gossipController'),
   _ = require('lodash'),
   Wallet = require('ethereumjs-wallet'),
   states = require('./factories/stateFactory'),
   Multiaddr = require('multiaddr'),
+  decodePacketUtils = require('../utils/decodePacket'),
   messageTypes = require('./factories/messageTypesFactory'),
   hashUtils = require('../utils/hashes'),
-  decodePacketUtils = require('../utils/decodePacket'),
   NodeCache = require('ttl-mem-cache'),
   VoteActions = require('./actions/voteActions'),
   NodeActions = require('./actions/nodeActions'),
-  semaphore = require('semaphore')(1),
   AppendActions = require('./actions/appendActions'),
   MessageActions = require('./actions/messageActions'),
+  GossipActions = require('./actions/gossipActions'),
   RequestProcessor = require('./services/requestProcessorService'),
   GossipRequestProcessor = require('./services/gossipRequestProcessorService'),
   bunyan = require('bunyan'),
@@ -25,10 +25,13 @@ class Mokka extends EventEmitter {
   constructor (options = {}) {
     super();
 
-    AppendActions(this);
-    VoteActions(this);
-    NodeActions(this);
-    MessageActions(this);
+    this.actions = {
+      append: new AppendActions(this),
+      vote: new VoteActions(this),
+      node: new NodeActions(this),
+      message: new MessageActions(this),
+      gossip: new GossipActions(this)
+    };
 
     this.election = {
       min: options.electionMin || 150,
@@ -51,6 +54,7 @@ class Mokka extends EventEmitter {
     this.Log = options.Log;
 
     this.time = new TimerController(this);
+    this.gossip = new GossipController(this);
 
     this.logger = bunyan.createLogger({name: 'mokka.logger', level: options.logLevel || 3});
 
@@ -111,33 +115,15 @@ class Mokka extends EventEmitter {
       mokka.emit(Object.keys(states)[state].toLowerCase());
     });
 
-    mokka.on('data', async (packet) => { //todo implement decoding and encoding for data
+    mokka.on('data', async packet => {
 
       packet = decodePacketUtils(packet);
 
-      let data = packet.type === messageTypes.ACK ?
-        await this.requestProcessor.process(packet) :
-        await new Promise(res => {
-          semaphore.take(async () => {
-            let data = await this.requestProcessor.process(packet);
-            res(data);
-            semaphore.leave();
-          });
-        });
+      if([messageTypes.GOSSIP_SECOND_RESPONSE, messageTypes.GOSSIP_FIRST_RESPONSE, messageTypes.GOSSIP_REQUEST].includes(packet.type))
+        return await this.gossipRequestProcessor.process(packet);
 
+      await this.requestProcessor.process(packet);
 
-      if (!_.has(data, 'who') && !_.has(data, '0.who'))
-        return;
-
-      if (_.isArray(data)) {
-
-        for (let item of data)
-          this.actions.message.message(item.who, item.reply);
-
-        return;
-      }
-
-      this.actions.message.message(data.who, data.reply);
     });
 
 
@@ -154,7 +140,10 @@ class Mokka extends EventEmitter {
       mokka.lastInfo = await this.log.getLastInfo();
     });
 
+    mokka.gossip.start();
     mokka.processor._runLoop();
+
+
 
     function initialize (err) {
       if (err) return mokka.emit(messageTypes.ERROR, err);

@@ -2,6 +2,7 @@ const _ = require('lodash'),
   states = require('../factories/stateFactory'),
   messageTypes = require('../factories/messageTypesFactory'),
   eventTypes = require('../factories/eventTypesFactory'),
+  semaphore = require('semaphore'),
   ProofValidationService = require('./proofValidationService');
 
 
@@ -10,10 +11,37 @@ class RequestProcessor {
   constructor (mokka) {
     this.mokka = mokka;
     this.proofValidation = new ProofValidationService(mokka);
+    this.sem = semaphore(1);
   }
 
+  async process(packet){
 
-  async process (packet) {
+    let data = packet.type === messageTypes.ACK ?
+      await this._process(packet) :
+      await new Promise(res => {
+        this.sem.take(async () => {
+          let data = await this._process(packet);
+          res(data);
+          this.sem.leave();
+        });
+      });
+
+
+    if (!_.has(data, 'who') && !_.has(data, '0.who'))
+      return;
+
+    if (_.isArray(data)) {
+
+      for (let item of data)
+        this.mokka.actions.message.message(item.who, item.reply);
+
+      return;
+    }
+
+    this.mokka.actions.message.message(data.who, data.reply);
+  }
+
+  async _process (packet) {
 
     let reply;
 

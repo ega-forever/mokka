@@ -10,187 +10,188 @@ const _ = require('lodash'),
   sem = require('semaphore')(1),
   states = require('../factories/stateFactory');
 
-const join = function (multiaddr, write) {
 
-  const m = Multiaddr(multiaddr);
+class NodeActions {
 
-  const publicKey = hashUtils.getHexFromIpfsHash(m.getPeerId());
-  if (this.publicKey === publicKey)
-    return;
-
-  const mOptions = m.toOptions();
-
-  let node = cloneNode({
-    write: write,
-    publicKey: publicKey,
-    address: `${mOptions.transport}://${mOptions.host}:${mOptions.port}`,
-    state: states.CHILD
-  }, this);
-
-  node.once('end', () => this.leave(node));
-
-  this.nodes.push(node);
-  this.emit('join', node);
-
-  return node;
-};
-
-const leave = function (publicKey) {
-  let index = -1,
-    node;
-
-  for (let i = 0; i < this.nodes.length; i++)
-    if (this.nodes[i] === publicKey || this.nodes[i].publicKey === publicKey) {
-      node = this.nodes[i];
-      index = i;
-      break; //todo refactor
-    }
-
-
-  if (~index && node) {
-    this.nodes.splice(index, 1);
-
-    if (node.end)
-      node.end();
-
-    this.emit('leave', node);
+  constructor (mokka) {
+    this.mokka = mokka;
   }
 
-  return node;
-};
 
-const end = function () {
+  async join (multiaddr, write) {
 
-  if (states.STOPPED === this.state)
-    return false;
+    const m = Multiaddr(multiaddr);
 
-  this.change({state: states.STOPPED});
+    const publicKey = hashUtils.getHexFromIpfsHash(m.getPeerId());
+    if (this.mokka.publicKey === publicKey)
+      return;
 
-  if (this.nodes.length)
-    for (let i = 0; i < this.nodes.length; i++)
-      this.actions.node.leave(this.nodes[i]);
+    const mOptions = m.toOptions();
 
+    let node = cloneNode({
+      write: write,
+      publicKey: publicKey,
+      address: `${mOptions.transport}://${mOptions.host}:${mOptions.port}`,
+      state: states.CHILD
+    }, this.mokka);
 
-  this.emit('end');
-  this.time.timers.end();
-  this.removeAllListeners();
-  this.log.end();
+    node.once('end', () => this.leave(node));
 
-  this.time.timers = this.Log = this.beat = this.election = null;
-  return true;
-};
+    this.mokka.nodes.push(node);
+    this.mokka.emit('join', node);
 
-const promote = async function () {
+    this.mokka.gossip.handleNewPeers([publicKey]);
 
-  return await new Promise(res => {
+    return node;
+  };
 
+  leave (publicKey) {
+    let index = -1,
+      node;
 
-    sem.take(async () => {
-
-      let blackListed = this.cache.get(`blacklist.${this.publicKey}`);
-
-      if (blackListed) {
-        this.logger.trace('awaiting for next rounds');
-        sem.leave();
-        return res();
+    for (let i = 0; i < this.mokka.nodes.length; i++)
+      if (this.mokka.nodes[i] === publicKey || this.mokka.nodes[i].publicKey === publicKey) {
+        node = this.mokka.nodes[i];
+        index = i;
+        break; //todo refactor
       }
 
-      let locked = this.cache.get('commit.locked');
 
-      if (locked) {
-        this.logger.trace('awaiting for new possible leader');
-        sem.leave();
-        return res();
-      }
+    if (~index && node) {
+      this.mokka.nodes.splice(index, 1);
 
-      if (this.votes.for && this.votes.for === this.publicKey) {
-        this.logger.trace('already promoted myself');
-        sem.leave();
-        return res();
-      }
+      if (node.end)
+        node.end();
 
-      this.change({
-        state: states.CANDIDATE,
-        term: this.lastInfo.term + 1,
-        leader: ''
-      });
+      this.mokka.emit('leave', node);
+    }
 
-      this.votes.for = this.publicKey;
-      this.votes.granted = 1;
-      this.votes.started = Date.now();
+    return node;
+  };
 
-      let token = speakeasy.totp({
-        secret: this.networkSecret,
-        //step: this.election.max / 1000
-        step: 30, //todo resolve timing calculation
-        window: 2
-      });
+  end () {
 
-      this.votes.secret = secrets.str2hex(token);
-      this.votes.shares = [];
+    if (states.STOPPED === this.mokka.state)
+      return false;
+
+    this.mokka.change({state: states.STOPPED});
+
+    if (this.mokka.nodes.length)
+      for (let i = 0; i < this.mokka.nodes.length; i++)
+        this.mokka.actions.node.leave(this.mokka.nodes[i]);
 
 
-      let shares = secrets.share(this.votes.secret, this.nodes.length + 1, this.majority());
+    this.mokka.emit('end');
+    this.mokka.time.timers.end();
+    this.mokka.removeAllListeners();
+    this.mokka.log.end();
 
-      shares = _.sortBy(shares);
+    this.mokka.time.timers = this.mokka.Log = this.mokka.beat = this.mokka.election = null;
+    return true;
+  };
 
-      for (let index = 0; index < this.nodes.length; index++) {
-        this.votes.shares.push({
-          share: shares[index],
-          publicKey: this.nodes[index].publicKey,
-          voted: false
+
+  async promote () {
+
+    return await new Promise(res => {
+
+
+      sem.take(async () => {
+
+        let blackListed = this.mokka.cache.get(`blacklist.${this.mokka.publicKey}`);
+
+        if (blackListed) {
+          this.mokka.logger.trace('awaiting for next rounds');
+          sem.leave();
+          return res();
+        }
+
+        let locked = this.mokka.cache.get('commit.locked');
+
+        if (locked) {
+          this.mokka.logger.trace('awaiting for new possible leader');
+          sem.leave();
+          return res();
+        }
+
+        if (this.mokka.votes.for && this.mokka.votes.for === this.mokka.publicKey) {
+          this.mokka.logger.trace('already promoted myself');
+          sem.leave();
+          return res();
+        }
+
+        this.mokka.change({
+          state: states.CANDIDATE,
+          term: this.mokka.lastInfo.term + 1,
+          leader: ''
         });
 
-        const packet = await this.actions.message.packet(messageTypes.VOTE, {
-          share: shares[index]
+        this.mokka.votes.for = this.mokka.publicKey;
+        this.mokka.votes.granted = 1;
+        this.mokka.votes.started = Date.now();
+
+        let token = speakeasy.totp({
+          secret: this.mokka.networkSecret,
+          //step: this.election.max / 1000
+          step: 30, //todo resolve timing calculation
+          window: 2
         });
 
-        this.actions.message.message(this.nodes[index].publicKey, packet);
-      }
+        this.mokka.votes.secret = secrets.str2hex(token);
+        this.mokka.votes.shares = [];
 
 
-      const myShare = _.last(shares);
-      const {signature} = web3.eth.accounts.sign(myShare, `0x${this.privateKey}`);
+        let shares = secrets.share(this.mokka.votes.secret, this.mokka.nodes.length + 1, this.mokka.majority());
 
-      this.votes.shares.push({
-        share: myShare,
-        publicKey: this.publicKey,
-        signature: signature,
-        voted: true
+        shares = _.sortBy(shares);
+
+        for (let index = 0; index < this.mokka.nodes.length; index++) {
+          this.mokka.votes.shares.push({
+            share: shares[index],
+            publicKey: this.mokka.nodes[index].publicKey,
+            voted: false
+          });
+
+          const packet = await this.mokka.actions.message.packet(messageTypes.VOTE, {
+            share: shares[index]
+          });
+
+          this.mokka.actions.message.message(this.mokka.nodes[index].publicKey, packet);
+        }
+
+
+        const myShare = _.last(shares);
+        const {signature} = web3.eth.accounts.sign(myShare, `0x${this.mokka.privateKey}`);
+
+        this.mokka.votes.shares.push({
+          share: myShare,
+          publicKey: this.mokka.publicKey,
+          signature: signature,
+          voted: true
+        });
+
+
+        if (this.mokka.time.timers.active('term_change')) //todo move to timerController
+          this.mokka.time.timers.clear('term_change');
+
+        this.mokka.time.timers.setTimeout('term_change', async () => {
+          this.mokka.logger.trace('clean up passed voting');
+          this.mokka.votes.for = null;
+          this.mokka.votes.granted = 0;
+          this.mokka.votes.shares = [];
+          this.mokka.votes.secret = null;
+          this.mokka.votes.started = null;
+          if (this.mokka.state === states.CANDIDATE)
+            this.mokka.change({state: states.FOLLOWER, term: this.mokka.term - 1});
+        }, this.mokka.election.max);
+
+        sem.leave();
+        res();
       });
 
-
-      if (this.time.timers.active('term_change')) //todo move to timerController
-        this.time.timers.clear('term_change');
-
-      this.time.timers.setTimeout('term_change', async () => {
-        this.logger.trace('clean up passed voting');
-        this.votes.for = null;
-        this.votes.granted = 0;
-        this.votes.shares = [];
-        this.votes.secret = null;
-        this.votes.started = null;
-        if (this.state === states.CANDIDATE)
-          this.change({state: states.FOLLOWER, term: this.term - 1});
-      }, this.election.max);
-
-      sem.leave();
-      res();
     });
+  };
 
-  });
+}
 
-
-};
-
-
-module.exports = (instance) => {
-
-  _.set(instance, 'actions.node', {
-    promote: promote.bind(instance),
-    join: join.bind(instance),
-    leave: leave.bind(instance),
-    end: end.bind(instance)
-  });
-
-};
+module.exports = NodeActions;

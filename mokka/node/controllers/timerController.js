@@ -1,5 +1,4 @@
-const EventEmitter = require('events'),
-  Tick = require('tick-tock'),
+const Tick = require('tick-tock'),
   _ = require('lodash'),
   states = require('../factories/stateFactory'),
   messageTypes = require('../factories/messageTypesFactory');

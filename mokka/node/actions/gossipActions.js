@@ -4,44 +4,63 @@ const _ = require('lodash'),
   crypto = require('crypto'),
   states = require('../factories/stateFactory');
 
-const request = async (packet) => {
 
-  let sc = this.gossip.scuttle.scuttle(packet.data); //todo request from gossip
-  this.gossip.handleNewPeers(sc.new_peers);//todo implement in gossip
+class GossipActions {
 
-  let data = {
-    request_digest: sc.requests,
-    updates: sc.deltas
+  constructor (mokka) {
+    this.mokka = mokka;
+  }
+
+
+  async request (packet) {
+
+    let sc = this.mokka.gossip.scuttle.scuttle(packet.data.digest); //todo request from gossip
+    this.mokka.gossip.handleNewPeers(sc.new_peers);//todo implement in gossip
+
+    let data = {
+      request_digest: sc.requests,
+      updates: sc.deltas
+    };
+
+    const reply = await this.mokka.actions.message.packet(messageTypes.GOSSIP_FIRST_RESPONSE, data);
+
+    return {
+      who: packet.publicKey,//todo to whom?
+      reply: reply
+    };
   };
 
-  const reply = await this.actions.message.packet(messageTypes.GOSSIP_FIRST_RESPONSE, data);
+  async firstResponse (packet) {
 
-  return {
-    who: packet.publicKey,//todo to whom?
-    reply: reply
+    this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
+
+    let data = {
+      updates: this.mokka.gossip.scuttle.fetchDeltas(packet.data.request_digest)
+    };
+
+    const reply = await this.mokka.actions.message.packet(messageTypes.GOSSIP_SECOND_RESPONSE, data);
+
+    return {
+      who: packet.publicKey,//todo to whom?
+      reply: reply
+    };
   };
-};
 
-const firstResponse = async packet=>{
+  async secondResponse (packet) {
+    if(packet.data.updates.length){
+      console.log(packet);
+process.exit(0)
+    }
 
-  this.scuttle.updateKnownState(packet.data.updates);
-
-  let data = {
-    updates: this.gossip.scuttle.fetchDeltas(packet.data.request_digest)
+    this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
   };
 
-  const reply = await this.actions.message.packet(messageTypes.GOSSIP_SECOND_RESPONSE, data);
 
-  return {
-    who: packet.publicKey,//todo to whom?
-    reply: reply
-  };
-};
+}
 
-const secondResponse = async packet=>{
-  this.gossip.scuttle.updateKnownState(packet.data.updates);
-};
+module.exports = GossipActions;
 
+/*
 module.exports = (instance) => {
 
   _.set(instance, 'actions.gossip', {
@@ -50,4 +69,4 @@ module.exports = (instance) => {
     secondResponse: secondResponse.bind(instance)
   });
 
-};
+};*/
