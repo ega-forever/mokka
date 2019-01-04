@@ -50,11 +50,7 @@ class Mokka extends EventEmitter {
     };
 
     this.threshold = options.threshold || 0.8;
-   // this.timers = new Tick(this); //todo move to timecontroller
     this.Log = options.Log;
-
-    this.time = new TimerController(this);
-    this.gossip = new GossipController(this);
 
     this.logger = bunyan.createLogger({name: 'mokka.logger', level: options.logLevel || 3});
 
@@ -85,6 +81,11 @@ class Mokka extends EventEmitter {
     this.state = options.state || states.FOLLOWER;    // Our current state.
     this.leader = '';                               // Leader in our cluster.
     this.term = 0;                                  // Our current term.
+
+
+    this.time = new TimerController(this);
+    this.gossip = new GossipController(this);
+
     this.requestProcessor = new RequestProcessor(this);
     this.gossipRequestProcessor = new GossipRequestProcessor(this);
 

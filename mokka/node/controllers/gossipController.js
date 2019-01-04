@@ -15,50 +15,53 @@ class GossipController extends EventEmitter {
     this.peers = {}; //todo init
     this.seeds = [];
 
-    this.my_state = new PeerState(mokka.publicKey);
-    this.scuttle = new Scuttle(this.peers, this.my_state);//todo pass peers
+    this.myState = new PeerState(mokka.publicKey);
+
+    this.peers[this.myState.name] = this.myState; //todo validate
+
+
+    this.scuttle = new Scuttle(this.peers, this.myState);//todo pass peers
   }
 
 
   start () {
-    this.mokka.time.timers.setInterval('gossip_heart_beat', () => this.my_state.beatHeart(), 1000);
+    this.mokka.time.timers.setInterval('gossip_heart_beat', () => this.myState.beatHeart(), 1000);
     this.mokka.time.timers.setInterval('gossip', () => this.gossip(), 1000);
 
     setInterval(()=>{
-      console.log('test')
-      this.my_state.updateLocal('test','test123');
-    }, 5000)
+      console.log('test');
+      this.myState.updateLocal('test','test123' + Date.now());
+    }, 5000);
 
 
   }
 
   gossip () {
 
-    const live_peer = this.livePeers().length > 0 ? this.chooseRandom(this.livePeers()) : null;
+    const livePeer = this.livePeers().length > 0 ? this.chooseRandom(this.livePeers()) : null;
 
-    if (live_peer)
-      this.gossipToPeer(live_peer);
+    if (livePeer)
+      this.gossipToPeer(livePeer);
 
     // Possilby gossip to a dead peer
     let prob = this.deadPeers().length / (this.livePeers().length + 1);
     if (Math.random() < prob) {
-      let dead_peer = this.chooseRandom(this.deadPeers());
-      this.gossipToPeer(dead_peer);
+      let deadPeer = this.chooseRandom(this.deadPeers());
+      this.gossipToPeer(deadPeer);
     }
 
     // Gossip to seed under certain conditions
-    if (live_peer && !this.seeds[live_peer] && this.livePeers().length < this.seeds.length)
+    if (livePeer && !this.seeds[livePeer] && this.livePeers().length < this.seeds.length)
       if (Math.random() < (this.seeds.length / Object.keys(this.peers).length))
-        this.gossipToPeer(chooseRandom(this.peers));
+        this.gossipToPeer(this.chooseRandom(this.peers));
 
 
     // Check health of peers
 
     for(let pubKey of Object.keys(this.peers)) {
       let peer = this.peers[pubKey];
-      if(peer !== this.my_state) {
+      if(peer !== this.myState)
         peer.isSuspect();
-      }
     }
   }
 
@@ -101,16 +104,14 @@ class GossipController extends EventEmitter {
       let peer = this.peers[pubKey];
       this.listenToPeer(peer);
     }
-  };
+  }
 
 
   listenToPeer (peer) {
 
-    console.log(peer)
-
     peer.on('update', (k,v)=> { //todo move to state
-      process.exit(0)
       this.emit('update', peer.name, k, v);
+      console.log('super update', k, v); //todo remove
     });
     peer.on('peer_alive', ()=> { //todo move to state
       this.emit('peer_alive', peer.name);
@@ -118,7 +119,7 @@ class GossipController extends EventEmitter {
     peer.on('peer_failed', ()=> { //todo move to state
       this.emit('peer_failed', peer.name);
     });
-  };
+  }
 
 }
 

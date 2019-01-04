@@ -28,7 +28,7 @@ class GossipActions {
       who: packet.publicKey,//todo to whom?
       reply: reply
     };
-  };
+  }
 
   async firstResponse (packet) {
 
@@ -44,16 +44,11 @@ class GossipActions {
       who: packet.publicKey,//todo to whom?
       reply: reply
     };
-  };
+  }
 
   async secondResponse (packet) {
-    if(packet.data.updates.length){
-      console.log(packet);
-process.exit(0)
-    }
-
     this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
-  };
+  }
 
 
 }
