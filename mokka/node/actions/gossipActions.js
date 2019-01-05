@@ -1,8 +1,4 @@
-const _ = require('lodash'),
-  messageTypes = require('../factories/messageTypesFactory'),
-  eventTypes = require('../factories/eventTypesFactory'),
-  crypto = require('crypto'),
-  states = require('../factories/stateFactory');
+const messageTypes = require('../factories/messageTypesFactory');
 
 
 class GossipActions {
@@ -14,11 +10,11 @@ class GossipActions {
 
   async request (packet) {
 
-    let sc = this.mokka.gossip.scuttle.scuttle(packet.data.digest); //todo request from gossip
-    this.mokka.gossip.handleNewPeers(sc.new_peers);//todo implement in gossip
+    let sc = this.mokka.gossip.scuttle.scuttle(packet.data.digest);
+    this.mokka.gossip.handleNewPeers(sc.newPeers);
 
     let data = {
-      request_digest: sc.requests,
+      requestDigest: sc.requests,
       updates: sc.deltas
     };
 
@@ -35,7 +31,7 @@ class GossipActions {
     this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
 
     let data = {
-      updates: this.mokka.gossip.scuttle.fetchDeltas(packet.data.request_digest)
+      updates: this.mokka.gossip.scuttle.fetchDeltas(packet.data.requestDigest)
     };
 
     const reply = await this.mokka.actions.message.packet(messageTypes.GOSSIP_SECOND_RESPONSE, data);
@@ -54,14 +50,3 @@ class GossipActions {
 }
 
 module.exports = GossipActions;
-
-/*
-module.exports = (instance) => {
-
-  _.set(instance, 'actions.gossip', {
-    request: request.bind(instance),
-    firstResponse: firstResponse.bind(instance),
-    secondResponse: secondResponse.bind(instance)
-  });
-
-};*/

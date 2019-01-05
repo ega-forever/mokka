@@ -1,7 +1,6 @@
 const _ = require('lodash'),
-  states = require('../factories/stateFactory'),
-  {PeerState} = require('../../../gossip/node-gossip/lib/peer_state'), //todo move
-  {Scuttle} = require('../../../gossip/node-gossip/lib/scuttle'),
+  PeerState = require('../models/peerStateModel'), //todo move
+  GossipScuttleService = require('../services/gossipScuttleService'),
   EventEmitter = require('events'),
   messageTypes = require('../factories/messageTypesFactory');
 
@@ -14,13 +13,10 @@ class GossipController extends EventEmitter {
 
     this.peers = {}; //todo init
     this.seeds = [];
-
     this.myState = new PeerState(mokka.publicKey);
 
-    this.peers[this.myState.name] = this.myState; //todo validate
-
-
-    this.scuttle = new Scuttle(this.peers, this.myState);//todo pass peers
+    this.peers[this.myState.pubKey] = this.myState; //todo validate
+    this.scuttle = new GossipScuttleService(this.peers);//todo pass peers
   }
 
 
@@ -28,11 +24,18 @@ class GossipController extends EventEmitter {
     this.mokka.time.timers.setInterval('gossip_heart_beat', () => this.myState.beatHeart(), 1000);
     this.mokka.time.timers.setInterval('gossip', () => this.gossip(), 1000);
 
-    setInterval(()=>{
-      console.log('test');
-      this.myState.updateLocal('test','test123' + Date.now());
-    }, 5000);
+    /*    setInterval(() => {
+          console.log('test');
+          this.myState.updateLocal('test', 'test123' + Date.now());
+        }, 5000);*/
+  }
 
+
+  async push (record) { //todo implement
+
+
+   // await this.mokka.log.putPending(task);
+    //this.myState.updateLocal('test', 'test123' + Date.now());
 
   }
 
@@ -58,9 +61,9 @@ class GossipController extends EventEmitter {
 
     // Check health of peers
 
-    for(let pubKey of Object.keys(this.peers)) {
+    for (let pubKey of Object.keys(this.peers)) {
       let peer = this.peers[pubKey];
-      if(peer !== this.myState)
+      if (peer !== this.myState)
         peer.isSuspect();
     }
   }
@@ -96,7 +99,6 @@ class GossipController extends EventEmitter {
       .value();
   }
 
-
   handleNewPeers (pubKeys) {
     for (let pubKey of pubKeys) {
       this.peers[pubKey] = new PeerState(pubKey);
@@ -106,18 +108,17 @@ class GossipController extends EventEmitter {
     }
   }
 
-
   listenToPeer (peer) {
 
-    peer.on('update', (k,v)=> { //todo move to state
-      this.emit('update', peer.name, k, v);
+    peer.on('update', (k, v) => { //todo move to state
+      this.emit('update', peer.pubKey, k, v);
       console.log('super update', k, v); //todo remove
     });
-    peer.on('peer_alive', ()=> { //todo move to state
-      this.emit('peer_alive', peer.name);
+    peer.on('peer_alive', () => { //todo move to state
+      this.emit('peer_alive', peer.pubKey);
     });
-    peer.on('peer_failed', ()=> { //todo move to state
-      this.emit('peer_failed', peer.name);
+    peer.on('peer_failed', () => { //todo move to state
+      this.emit('peer_failed', peer.pubKey);
     });
   }
 

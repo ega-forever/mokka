@@ -23,6 +23,8 @@ class TaskProcessor extends eventEmitter {
     return await new Promise(res =>
       this.semPending.take(async () => {
         await this.mokka.log.putPending(task);
+        //await this.mokka.gossip.push(task);//todo implement
+
         this.semPending.leave();
         res();
       })
@@ -69,8 +71,6 @@ class TaskProcessor extends eventEmitter {
 
       await this._commit(pending.command, pending.hash);
     }
-
-
   }
 
   async _commit (task, hash) {
