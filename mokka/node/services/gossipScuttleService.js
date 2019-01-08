@@ -62,13 +62,13 @@ class GossipScuttleService {
       this.peers[peer].maxVersionSeen : 0;
   }
 
-  updateKnownState (deltas) {
+  async updateKnownState (deltas) {
     for (let key of Object.keys(deltas)) {
       let delta = deltas[key];
 
       let pubKey = delta.shift();
       let peerState = this.peers[pubKey];
-      peerState.updateWithDelta(delta[0], delta[1], delta[2]);
+      await peerState.updateWithDelta(delta[0], delta[1], delta[2]);
     }
   }
 

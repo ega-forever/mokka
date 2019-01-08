@@ -3,11 +3,12 @@ const EventEmitter = require('events'),
 
 class PeerState extends EventEmitter {
 
-  constructor (pubKey) {
+  constructor (pubKey, mokka) {
     super();
+    this.mokka = mokka;
     this.pubKey = pubKey;
     this.maxVersionSeen = 0;
-    this.attrs = {};
+    this.attrs = {}; //local storage
     this.detector = new AccrualFailureDetector();
     this.alive = true;
     this.heartBeatVersion = 0;
@@ -15,12 +16,14 @@ class PeerState extends EventEmitter {
   }
 
 
-  updateWithDelta (k, v, n) {
+  async updateWithDelta (k, v, n) {
     // It's possibly to get the same updates more than once if we're gossiping with multiple peers at once
     // ignore them
     if (n > this.maxVersionSeen) {
       this.maxVersionSeen = n;
-      this.setKey(k, v, n);
+      //this.setLocalKey(k, v, n);
+      await this.addToDb(v); //todo implement
+
       if (k === '__heartbeat__') {
         let d = new Date();
         this.detector.add(d.getTime());
@@ -29,31 +32,25 @@ class PeerState extends EventEmitter {
   }
 
 
-  updateLocal (k, v) {
+  async addToDb (command) { //todo refactor
     this.maxVersionSeen += 1;
-    this.setKey(k, v, this.maxVersionSeen);
+    await this.mokka.log.putPending(command, this.maxVersionSeen);
+//    this.setLocalKey(k, v, this.maxVersionSeen);
   }
 
-  getValue (k) {
-    if (!this.attrs[k])
-      return;
-
-    return this.attrs[k][0];
+  async deleteLocal (hash) { //todo refactor
+    await this.mokka.log.pullPending(hash);
   }
 
-  getKeys () {
-    return Object.keys(this.attrs);
-  }
-
-  setKey (k, v, n) {
+  setLocalKey (k, v, n) {
     this.attrs[k] = [v, n];
     this.emit('update', k, v);
   }
 
 
-  beatHeart () {
+  async beatHeart () {
     this.heartBeatVersion += 1;
-    this.updateLocal('__heartbeat__', this.heartBeatVersion);
+    await this.setLocalKey('__heartbeat__', this.heartBeatVersion, this.maxVersionSeen);
   }
 
   deltasAfterVersion (lowestVersion) {

@@ -21,7 +21,8 @@ class Log extends EventEmitter {
     this.prefixes = {
       logs: 1,
       term: 2,
-      pending: 3
+      pending: 3,
+      refs: 4
     };
 
     this.eventTypes = {
@@ -141,14 +142,22 @@ class Log extends EventEmitter {
     }
 
     let result = await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
+    await this.db.put(`${this.prefixes.refs}:${entry.hash}`, entry.index);
     this.emit(this.eventTypes.LOGS_UPDATED);
     return result;
   }
 
-  async putPending (command) {
+  async checkPendingCommitted (command) {
+    const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
+    let record = await this.getByHash(hash);
 
-    let record = {command, received: this.node.leader === this.node.publicKey};
+    return !!record;
+  }
+
+  async putPending (command, version) {
+
+    let record = {command, received: this.node.leader === this.node.publicKey, version};
 
     const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
@@ -161,11 +170,11 @@ class Log extends EventEmitter {
     };
   }
 
-  async ackPending (hash) {
+  async ackPending (hash) { //todo remove?
 
     let entry = await this.db.get(`${this.prefixes.pending}:${hash}`);
 
-    if(!entry)
+    if (!entry)
       return;
 
     entry.received = true;
@@ -332,6 +341,17 @@ class Log extends EventEmitter {
   async get (index) {
     try {
       return await this.db.get(`${this.prefixes.logs}:${Log._getBnNumber(index)}`);
+    } catch (err) {
+      return null;
+    }
+
+  }
+
+
+  async getByHash (hash) {
+    try {
+      let refIndex = await this.db.get(`${this.prefixes.refs}:${hash}`);
+      return await this.get(refIndex);
     } catch (err) {
       return null;
     }

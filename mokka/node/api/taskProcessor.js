@@ -22,9 +22,8 @@ class TaskProcessor extends eventEmitter {
   async push (task) {
     return await new Promise(res =>
       this.semPending.take(async () => {
-        await this.mokka.log.putPending(task);
-        //await this.mokka.gossip.push(task);//todo implement
-
+        //await this.mokka.log.putPending(task);
+        await this.mokka.gossip.push(task);//todo implement
         this.semPending.leave();
         res();
       })
@@ -39,6 +38,10 @@ class TaskProcessor extends eventEmitter {
   async _runLoop () { //loop for checking new packets
     while (this.run) {
 
+      if (this.mokka.state !== states.LEADER) {
+        await new Promise(res => this.mokka.once(eventTypes.LEADER, res));
+        continue;
+      }
 
       if (!this.sem.available()) {
         await new Promise(res => this.once(eventTypes.QUEUE_AVAILABLE, res));
@@ -47,7 +50,7 @@ class TaskProcessor extends eventEmitter {
 
       let lastEntry = await this.mokka.log.getLastEntry();
 
-      if (this.mokka.state === states.LEADER && lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {//check for leader only
+      if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {//check for leader only
 
         let followers = _.chain(this.mokka.nodes)
           .reject(node => _.find(lastEntry.responses, {publicKey: node.publicKey}))
@@ -86,18 +89,11 @@ class TaskProcessor extends eventEmitter {
           return res();
         }
 
-        if (this.mokka.state === states.LEADER) {
-          let entry = await this._save(task);
-          await this._broadcast(entry.index, entry.hash);
-          this.mokka.logger.trace(`task has been broadcasted ${task}`);
-          this.mokka.logger.trace(`pulling pending task ${task} with hash ${hash}`);//todo think about pull
-          await this.mokka.log.pullPending(hash);
-        } else {
-          await this._broadcastPending(task, hash);
-
-          await this.mokka.log.pullPending(hash);//todo pull task when leader received it (may be make ack_pending?)
-        }
-
+        let entry = await this._save(task);
+        await this._broadcast(entry.index, entry.hash);
+        this.mokka.logger.trace(`task has been broadcasted ${task}`);
+        this.mokka.logger.trace(`pulling pending task ${task} with hash ${hash}`);//todo think about pull
+        await this.mokka.log.pullPending(hash);
 
         this.sem.leave();
         this.emit(eventTypes.QUEUE_AVAILABLE);

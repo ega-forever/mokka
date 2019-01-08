@@ -12,8 +12,7 @@ class GossipController extends EventEmitter {
     this.mokka = mokka;
 
     this.peers = {}; //todo init
-    this.seeds = [];
-    this.myState = new PeerState(mokka.publicKey);
+    this.myState = new PeerState(mokka.publicKey, mokka);
 
     this.peers[this.myState.pubKey] = this.myState; //todo validate
     this.scuttle = new GossipScuttleService(this.peers);//todo pass peers
@@ -32,11 +31,14 @@ class GossipController extends EventEmitter {
 
 
   async push (record) { //todo implement
+    //await this.mokka.log.putPending(task);
 
+    let isCommitted = await this.mokka.log.checkPendingCommitted(record);
 
-   // await this.mokka.log.putPending(task);
-    //this.myState.updateLocal('test', 'test123' + Date.now());
+    if(isCommitted)
+      return;
 
+    await this.myState.addToDb(record);
   }
 
   gossip () {
@@ -52,14 +54,6 @@ class GossipController extends EventEmitter {
       let deadPeer = this.chooseRandom(this.deadPeers());
       this.gossipToPeer(deadPeer);
     }
-
-    // Gossip to seed under certain conditions
-    if (livePeer && !this.seeds[livePeer] && this.livePeers().length < this.seeds.length)
-      if (Math.random() < (this.seeds.length / Object.keys(this.peers).length))
-        this.gossipToPeer(this.chooseRandom(this.peers));
-
-
-    // Check health of peers
 
     for (let pubKey of Object.keys(this.peers)) {
       let peer = this.peers[pubKey];
@@ -101,7 +95,7 @@ class GossipController extends EventEmitter {
 
   handleNewPeers (pubKeys) {
     for (let pubKey of pubKeys) {
-      this.peers[pubKey] = new PeerState(pubKey);
+      this.peers[pubKey] = new PeerState(pubKey, this.mokka);
       this.emit('new_peer', pubKey);//todo move to state
       let peer = this.peers[pubKey];
       this.listenToPeer(peer);
