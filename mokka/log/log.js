@@ -22,7 +22,8 @@ class Log extends EventEmitter {
       logs: 1,
       term: 2,
       pending: 3,
-      refs: 4
+      refs: 4,
+      pendingRefs: 5
     };
 
     this.eventTypes = {
@@ -161,7 +162,18 @@ class Log extends EventEmitter {
 
     const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
+    let existedPendingLog = await this.getPending(hash);
+
+    if(existedPendingLog)
+      return;
+
+    let existedLog = await this.getByHash(hash);
+
+    if(existedLog)
+      return;
+
     await this.db.put(`${this.prefixes.pending}:${hash}`, record);
+    await this.db.put(`${this.prefixes.pendingRefs}:${Log._getBnNumber(version)}:${hash}`, hash);
 
     return {
       command: command,
@@ -184,7 +196,16 @@ class Log extends EventEmitter {
   }
 
   async pullPending (hash) {
+
+    let pending = await this.getPending(hash);
+
+    if (!pending)
+      return;
+
     await this.db.del(`${this.prefixes.pending}:${hash}`);
+    await this.db.del(`${this.prefixes.pendingRefs}:${Log._getBnNumber(pending.version)}:${hash}`);
+
+
   }
 
   async getPending (hash, task = false) {
@@ -225,6 +246,29 @@ class Log extends EventEmitter {
         });
     });
   }
+
+  async getPendingHashesAfterVersion (version) {
+
+    return await new Promise((resolve, reject) => {
+
+      let items = [];
+
+      this.db.createReadStream({
+        lt: `${this.prefixes.pendingRefs + 1}:${Log._getBnNumber(0)}`,
+        gt: `${this.prefixes.pendingRefs}:${Log._getBnNumber(version)}`
+      })
+        .on('data', data => {
+          items.push(data.value);
+        })
+        .on('error', err => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(items);
+        });
+    });
+  }
+
 
   async addProof (term, proof) { //do we need to
     return await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(term)}`, proof);

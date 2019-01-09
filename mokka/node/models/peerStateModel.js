@@ -1,4 +1,5 @@
 const EventEmitter = require('events'),
+  Promise = require('bluebird'),
   AccrualFailureDetector = require('../../utils/accrualFailureDetector');
 
 class PeerState extends EventEmitter {
@@ -22,20 +23,22 @@ class PeerState extends EventEmitter {
     if (n > this.maxVersionSeen) {
       this.maxVersionSeen = n;
       //this.setLocalKey(k, v, n);
-      await this.addToDb(v); //todo implement
 
       if (k === '__heartbeat__') {
         let d = new Date();
         this.detector.add(d.getTime());
+        this.setLocalKey(k, v, n);
+      } else {
+        await this.addToDb(v); //todo implement
       }
     }
   }
 
 
   async addToDb (command) { //todo refactor
-    this.maxVersionSeen += 1;
-    await this.mokka.log.putPending(command, this.maxVersionSeen);
-//    this.setLocalKey(k, v, this.maxVersionSeen);
+    let entry = await this.mokka.log.putPending(command, this.maxVersionSeen + 1);
+    if (entry)
+      this.maxVersionSeen += 1;
   }
 
   async deleteLocal (hash) { //todo refactor
@@ -53,16 +56,14 @@ class PeerState extends EventEmitter {
     await this.setLocalKey('__heartbeat__', this.heartBeatVersion, this.maxVersionSeen);
   }
 
-  deltasAfterVersion (lowestVersion) {
-    const deltas = [];
-    for (let k in this.attrs) {
-      let value = this.attrs[k][0];
-      let version = this.attrs[k][1];
-      if (version > lowestVersion)
-        deltas.push([k, value, version]);
+  async deltasAfterVersion (lowestVersion) {//todo refactor (replace attrs with log)
 
-    }
-    return deltas;
+    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion);
+
+    return await Promise.mapSeries(hashes, async hash => {
+      let item = await this.mokka.log.getPending(hash);
+      return [hash, item.command, item.version];
+    });
   }
 
   isSuspect () {

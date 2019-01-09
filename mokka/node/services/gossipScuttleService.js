@@ -15,7 +15,7 @@ class GossipScuttleService {
   }
 
 
-  scuttle (digest) {
+  async scuttle (digest) {
     let deltasWithPeer = [];
     let requests = {};
     let newPeers = [];
@@ -26,9 +26,10 @@ class GossipScuttleService {
       if (!this.peers[pubKey]) {
         requests[pubKey] = 0;
         newPeers.push(pubKey);
-      } else if (localVersion > digest[pubKey])
-        deltasWithPeer.push({peer: pubKey, deltas: localPeer.deltasAfterVersion(digest[pubKey])});
-      else if (localVersion < digest[pubKey])
+      } else if (localVersion > digest[pubKey]) {
+        let deltas = await localPeer.deltasAfterVersion(digest[pubKey]);
+        deltasWithPeer.push({peer: pubKey, deltas: deltas});
+      } else if (localVersion < digest[pubKey])
         requests[pubKey] = localVersion;
 
     }
@@ -72,10 +73,10 @@ class GossipScuttleService {
     }
   }
 
-  fetchDeltas (requests) {
+  async fetchDeltas (requests) {
     let deltas = [];
     for (let pubKey of Object.keys(requests)) {
-      let peerDeltas = this.peers[pubKey].deltasAfterVersion(requests[pubKey]);
+      let peerDeltas = await this.peers[pubKey].deltasAfterVersion(requests[pubKey]);
       peerDeltas.sort((a, b) => a[2] - b[2]);
       for (let delta of Object.keys(peerDeltas)) {
         peerDeltas[delta].unshift(pubKey);

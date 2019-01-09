@@ -10,7 +10,7 @@ class GossipActions {
 
   async request (packet) {
 
-    let sc = this.mokka.gossip.scuttle.scuttle(packet.data.digest);
+    let sc = await this.mokka.gossip.scuttle.scuttle(packet.data.digest);
     this.mokka.gossip.handleNewPeers(sc.newPeers);
 
     let data = {
@@ -21,29 +21,31 @@ class GossipActions {
     const reply = await this.mokka.actions.message.packet(messageTypes.GOSSIP_FIRST_RESPONSE, data);
 
     return {
-      who: packet.publicKey,//todo to whom?
+      who: packet.publicKey,
       reply: reply
     };
   }
 
   async firstResponse (packet) {
 
-    this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
+    await this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
+
+    let updates = await this.mokka.gossip.scuttle.fetchDeltas(packet.data.requestDigest);
 
     let data = {
-      updates: this.mokka.gossip.scuttle.fetchDeltas(packet.data.requestDigest)
+      updates: updates
     };
 
     const reply = await this.mokka.actions.message.packet(messageTypes.GOSSIP_SECOND_RESPONSE, data);
 
     return {
-      who: packet.publicKey,//todo to whom?
+      who: packet.publicKey,
       reply: reply
     };
   }
 
   async secondResponse (packet) {
-    this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
+    await this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
   }
 
 
