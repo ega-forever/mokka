@@ -172,36 +172,6 @@ class TaskProcessor extends eventEmitter {
 
   }
 
-  async _broadcastPending (task, hash) {
-
-    if (!this.mokka.leader) {
-      await new Promise(res => this.mokka.once(eventTypes.LEADER, res));
-      return await this._broadcastPending(task, hash);
-    }
-
-    let entry = await this.mokka.log.getPending(hash);
-
-    if (!entry || entry.received)
-      return;
-
-
-    const proposePacket = await this.mokka.actions.message.packet(messageTypes.PROPOSE, task);//todo add validation by signature
-    await this.mokka.actions.message.message(states.LEADER, proposePacket);
-
-    //todo make event about received append_pending task
-    return await new Promise(res =>
-      this.mokka.once(eventTypes.PENDING_COMMITTED, (hash) => {
-          if (hash === entry.hash)
-            res();
-        }
-      ))
-      .timeout(this.mokka.time.timeout())
-      .catch(async () => await this._broadcastPending(task, hash));
-
-
-  }
-
-
 }
 
 module.exports = TaskProcessor;

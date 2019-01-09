@@ -174,23 +174,6 @@ class AppendActions {
     };
   };
 
-  async proposed (packet) {//todo add signature check
-
-    let entry = await this.mokka.log.putPending(packet.data);
-
-    const reply = await this.mokka.actions.message.packet(messageTypes.APPEND_PENDING, entry.hash);
-
-    return {
-      who: packet.publicKey,
-      reply: reply
-    };
-  };
-
-  async appendAckPending (packet) {//todo add signature check
-    await this.mokka.log.ackPending(packet.data);
-    this.mokka.emit(eventTypes.PENDING_COMMITTED, packet.data);
-  };
-
   async appendFail (packet) {
 
     if (packet.data.index > this.mokka.lastInfo.index) {

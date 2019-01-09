@@ -113,12 +113,6 @@ class RequestProcessor {
     if (packet.type === messageTypes.RE_APPEND)
       reply = await this.mokka.actions.append.obtain(packet);
 
-    if (packet.type === messageTypes.PROPOSE)
-      reply = await this.mokka.actions.append.proposed(packet);
-
-    if (packet.type === messageTypes.APPEND_PENDING)
-      reply = await this.mokka.actions.append.appendAckPending(packet);//todo
-
     if (!Object.values(messageTypes).includes(packet.type)) {
       let response = await this.mokka.actions.message.packet('error', 'Unknown message type: ' + packet.type);
       reply = {
