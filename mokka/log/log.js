@@ -164,12 +164,12 @@ class Log extends EventEmitter {
 
     let existedPendingLog = await this.getPending(hash);
 
-    if(existedPendingLog)
+    if (existedPendingLog)
       return;
 
     let existedLog = await this.getByHash(hash);
 
-    if(existedLog)
+    if (existedLog)
       return;
 
     await this.db.put(`${this.prefixes.pending}:${hash}`, record);
@@ -182,19 +182,6 @@ class Log extends EventEmitter {
     };
   }
 
-  async ackPending (hash) { //todo remove?
-
-    let entry = await this.db.get(`${this.prefixes.pending}:${hash}`);
-
-    if (!entry)
-      return;
-
-    entry.received = true;
-    await this.db.put(`${this.prefixes.pending}:${hash}`, entry);
-
-    return entry;
-  }
-
   async pullPending (hash) {
 
     let pending = await this.getPending(hash);
@@ -204,8 +191,6 @@ class Log extends EventEmitter {
 
     await this.db.del(`${this.prefixes.pending}:${hash}`);
     await this.db.del(`${this.prefixes.pendingRefs}:${Log._getBnNumber(pending.version)}:${hash}`);
-
-
   }
 
   async getPending (hash, task = false) {
@@ -222,27 +207,57 @@ class Log extends EventEmitter {
 
   async getFirstPending () {
 
-    return await new Promise((resolve, reject) => {
+    let hash = await new Promise((resolve, reject) => {
 
-      let item = {
-        hash: null,
-        command: null
-      };
+      let hash;
 
       this.db.createReadStream({
         limit: 1,
-        lt: `${this.prefixes.pending + 1}:${Log._getBnNumber(0)}`,
-        gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
+        lt: `${this.prefixes.pendingRefs + 1}:${Log._getBnNumber(0)}`,
+        gte: `${this.prefixes.pendingRefs}:${Log._getBnNumber(0)}`
       })
         .on('data', data => {
-          item = data.value;
-          item.hash = data.key.toString().replace(`${this.prefixes.pending}:`, '');
+          hash = data.value;
         })
         .on('error', err => {
           reject(err);
         })
         .on('end', () => {
-          resolve(item);
+          resolve(hash);
+        });
+    });
+
+    let pending = await this.getPending(hash);
+
+    if (!pending)
+      return {
+        hash: null,
+        command: null
+      };
+
+    return {
+      hash: hash,
+      command: pending.command
+    };
+  }
+
+  async getPendingCount () {
+    return await new Promise((resolve, reject) => {
+
+      let count = 0;
+
+      this.db.createReadStream({
+        lt: `${this.prefixes.pendingRefs + 1}:${Log._getBnNumber(0)}`,
+        gte: `${this.prefixes.pendingRefs}:${Log._getBnNumber(0)}`
+      })
+        .on('data', () => {
+          count++;
+        })
+        .on('error', err => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(count);
         });
     });
   }
@@ -255,7 +270,8 @@ class Log extends EventEmitter {
 
       this.db.createReadStream({
         lt: `${this.prefixes.pendingRefs + 1}:${Log._getBnNumber(0)}`,
-        gt: `${this.prefixes.pendingRefs}:${Log._getBnNumber(version)}`
+        gt: `${this.prefixes.pendingRefs}:${Log._getBnNumber(version)}`,
+        limit: 10
       })
         .on('data', data => {
           items.push(data.value);

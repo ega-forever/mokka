@@ -1,5 +1,7 @@
 const EventEmitter = require('events'),
   Promise = require('bluebird'),
+  _ = require('lodash'),
+
   AccrualFailureDetector = require('../../utils/accrualFailureDetector');
 
 class PeerState extends EventEmitter {
@@ -8,42 +10,41 @@ class PeerState extends EventEmitter {
     super();
     this.mokka = mokka;
     this.pubKey = pubKey;
-    this.maxVersionSeen = 0;
     this.attrs = {}; //local storage
     this.detector = new AccrualFailureDetector();
     this.alive = true;
     this.heartBeatVersion = 0;
+    this.maxVersionSeen = 0;
     this.PHI = 8;
   }
 
 
   async updateWithDelta (k, v, n) {
-    // It's possibly to get the same updates more than once if we're gossiping with multiple peers at once
-    // ignore them
+
     if (n > this.maxVersionSeen) {
-      this.maxVersionSeen = n;
-      //this.setLocalKey(k, v, n);
 
       if (k === '__heartbeat__') {
         let d = new Date();
         this.detector.add(d.getTime());
         this.setLocalKey(k, v, n);
       } else {
+        this.mokka.logger.info(`received pending ${k} with next version ${this.maxVersionSeen + 1}`);
         await this.addToDb(v); //todo implement
       }
     }
   }
 
+  async _getMaxVersion(){
+    let {index} = await this.mokka.lastInfo;
+    let count = await this.mokka.log.getPendingCount();
+    return index + count;
+  }
 
   async addToDb (command) { //todo refactor
-    let entry = await this.mokka.log.putPending(command, this.maxVersionSeen + 1);
-    if (entry)
-      this.maxVersionSeen += 1;
+    await this.mokka.log.putPending(command, this.maxVersionSeen + 1);
+    this.maxVersionSeen = await this._getMaxVersion();
   }
 
-  async deleteLocal (hash) { //todo refactor
-    await this.mokka.log.pullPending(hash);
-  }
 
   setLocalKey (k, v, n) {
     this.attrs[k] = [v, n];
@@ -60,10 +61,32 @@ class PeerState extends EventEmitter {
 
     let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion);
 
-    return await Promise.mapSeries(hashes, async hash => {
+    let items = await Promise.mapSeries(hashes, async hash => {
       let item = await this.mokka.log.getPending(hash);
+
+      if (!item)
+        return;
+
       return [hash, item.command, item.version];
     });
+
+
+    return _.chain(items)
+      .compact()
+      .sortBy(item => item[2])
+      .transform((result, item) => {
+
+        if (result.length) {
+          let prev = _.last(result);
+          if (prev[2] + 1 !== item[2])
+            return;
+        }
+
+        result.push(item);
+
+      }, [])
+      .value();
+
   }
 
   isSuspect () {

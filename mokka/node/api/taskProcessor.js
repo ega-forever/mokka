@@ -1,7 +1,6 @@
 const Promise = require('bluebird'),
   semaphore = require('semaphore'),
   states = require('../factories/stateFactory'),
-  messageTypes = require('../factories/messageTypesFactory'),
   Web3 = require('web3'),
   web3 = new Web3(),
   _ = require('lodash'),
@@ -22,7 +21,6 @@ class TaskProcessor extends eventEmitter {
   async push (task) {
     return await new Promise(res =>
       this.semPending.take(async () => {
-        //await this.mokka.log.putPending(task);
         await this.mokka.gossip.push(task);//todo implement
         this.semPending.leave();
         res();
@@ -66,6 +64,7 @@ class TaskProcessor extends eventEmitter {
 
 
       let pending = await this.mokka.log.getFirstPending();
+
       if (!pending.hash) {
         await Promise.delay(this.mokka.time.timeout()); //todo delay for next tick or event on new push
         continue;
