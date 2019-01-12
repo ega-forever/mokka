@@ -6,7 +6,7 @@ const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
   Web3 = require('web3'),
   web3 = new Web3(),
-  cloneNode = require('../../utils/cloneNode'),
+  NodeModel = require('../models/nodeModel'),
   sem = require('semaphore')(1),
   states = require('../factories/stateFactory');
 
@@ -18,7 +18,7 @@ class NodeActions {
   }
 
 
-  async join (multiaddr, write) {
+  async join (multiaddr) {
 
     const m = Multiaddr(multiaddr);
 
@@ -28,12 +28,14 @@ class NodeActions {
 
     const mOptions = m.toOptions();
 
-    let node = cloneNode({
-      write: write,
+    let node = new NodeModel({
       publicKey: publicKey,
       address: `${mOptions.transport}://${mOptions.host}:${mOptions.port}`,
       state: states.CHILD
-    }, this.mokka);
+    });
+
+    node.write = this.mokka.write.bind(node);
+    node.logger = this.mokka.logger;
 
     node.once('end', () => this.leave(node));
 

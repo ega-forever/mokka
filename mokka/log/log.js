@@ -173,7 +173,7 @@ class Log extends EventEmitter {
       return;
 
     await this.db.put(`${this.prefixes.pending}:${hash}`, record);
-    await this.db.put(`${this.prefixes.pendingRefs}:${Log._getBnNumber(version)}:${hash}`, hash);
+    await this.db.put(`${this.prefixes.pendingRefs}:${Log._getBnNumber(version)}`, hash);
 
     return {
       command: command,
@@ -190,7 +190,7 @@ class Log extends EventEmitter {
       return;
 
     await this.db.del(`${this.prefixes.pending}:${hash}`);
-    await this.db.del(`${this.prefixes.pendingRefs}:${Log._getBnNumber(pending.version)}:${hash}`);
+    await this.db.del(`${this.prefixes.pendingRefs}:${Log._getBnNumber(pending.version)}`);
   }
 
   async getPending (hash, task = false) {
