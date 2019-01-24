@@ -57,7 +57,7 @@ class PeerState extends EventEmitter {
     await this.setLocalKey('__heartbeat__', this.heartBeatVersion, this.maxVersionSeen);
   }
 
-  async deltasAfterVersion (lowestVersion) {//todo refactor (replace attrs with log)
+  async deltasAfterVersion (lowestVersion) {
 
     let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion);
 

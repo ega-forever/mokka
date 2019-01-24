@@ -61,7 +61,7 @@ class Mokka extends NodeModel {
 
     this.requestProcessor = new RequestProcessor(this);
     this.gossipRequestProcessor = new GossipRequestProcessor(this);
-    this.log = new this.Log(this, options.log_options);
+    this.log = new this.Log(this, options.logOptions);
 
     this._registerEvents();
     this._initialize(options);

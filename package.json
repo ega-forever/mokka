@@ -2,7 +2,7 @@
   "name": "mokka",
   "version": "1.0.0",
   "description": "mokka consensus",
-  "main": "index.js",
+  "main": "mokka/index.js",
   "scripts": {
     "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js",
     "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore .",
@@ -15,7 +15,6 @@
   "license": "AGPL",
   "dependencies": {
     "axon": "2.0.x",
-    "bls-lib": "^0.3.4",
     "bluebird": "^3.5.2",
     "bunyan": "^1.8.12",
     "encoding-down": "^3.0.1",
@@ -33,8 +32,6 @@
     "speakeasy": "^2.0.0",
     "tick-tock": "^1.0.0",
     "ttl-mem-cache": "^4.0.2",
-    "uniqid": "^5.0.3",
-    "vectorclock": "0.0.0",
     "web3": "^1.0.0-beta.36"
   },
   "devDependencies": {
