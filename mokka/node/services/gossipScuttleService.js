@@ -20,7 +20,11 @@ class GossipScuttleService {
     let requests = {};
     let newPeers = [];
     for (let pubKey of Object.keys(digest)) {
-      let localVersion = this.maxVersionSeenForPeer(pubKey);
+      //let localVersion = this.maxVersionSeenForPeer(pubKey);
+      let localVersion = await this.peers[pubKey]._getMaxVersion();
+
+      console.log(`local version ${localVersion} of peer ${pubKey}`)
+
       let localPeer = this.peers[pubKey];
 
       if (!this.peers[pubKey]) {
@@ -66,7 +70,6 @@ class GossipScuttleService {
   async updateKnownState (deltas) {
     for (let key of Object.keys(deltas)) {
       let delta = deltas[key];
-
       let pubKey = delta.shift();
       let peerState = this.peers[pubKey];
       await peerState.updateWithDelta(delta[0], delta[1], delta[2]);

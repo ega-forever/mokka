@@ -1,6 +1,6 @@
 {
   "name": "mokka",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "mokka consensus",
   "main": "mokka/index.js",
   "scripts": {
@@ -9,7 +9,11 @@
     "coverage": "node ./node_modules/istanbul/lib/cli cover mokka/node/index.js"
   },
   "keywords": [
-    "mokka"
+    "mokka",
+    "consensus",
+    "rsm",
+    "raft",
+    "distributed"
   ],
   "author": "Egor Zuev",
   "license": "AGPL",

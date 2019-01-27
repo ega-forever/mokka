@@ -21,6 +21,10 @@ class PeerState extends EventEmitter {
 
   async updateWithDelta (k, v, n) {
 
+    if(n === this.maxVersionSeen){
+      this.mokka.logger.info(`equal version pending ${k}`);
+    }
+
     if (n > this.maxVersionSeen) {
 
       if (k === '__heartbeat__') {
@@ -28,20 +32,21 @@ class PeerState extends EventEmitter {
         this.detector.add(d.getTime());
         this.setLocalKey(k, v, n);
       } else {
-        this.mokka.logger.info(`received pending ${k} with next version ${this.maxVersionSeen + 1}`);
+        this.mokka.logger.info(`received pending ${k} with next version ${this.maxVersionSeen + 1} for peer ${this.pubKey}`);
         await this.addToDb(v); //todo implement
       }
     }
   }
 
   async _getMaxVersion(){
-    let {index} = await this.mokka.lastInfo;
-    let count = await this.mokka.log.getPendingCount();
-    return index + count;
+   // let {index} = await this.mokka.lastInfo;
+    let count = await this.mokka.log.getPendingCount(this.pubKey);
+  //  return index + count;
+    return count;
   }
 
   async addToDb (command) { //todo refactor
-    await this.mokka.log.putPending(command, this.maxVersionSeen + 1);
+    await this.mokka.log.putPending(command, this.maxVersionSeen + 1, this.pubKey);
     this.maxVersionSeen = await this._getMaxVersion();
   }
 
@@ -59,7 +64,7 @@ class PeerState extends EventEmitter {
 
   async deltasAfterVersion (lowestVersion) {
 
-    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion);
+    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, 10);
 
     let items = await Promise.mapSeries(hashes, async hash => {
       let item = await this.mokka.log.getPending(hash);
