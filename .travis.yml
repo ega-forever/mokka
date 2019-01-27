@@ -1,0 +1,24 @@
+sudo: required
+dist: trusty
+os: linux
+group: stable
+language: node_js
+node_js: 7.6.0
+
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install python2.7 git-all pkg-config libncurses5-dev libssl-dev libnss3-dev libexpat-dev libc6-dev -y
+
+install:
+  - npm install
+
+script:
+  - npm test
+  - npm run lint
+
+notifications:
+  email: false
+
+cache:
+  directories:
+    - node_modules

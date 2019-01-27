@@ -21,28 +21,34 @@ class TaskProcessor extends eventEmitter {
   async push (task) {
     return await new Promise(res =>
       this.semPending.take(async () => {
-        await this.mokka.log.putPending(task);
+        await this.mokka.gossip.push(task);//todo implement
         this.semPending.leave();
         res();
       })
     );
-
-
   }
 
+  async claimLeadership () {
+    if (this.mokka.state !== states.LEADER)
+      await this._lock();
+  }
 
-  async runLoop () { //loop for checking new packets
+  async _runLoop () { //loop for checking new packets
     while (this.run) {
 
+      if (this.mokka.state !== states.LEADER) {
+        await new Promise(res => this.mokka.once(eventTypes.LEADER, res));
+        continue;
+      }
 
       if (!this.sem.available()) {
-        await new Promise(res=> this.once(eventTypes.QUEUE_AVAILABLE, res));
+        await new Promise(res => this.once(eventTypes.QUEUE_AVAILABLE, res));
         continue;
       }
 
       let lastEntry = await this.mokka.log.getLastEntry();
 
-      if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {
+      if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {//check for leader only
 
         let followers = _.chain(this.mokka.nodes)
           .reject(node => _.find(lastEntry.responses, {publicKey: node.publicKey}))
@@ -51,34 +57,28 @@ class TaskProcessor extends eventEmitter {
         const minConfirmations = Math.floor(followers.length / 2) + 1;
 
         if (lastEntry.responses.length - 1 < minConfirmations) {
-          await new Promise(res=> this.mokka.once(eventTypes.ENTRY_COMMITTED, res));
+          await new Promise(res => this.mokka.once(eventTypes.ENTRY_COMMITTED, res));
           continue;
         }
       }
 
 
       let pending = await this.mokka.log.getFirstPending();
+
       if (!pending.hash) {
-        await Promise.delay(this.mokka.timeout()); //todo delay for next tick or event on new push
+        await Promise.delay(this.mokka.time.timeout()); //todo delay for next tick or event on new push
         continue;
       }
 
 
       await this._commit(pending.command, pending.hash);
-      this.mokka.logger.trace(`pulling pending task ${pending.command} with hash ${pending.hash}`);
-      await this.mokka.log.pullPending(pending.hash);
     }
-
-
   }
 
   async _commit (task, hash) {
 
     return await new Promise(res =>
       this.sem.take(async () => {
-
-        if (this.mokka.state !== states.LEADER)
-          await this._lock();
 
         let checkPending = await this.mokka.log.getPending(hash);
 
@@ -91,10 +91,12 @@ class TaskProcessor extends eventEmitter {
         let entry = await this._save(task);
         await this._broadcast(entry.index, entry.hash);
         this.mokka.logger.trace(`task has been broadcasted ${task}`);
+        this.mokka.logger.trace(`pulling pending task ${task} with hash ${hash}`);//todo think about pull
+        await this.mokka.log.pullPending(hash);
 
         this.sem.leave();
         this.emit(eventTypes.QUEUE_AVAILABLE);
-        res(entry);
+        res();
       })
     );
   }
@@ -104,7 +106,7 @@ class TaskProcessor extends eventEmitter {
     const {index, createdAt} = await this.mokka.log.getLastEntry();
 
     if (Date.now() - createdAt < this.mokka.election.max && index !== 0) {
-      this.mokka.heartbeat(this.mokka.election.max);
+      this.mokka.time.heartbeat(this.mokka.election.max);
       await Promise.delay(this.mokka.election.max - (Date.now() - createdAt));
       this.mokka.logger.trace('going to await for the current leader');
       return await this._lock();
@@ -112,23 +114,23 @@ class TaskProcessor extends eventEmitter {
 
 
     this.mokka.logger.trace('promoting by propose');
-    this.mokka.timers.clear('heartbeat');
+    this.mokka.time.timers.clear('heartbeat');
     await this.mokka.actions.node.promote(2);
 
-    this.mokka.heartbeat(this.mokka.timeout() + this.mokka.election.max);
+    this.mokka.time.heartbeat(this.mokka.time.timeout() + this.mokka.election.max);
 
     await Promise.delay(this.mokka.election.max);
 
     if (this.mokka.state !== states.LEADER) {
       this.mokka.logger.trace('trying to propose task again');
-      let timeout = this.mokka.timeout();
+      let timeout = this.mokka.time.timeout();
       const {createdAt} = this.mokka.lastInfo;
       const delta = Date.now() - createdAt;
 
       if (delta < this.mokka.election.max)
         timeout += delta;
 
-      this.mokka.heartbeat(timeout);
+      this.mokka.time.heartbeat(timeout);
       await Promise.delay(timeout);
       return await this._lock();
     }

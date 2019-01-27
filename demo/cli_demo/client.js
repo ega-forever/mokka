@@ -1,11 +1,11 @@
-const Log = require('../mokka/log/log'),
+const Log = require('../../mokka').storage,
   Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   path = require('path'),
-  hashUtils = require('../mokka/utils/hashes'),
+  hashUtils = require('../../mokka/utils/hashes'),
   detectPort = require('detect-port'),
-  TCPMokka = require('../mokka/implementation/TCP'),
-  states = require('../mokka/node/factories/stateFactory'),
+  TCPMokka = require('../../mokka').implementation.TCP,
+  states = require('../../mokka/node/factories/stateFactory'),
   readline = require('readline');
 
 
@@ -24,14 +24,6 @@ const keys = [
   '36aa6e0db4e8450f8665f69009eb01e73ed49112da217019d810a398a78bc08b',
   'fe2054dd406fa09bf8fbf95fb8aa4abdf045ef32b8c8b7f702571bc8723885fb',
   'fe2054dd406fa09bf8fbf95fb8aa4abdf045ef32b8c8b7f702571bc8723885f1'
-];
-
-
-const hosts = [
-  {host: '52.15.183.149', port: 19742},
-  {host: '52.15.183.149', port: 17244},
-  {host: '52.15.183.149', port: 12764},
-  {host: '52.15.183.149', port: 14898}
 ];
 
 const pubKeys = keys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
@@ -58,26 +50,20 @@ const initMokka = async () => {
     if (index === index1)
       continue;
     uris.push(`/ip4/127.0.0.1/tcp/${startPort + index1}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
-
-    //uris.push(`/ip4/${hosts[index1].host}/tcp/${hosts[index1].port}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
   }
-
-
-  const peers = _.chain(pubKeys).cloneDeep().pullAt(index).value();
 
   mokka = new TCPMokka({
     address: `/ip4/127.0.0.1/tcp/${startPort + index}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
     electionMin: 300,
     electionMax: 1000,
-    heartbeat: 50,
+    heartbeat: 200,
     Log: Log,
-    log_options: {
+    logOptions: {
       adapter: require('leveldown'),
       path: path.join('./', 'dump', `test.${index}.db`)
     },
     logLevel: 30,
-    privateKey: keys[index],
-    peers: peers
+    privateKey: keys[index]
   });
 
 
@@ -85,7 +71,7 @@ const initMokka = async () => {
     mokka.actions.node.join(peer);
 
   mokka.on('error', function (err) {
-    //console.log(err);
+    console.log(err);
   });
 
   mokka.on('state change', function (state) {
@@ -116,6 +102,9 @@ const askCommand = (rl, mokka) => {
       await generateTxsAsSingle(mokka, amount);
     }
 
+    if(command.indexOf('take_ownership') === 0)
+      await takeOwnership(mokka);
+
 
     askCommand(rl, mokka);
   });
@@ -139,6 +128,11 @@ const generateTxs = async (mokka, amount) => {
 };
 
 
+const takeOwnership = async (mokka) => {
+  await mokka.processor.claimLeadership();
+};
+
+
 const generateTxsAsSingle = async (mokka, amount) => {
 
   let txs = [];
@@ -156,9 +150,7 @@ const generateTxsAsSingle = async (mokka, amount) => {
 
   }
 
-  console.log('size', Buffer.from(JSON.stringify(txs)).length);
   await mokka.processor.push(txs);
-
 
 };
 

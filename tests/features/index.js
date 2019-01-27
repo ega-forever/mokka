@@ -5,12 +5,9 @@
  */
 
 const Promise = require('bluebird'),
-  Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   expect = require('chai').expect,
-  hashUtils = require('../../mokka/utils/hashes'),
-  cp = require('child_process'),
-  path = require('path');
+  startPeers = require('../utils/node/startPeers');
 
 module.exports = (ctx) => {
 
@@ -22,198 +19,157 @@ module.exports = (ctx) => {
 
     for (let index = 0; index < nodesCount; index++)
       ctx.ports.push(2000 + index);
-
-
   });
 
+  it('run tasks serially (50 tasks per each node)', async () => {
 
-  it('run tasks concurrently (10 times, 100 tasks per each node)', async () => {
+    const {nodes} = await startPeers(ctx.ports);
+    let states = {};
 
+    await Promise.delay(5000);
 
-    for (let tries = 1; tries <= 10; tries++) {
-
-      console.log(`run simulation ${tries}`);
-
-      ctx.nodes = [];
-      let states = {};
-
-      const nodePath = path.join(__dirname, '../node/node.js');
-
-      let privKeys = _.chain(new Array(ctx.ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
-      let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
-
-      const killCb = () => {
-        console.log('killed by child!')
-        process.exit(0);
-      };
-
-      for (let index = 0; index < ctx.ports.length; index++) {
-
-        let uris = [];
-
-        for (let index1 = 0; index1 < ctx.ports.length; index1++) {
-          if (index === index1)
-            continue;
-          uris.push(`/ip4/127.0.0.1/tcp/${ctx.ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
-        }
-
-        let amount = 100;
-
-        const nodePid = cp.fork(nodePath, {
-          env: _.merge({}, process.env, {
-            PRIVATE_KEY: privKeys[index],
-            PORT: ctx.ports[index],
-            PEERS: uris.join(';'),
-            CHUNKS: [amount * index + 1, amount * (index + 1)].join(':')
-          })
-        });
-
-        ctx.nodes.push(nodePid);
+    const killCb = () => {
+      console.log('killed by child!');
+      process.exit(0);
+    };
 
 
-        // nodePid.stdout.on('data', (data) => {
-        nodePid.on('message', (data) => {
-          data = data.toString();
-          console.log(data);
-          try {
-            data = JSON.parse(data);
-            if (_.isNumber(data.node)) {
-              states[index] = data;
-            }
-          } catch (e) {
-          }
-        });
+    for (let index = 0; index < nodes.length; index++) {
+      nodes[index].on('message', (data) => {
+        if (data.command === 'status')
+          states[index] = data.info;
+      });
+      nodes[index].on('exit', killCb);
+    }
 
-        nodePid.on('exit', killCb);
-      }
+    let taskAmount = 50;
+
+    let updateIntervalPid = setInterval(() => {
+      for (let node of nodes)
+        node.send({command: 'status'});
+    }, 1000);
+
+    for (let index = 0; index < nodes.length; index++) {
 
 
-      await Promise.delay(10000);
+      for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
+        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}`]});
 
-      for (let node of ctx.nodes)
-        node.send({start: true});
 
       await new Promise(res => {
+        let intervalPid = setInterval(() => {
+          if (!states[index] || states[index].index !== (index + 1) * taskAmount) //todo await until most of nodes will ack
+            return;
 
-        let intervalId = setInterval(() => {
-          let records = Object.values(states);
-          if (records.length === ctx.nodes.length) {
+          clearInterval(intervalPid);
+          res();
+        }, 1000);
 
-            expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
-            expect(_.uniq(records.map(rec => rec.index)).length).to.eq(1);
-            expect(_.uniq(records.map(rec => rec.term)).length).to.eq(1);
-
-            clearInterval(intervalId);
-            res();
-          }
-        }, 3000);
-
-      });
-
-      for (let node of ctx.nodes) {
-        node.removeListener('exit', killCb);
-        node.kill();
-      }
+      })
     }
+
+
+    await Promise.delay(10000);//todo remove
+
+    clearInterval(updateIntervalPid);
+    let records = Object.values(states);
+
+    console.log(records)
+
+    expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
+
+
+    for (let node of nodes) {
+      node.removeListener('exit', killCb);
+      node.kill();
+    }
+
   });
 
-  it('run tasks concurrently (random timing, 10 times, 10 tasks per each node)', async () => {
+  it('run tasks concurrently (50 tasks per each node)', async () => {
+
+    const {nodes} = await startPeers(ctx.ports);
+    await Promise.delay(3000);
+    let states = {};
+
+    const killCb = () => {
+      console.log('killed by child!');
+      process.exit(0);
+    };
 
 
-    for (let tries = 1; tries <= 10; tries++) {
+    for (let index = 0; index < nodes.length; index++) {
+      nodes[index].on('message', (data) => {
+        if (data.command === 'status')
+          states[index] = data.info;
+      });
+      nodes[index].on('exit', killCb);
+    }
 
-      console.log(`run simulation ${tries}`);
+    let taskAmount = 50;
 
-      ctx.nodes = [];
-      let states = {};
+    let updateIntervalPid = setInterval(() => {
+      for (let node of nodes)
+        node.send({command: 'status'});
+    }, 1000);
 
-      const nodePath = path.join(__dirname, '../node/node.js');
+    for (let index = 0; index < nodes.length; index++)
+      for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
+        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}.${ctx.ports[index]}`]});
 
-      let privKeys = _.chain(new Array(ctx.ports.length)).fill(1).map(() => Wallet.generate().getPrivateKey().toString('hex')).value();
-      let pubKeys = privKeys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
 
-      const killCb = () => {
-        console.log('killed by child!')
-        process.exit(0);
-      };
+    const pushed = [0];
 
-      for (let index = 0; index < ctx.ports.length; index++) {
+    await new Promise(res => {
 
-        let uris = [];
+      let intervalId = setInterval(async () => {
+        let records = Object.values(states);
 
-        for (let index1 = 0; index1 < ctx.ports.length; index1++) {
-          if (index === index1)
-            continue;
-          uris.push(`/ip4/127.0.0.1/tcp/${ctx.ports[index1]}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
+        if (records.length === nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1) {
+          let nextIndex = records[0].index / taskAmount;
+
+          if (!pushed.includes(nextIndex) && _.isInteger(nextIndex) && nextIndex <= nodes.length - 1) {
+            for (let taskIndex = nextIndex * taskAmount; taskIndex < nextIndex * taskAmount + taskAmount; taskIndex++)
+              nodes[nextIndex].send({command: 'push', data: [taskIndex]});
+
+            pushed.push(nextIndex);
+          }
         }
 
-        let amount = 10;
 
-        const nodePid = cp.fork(nodePath, {
-          env: _.merge({}, process.env, {
-            PRIVATE_KEY: privKeys[index],
-            PORT: ctx.ports[index],
-            PEERS: uris.join(';'),
-            CHUNKS: [amount * index + 1, amount * (index + 1)].join(':'),
-            RANDOM_DELAY: 1
-          })
-        });
-
-        ctx.nodes.push(nodePid);
+        if (records.length === nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1 &&
+          _.uniq(records.map(rec => rec.index)).length === 1 && _.uniq(records.map(rec => rec.index))[0] === taskAmount * nodes.length) {
 
 
-        // nodePid.stdout.on('data', (data) => {
-        nodePid.on('message', (data) => {
-          data = data.toString();
-          console.log(data);
-          try {
-            data = JSON.parse(data);
-            if (_.isNumber(data.node)) {
-              states[index] = data;
-            }
-          } catch (e) {
-          }
-        });
-
-        nodePid.on('exit', killCb);
-      }
+          expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
+          expect(_.uniq(records.map(rec => rec.index)).length).to.eq(1);
+          expect(_.uniq(records.map(rec => rec.term)).length).to.eq(1);
 
 
-      await Promise.delay(10000);
+          clearInterval(intervalId);
+          res();
+        }
 
-      for (let node of ctx.nodes)
-        node.send({start: true});
+        for (let node of nodes)
+          node.send({command: 'status'});
 
-      await new Promise(res => {
 
-        let intervalId = setInterval(() => {
-          let records = Object.values(states);
-          if (records.length === ctx.nodes.length) {
+      }, 5000);
 
-            expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
-            expect(_.uniq(records.map(rec => rec.index)).length).to.eq(1);
-            expect(_.uniq(records.map(rec => rec.term)).length).to.eq(1);
+    });
 
-            clearInterval(intervalId);
-            res();
-          }
-        }, 3000);
+    await Promise.delay(5000);
 
-      });
-
-      for (let node of ctx.nodes) {
-        node.removeListener('exit', killCb);
-        node.kill();
-      }
+    clearInterval(updateIntervalPid);
+    for (let node of nodes) {
+      node.removeListener('exit', killCb);
+      node.kill();
     }
+
+
   });
 
-
-
-  after('kill environment', async () => {
-    // ctx.blockProcessorPid.kill();
-    // await Promise.delay(30000);
-  });
+  after('kill environment', async () => {});
 
 
 };

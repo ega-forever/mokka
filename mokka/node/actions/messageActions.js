@@ -4,92 +4,95 @@ const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory');
 
 
-const message = async function (who, what) {
+class MessageActions {
 
-  let mokka = this,
-    nodes = [];
+  constructor (mokka) {
+    this.mokka = mokka;
+  }
 
-  switch (who) {
-    case states.LEADER:
-      for (let node of mokka.nodes)
-        if (mokka.leader === node.publicKey)
-          nodes.push(node);
+  async message (who, what) {
 
-      break;
+    let nodes = [];
 
-    case states.FOLLOWER:
-      for (let node of mokka.nodes)
-        if (mokka.leader !== node.publicKey)
-          nodes.push(node);
+    switch (who) {
+      case states.LEADER:
+        for (let node of this.mokka.nodes)
+          if (this.mokka.leader === node.publicKey)
+            nodes.push(node);
 
-      break;
+        break;
 
-    case states.CHILD:
-      Array.prototype.push.apply(nodes, mokka.nodes);
-      break;
+      case states.FOLLOWER:
+        for (let node of this.mokka.nodes)
+          if (this.mokka.leader !== node.publicKey)
+            nodes.push(node);
 
-    default:
-      for (let node of mokka.nodes)
-        if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey)
-          nodes.push(node);
+        break;
+
+      case states.CHILD:
+        Array.prototype.push.apply(nodes, this.mokka.nodes);
+        break;
+
+      default:
+        for (let node of this.mokka.nodes)
+          if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey)
+            nodes.push(node);
+
+    }
+
+    for (let client of nodes)
+      client.write(encodePacketUtils(what));
+
+
+    // _timing.call(mokka, latency); //todo implement timing
 
   }
 
-  for (let client of nodes)
-    client.write(encodePacketUtils(what));
+
+  async packet (type, data) {
+
+    const wrapped = {
+      state: this.mokka.state,
+      term: this.mokka.term,
+      publicKey: this.mokka.publicKey,//todo remove
+      type: type
+    };
 
 
-  // _timing.call(mokka, latency); //todo implement timing
+    wrapped.last = this.mokka.lastInfo;
 
-};
+    if (data)
+      wrapped.data = data;
 
-const packet = async function (type, data) {
-
-  const wrapped = {
-    state: this.state,
-    term: this.term,
-    publicKey: this.publicKey,//todo remove
-    type: type
-  };
+    return wrapped;
+  }
 
 
-  wrapped.last = this.lastInfo;
+  async appendPacket (entry) {
 
-  if (data)
-    wrapped.data = data;
+    const {proof} = await this.mokka.log.getProof(entry ? entry.term : this.mokka.term);
 
-  return wrapped;
-};
-
-const appendPacket = async function (entry) {
-
-  const {proof} = await this.log.getProof(entry ? entry.term : this.term);
-
-  let payload = {
-    state: this.state,
-    term: entry ? entry.term : this.term,
-    publicKey: this.publicKey,//todo remove
-    type: messageTypes.APPEND,
-    proof: proof
-  };
+    let payload = {
+      state: this.mokka.state,
+      term: entry ? entry.term : this.mokka.term,
+      publicKey: this.mokka.publicKey,//todo remove
+      type: messageTypes.APPEND,
+      proof: proof
+    };
 
 
-  if(entry){
-    payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash']);
-    payload.last = await this.log.getEntryInfoBefore(entry);
-  }else 
-    payload.last = this.lastInfo;
-  
+    if (entry) {
+      payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash']);
+      payload.last = await this.mokka.log.getEntryInfoBefore(entry);
+    } else
+      payload.last = this.mokka.lastInfo;
 
-  return payload;
-};
 
-module.exports = (instance) => {
+    return payload;
+  }
 
-  _.set(instance, 'actions.message', {
-    message: message.bind(instance),
-    packet: packet.bind(instance),
-    appendPacket: appendPacket.bind(instance)
-  });
 
-};
+}
+
+
+module.exports = MessageActions;

@@ -21,7 +21,10 @@ class Log extends EventEmitter {
     this.prefixes = {
       logs: 1,
       term: 2,
-      pending: 3
+      pending: 3,
+      refs: 4,
+      pendingRefs: 5,
+      pendingStates: 6
     };
 
     this.eventTypes = {
@@ -29,7 +32,6 @@ class Log extends EventEmitter {
     };
 
     this.node = node;
-
 
 
     this.db = levelup(encode(_options.adapter(`${options.path}_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
@@ -142,28 +144,85 @@ class Log extends EventEmitter {
     }
 
     let result = await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
+    await this.db.put(`${this.prefixes.refs}:${entry.hash}`, entry.index);
     this.emit(this.eventTypes.LOGS_UPDATED);
     return result;
   }
 
-  async putPending (command) {
+  async checkPendingCommitted (command) {
+    const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
+    let record = await this.getByHash(hash);
 
-    let record = {command};
+    return !!record;
+  }
+
+  async putPending (command, version, peer) { //todo reimplement
+
+    let record = {command, received: this.node.leader === this.node.publicKey, version};
 
     const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
+    let existedLog = await this.getByHash(hash);
+
+    if (existedLog || command === null) {
+      await this.db.put(`${this.prefixes.pendingStates}:${peer}`, version);
+      return;
+    }
+
     await this.db.put(`${this.prefixes.pending}:${hash}`, record);
+    await this.db.put(`${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(version)}`, hash);//todo remove
+    await this.db.put(`${this.prefixes.pendingStates}:${peer}`, version);
 
     return {
       command: command,
-      hash: hash
+      hash: hash,
+      received: record.received
     };
   }
 
-  async pullPending (hash) {
+
+  async pullPending (hash) {//todo reimplement
+
+    let pending = await this.getPending(hash);
+
+    if (!pending)
+      return;
+
     await this.db.del(`${this.prefixes.pending}:${hash}`);
+
+    let refs = await this.getPendingRefsByHash(hash);
+
+    for (let ref of refs)
+      await this.db.del(ref);
   }
+
+
+  async getPendingRefsByHash (hash) {
+
+    return await new Promise((resolve, reject) => {
+
+      let refs = [];
+
+      this.db.createReadStream({
+        lt: `${this.prefixes.pendingRefs + 1}`,
+        gte: `${this.prefixes.pendingRefs}`
+      })
+        .on('data', (data) => {
+          if (data.value === hash)
+            refs.push(data.key.toString());
+        })
+        .on('error', err => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(refs);
+        });
+    });
+
+
+  }
+
 
   async getPending (hash, task = false) {
 
@@ -179,12 +238,9 @@ class Log extends EventEmitter {
 
   async getFirstPending () {
 
-    return await new Promise((resolve, reject) => {
+    let pending = await new Promise((resolve, reject) => {
 
-      let item = {
-        hash: null,
-        command: null
-      };
+      let record;
 
       this.db.createReadStream({
         limit: 1,
@@ -192,17 +248,66 @@ class Log extends EventEmitter {
         gte: `${this.prefixes.pending}:${Log._getBnNumber(0)}`
       })
         .on('data', data => {
-          item = data.value;
-          item.hash = data.key.toString().replace(`${this.prefixes.pending}:`, '');
+          record = data.value;
         })
         .on('error', err => {
           reject(err);
         })
         .on('end', () => {
-          resolve(item);
+          resolve(record);
+        });
+    });
+
+    if (!pending)
+      return {
+        hash: null,
+        command: null
+      };
+
+    let hash = crypto.createHmac('sha256', JSON.stringify(pending.command)).digest('hex');
+
+    return {
+      hash: hash,
+      command: pending.command
+    };
+  }
+
+  async getPendingCount (peer) {//todo refactor (use limit + part of key)
+    try {
+      return await this.db.get(`${this.prefixes.pendingStates}:${peer}`);
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  async getPendingHashesAfterVersion (version, peer, limit) {//todo implement limit
+
+    return await new Promise((resolve, reject) => {
+
+      let items = [];
+
+      let query = {
+        lt: `${this.prefixes.pendingRefs + 1}:${peer}:${Log._getBnNumber(0)}`,
+        gt: `${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(version)}`
+      };
+
+      if (_.isNumber(limit))
+        query.limit = limit;
+
+      this.db.createReadStream(query)
+        .on('data', data => {
+          if (data.key.toString().includes(peer))
+            items.push(data.value);
+        })
+        .on('error', err => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(items);
         });
     });
   }
+
 
   async addProof (term, proof) { //do we need to
     return await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(term)}`, proof);
@@ -319,6 +424,17 @@ class Log extends EventEmitter {
   async get (index) {
     try {
       return await this.db.get(`${this.prefixes.logs}:${Log._getBnNumber(index)}`);
+    } catch (err) {
+      return null;
+    }
+
+  }
+
+
+  async getByHash (hash) {
+    try {
+      let refIndex = await this.db.get(`${this.prefixes.refs}:${hash}`);
+      return await this.get(refIndex);
     } catch (err) {
       return null;
     }

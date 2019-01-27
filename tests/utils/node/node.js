@@ -1,8 +1,8 @@
-const Log = require('../../mokka/log/log'),
+const Log = require('../../../mokka/log/log'),
   Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
-  hashUtils = require('../../mokka/utils/hashes'),
-  TCPMokka = require('../../mokka/implementation/TCP');
+  hashUtils = require('../../../mokka/utils/hashes'),
+  TCPMokka = require('../../../mokka/implementation/TCP');
 
 let mokka = null;
 
