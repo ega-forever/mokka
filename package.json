@@ -3,11 +3,20 @@
   "version": "0.0.1",
   "description": "mokka consensus",
   "main": "mokka/index.js",
+  "homepage": "https://github.com/ega-forever/mokka#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ega-forever/mokka.git"
+  },
   "scripts": {
     "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js",
     "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore mokka",
     "coverage": "node ./node_modules/istanbul/lib/cli cover mokka/node/index.js"
   },
+  "files": [
+    "mokka",
+    "LICENSE"
+  ],
   "keywords": [
     "mokka",
     "consensus",
@@ -36,7 +45,7 @@
     "speakeasy": "^2.0.0",
     "tick-tock": "^1.0.0",
     "ttl-mem-cache": "^4.0.2",
-    "web3": "^1.0.0-beta.36"
+    "web3": "1.0.0-beta.36"
   },
   "devDependencies": {
     "chai": "^4.2.0",
