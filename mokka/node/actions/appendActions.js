@@ -132,7 +132,7 @@ class AppendActions {
         who: packet.publicKey
       };
     }
-  };
+  }
 
   async appendAck (packet) {
 
@@ -161,7 +161,7 @@ class AppendActions {
     });
 
     return replies;
-  };
+  }
 
   async obtain (packet) {
 
@@ -172,7 +172,7 @@ class AppendActions {
       who: packet.publicKey,
       reply: reply
     };
-  };
+  }
 
   async appendFail (packet) {
 
@@ -191,7 +191,7 @@ class AppendActions {
       reply: reply,
       who: packet.publicKey
     };
-  };
+  }
 
 
 }

@@ -71,7 +71,7 @@ const initMokka = async () => {
     mokka.actions.node.join(peer);
 
   mokka.on('error', function (err) {
-    //console.log(err);
+    console.log(err);
   });
 
   mokka.on('state change', function (state) {
@@ -129,7 +129,7 @@ const generateTxs = async (mokka, amount) => {
 
 
 const takeOwnership = async (mokka) => {
-    await mokka.processor.claimLeadership();
+  await mokka.processor.claimLeadership();
 };
 
 

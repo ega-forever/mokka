@@ -46,7 +46,7 @@ class MessageActions {
 
     // _timing.call(mokka, latency); //todo implement timing
 
-  };
+  }
 
 
   async packet (type, data) {
@@ -65,7 +65,7 @@ class MessageActions {
       wrapped.data = data;
 
     return wrapped;
-  };
+  }
 
 
   async appendPacket (entry) {
@@ -89,7 +89,7 @@ class MessageActions {
 
 
     return payload;
-  };
+  }
 
 
 }

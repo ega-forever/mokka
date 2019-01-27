@@ -5,7 +5,7 @@
   "main": "mokka/index.js",
   "scripts": {
     "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js",
-    "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore .",
+    "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore mokka",
     "coverage": "node ./node_modules/istanbul/lib/cli cover mokka/node/index.js"
   },
   "keywords": [

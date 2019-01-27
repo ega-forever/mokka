@@ -45,7 +45,7 @@ class NodeActions {
     this.mokka.gossip.handleNewPeers([publicKey]);
 
     return node;
-  };
+  }
 
   leave (publicKey) {
     let index = -1,
@@ -69,7 +69,7 @@ class NodeActions {
     }
 
     return node;
-  };
+  }
 
   end () {
 
@@ -90,7 +90,7 @@ class NodeActions {
 
     this.mokka.time.timers = this.mokka.Log = this.mokka.beat = this.mokka.election = null;
     return true;
-  };
+  }
 
 
   async promote () {
@@ -192,7 +192,7 @@ class NodeActions {
       });
 
     });
-  };
+  }
 
 }
 

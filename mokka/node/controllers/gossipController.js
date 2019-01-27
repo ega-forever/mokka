@@ -22,17 +22,10 @@ class GossipController extends EventEmitter {
   start () {
     this.mokka.time.timers.setInterval('gossip_heart_beat', () => this.myState.beatHeart(), 1000);
     this.mokka.time.timers.setInterval('gossip', () => this.gossip(), 1000);
-
-    /*    setInterval(() => {
-          console.log('test');
-          this.myState.updateLocal('test', 'test123' + Date.now());
-        }, 5000);*/
   }
 
 
-  async push (record) { //todo implement
-    //await this.mokka.log.putPending(task);
-
+  async push (record) {
     let isCommitted = await this.mokka.log.checkPendingCommitted(record);
 
     if(isCommitted)
@@ -106,7 +99,6 @@ class GossipController extends EventEmitter {
 
     peer.on('update', (k, v) => { //todo move to state
       this.emit('update', peer.pubKey, k, v);
-      console.log('super update', k, v); //todo remove
     });
     peer.on('peer_alive', () => { //todo move to state
       this.emit('peer_alive', peer.pubKey);

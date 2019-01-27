@@ -166,20 +166,9 @@ class Log extends EventEmitter {
     let existedLog = await this.getByHash(hash);
 
     if (existedLog || command === null) {
-      console.log('zero command for version', version, peer)
       await this.db.put(`${this.prefixes.pendingStates}:${peer}`, version);
       return;
     }
-
-/*    let pending = await this.getPending(hash);
-
-    if (pending){
-      let currentVersion = await this.db.get(`${this.prefixes.pendingStates}:${peer}`);
-      console.log('rewriting pending', command, peer, version, currentVersion);
-
-
-      process.exit(0)
-    }*/
 
     await this.db.put(`${this.prefixes.pending}:${hash}`, record);
     await this.db.put(`${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(version)}`, hash);//todo remove
@@ -265,7 +254,7 @@ class Log extends EventEmitter {
           reject(err);
         })
         .on('end', () => {
-          resolve(record)
+          resolve(record);
         });
     });
 

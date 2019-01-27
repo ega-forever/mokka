@@ -217,7 +217,7 @@ class VoteActions {
       reply: reply,
       who: packet.publicKey
     };
-  };
+  }
 
 
   async voted (packet) {
@@ -353,7 +353,7 @@ class VoteActions {
       who: states.FOLLOWER
     };
 
-  };
+  }
 }
 
 module.exports = VoteActions;

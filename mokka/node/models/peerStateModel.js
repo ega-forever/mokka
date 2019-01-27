@@ -21,11 +21,11 @@ class PeerState extends EventEmitter {
 
   async updateWithDelta (k, v, n) {
 
-    if(n === this.maxVersionSeen){
+    if(n === this.maxVersionSeen)
       this.mokka.logger.info(`equal version pending ${k}`);
-    }
+    
 
-    if (n > this.maxVersionSeen) {
+    if (n > this.maxVersionSeen) 
 
       if (k === '__heartbeat__') {
         let d = new Date();
@@ -35,13 +35,13 @@ class PeerState extends EventEmitter {
         this.mokka.logger.info(`received pending ${k} with next version ${this.maxVersionSeen + 1} for peer ${this.pubKey}`);
         await this.addToDb(v); //todo implement
       }
-    }
+    
   }
 
-  async _getMaxVersion(){
-   // let {index} = await this.mokka.lastInfo;
+  async _getMaxVersion (){
+    // let {index} = await this.mokka.lastInfo;
     let count = await this.mokka.log.getPendingCount(this.pubKey);
-  //  return index + count;
+    //  return index + count;
     return count;
   }
 
@@ -64,7 +64,7 @@ class PeerState extends EventEmitter {
 
   async deltasAfterVersion (lowestVersion) { //todo reimplement
 
-/*    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, 10);
+    /*    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, 10);
     let maxVersion = lowestVersion + 10 < this.maxVersionSeen ? lowestVersion + 10 : this.maxVersionSeen;*/
 
     let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey);
@@ -73,7 +73,7 @@ class PeerState extends EventEmitter {
     let items = await Promise.mapSeries(hashes, async hash => {
       let item = await this.mokka.log.getPending(hash);
 
-   /*   if (!item)
+      /*   if (!item)
         console.log('found missed hash');*/
 
       return [hash, _.get(item, 'command'), _.get(item, 'version', maxVersion)];
@@ -82,14 +82,14 @@ class PeerState extends EventEmitter {
 
     if(!items.length && lowestVersion < this.maxVersionSeen){
       let {hash} = await this.mokka.log.getLastInfo();
-      return [[hash, null, maxVersion]]
+      return [[hash, null, maxVersion]];
     }
 
 
     return _.chain(items)
       .compact()
       .sortBy(item => item[2])
-/*      .transform((result, item) => {
+    /*      .transform((result, item) => {
 
         if (result.length) {
           let prev = _.last(result);

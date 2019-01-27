@@ -14,7 +14,7 @@ class RequestProcessor {
     this.sem = semaphore(1);
   }
 
-  async process(packet){
+  async process (packet){
 
     let data = packet.type === messageTypes.ACK ?
       await this._process(packet) :
@@ -84,7 +84,7 @@ class RequestProcessor {
         term: packet.term
       });
 
-      this.mokka.emit(eventTypes.LEADER) //todo replace with change
+      this.mokka.emit(eventTypes.LEADER); //todo replace with change
 
     }
 
