@@ -1,11 +1,11 @@
-const Log = require('../mokka').storage,
+const Log = require('../../mokka').storage,
   Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   path = require('path'),
-  hashUtils = require('../mokka/utils/hashes'),
+  hashUtils = require('../../mokka/utils/hashes'),
   detectPort = require('detect-port'),
-  TCPMokka = require('../mokka').implementation.TCP,
-  states = require('../mokka/node/factories/stateFactory'),
+  TCPMokka = require('../../mokka').implementation.TCP,
+  states = require('../../mokka/node/factories/stateFactory'),
   readline = require('readline');
 
 

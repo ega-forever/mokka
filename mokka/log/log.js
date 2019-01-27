@@ -23,7 +23,8 @@ class Log extends EventEmitter {
       term: 2,
       pending: 3,
       refs: 4,
-      pendingRefs: 5
+      pendingRefs: 5,
+      pendingStates: 6
     };
 
     this.eventTypes = {
@@ -162,20 +163,17 @@ class Log extends EventEmitter {
 
     const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
-
-    let refs = await this.getPendingRefsByHash(hash);
-    let isIncluded = _.find(refs, ref => ref.includes(peer));
-    if (isIncluded)
-      return console.log(`already included ref for hash ${hash}`);
-
     let existedLog = await this.getByHash(hash);
 
-    if (existedLog)
+    if (existedLog) {
+      await this.db.put(`${this.prefixes.pendingStates}:${peer}`, version);
       return;
+    }
 
 
     await this.db.put(`${this.prefixes.pending}:${hash}`, record);
-    await this.db.put(`${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(version)}`, hash);
+    await this.db.put(`${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(version)}`, hash);//todo remove
+    await this.db.put(`${this.prefixes.pendingStates}:${peer}`, version);
 
     return {
       command: command,
@@ -194,12 +192,10 @@ class Log extends EventEmitter {
 
     await this.db.del(`${this.prefixes.pending}:${hash}`);
 
-    //let refs = await this.getPendingRefsByHash(hash);
+    let refs = await this.getPendingRefsByHash(hash);
 
-    /*    console.log(refs)
-
-        for(let ref of refs)
-          await this.db.del(ref);*/
+    for (let ref of refs)
+      await this.db.del(ref);
   }
 
 
@@ -227,6 +223,7 @@ class Log extends EventEmitter {
 
 
   }
+
 
   async getPending (hash, task = false) {
 
@@ -277,25 +274,11 @@ class Log extends EventEmitter {
   }
 
   async getPendingCount (peer) {//todo refactor (use limit + part of key)
-    return await new Promise((resolve, reject) => {
-
-      let count = 0;
-
-      this.db.createReadStream({
-        lt: `${this.prefixes.pendingRefs + 1}:${peer}:${Log._getBnNumber(0)}`,
-        gte: `${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(0)}`
-      })
-        .on('data', (data) => {
-          if (data.key.toString().includes(peer))
-            count++;
-        })
-        .on('error', err => {
-          reject(err);
-        })
-        .on('end', () => {
-          resolve(count);
-        });
-    });
+    try {
+      return await this.db.get(`${this.prefixes.pendingStates}:${peer}`);
+    } catch (e) {
+      return 0;
+    }
   }
 
   async getPendingHashesAfterVersion (version, peer, limit) {//todo implement limit
@@ -314,7 +297,8 @@ class Log extends EventEmitter {
 
       this.db.createReadStream(query)
         .on('data', data => {
-          items.push(data.value);
+          if (data.key.toString().includes(peer))
+            items.push(data.value);
         })
         .on('error', err => {
           reject(err);

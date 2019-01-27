@@ -23,8 +23,6 @@ class GossipScuttleService {
       //let localVersion = this.maxVersionSeenForPeer(pubKey);
       let localVersion = await this.peers[pubKey]._getMaxVersion();
 
-      console.log(`local version ${localVersion} of peer ${pubKey}`)
-
       let localPeer = this.peers[pubKey];
 
       if (!this.peers[pubKey]) {
@@ -60,11 +58,6 @@ class GossipScuttleService {
       requests: requests,
       newPeers: newPeers
     };
-  }
-
-  maxVersionSeenForPeer (peer) {
-    return this.peers[peer] ?
-      this.peers[peer].maxVersionSeen : 0;
   }
 
   async updateKnownState (deltas) {

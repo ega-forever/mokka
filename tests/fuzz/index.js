@@ -233,7 +233,7 @@ module.exports = (ctx) => {
 
     for (let index = 0; index < nodes.length; index++)
       for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
-        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}`]});
+        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}.${ctx.ports[index]}`]});
 
 
     const pushed = [0];
@@ -276,7 +276,9 @@ module.exports = (ctx) => {
 
     });
 
+    await Promise.delay(5000);
 
+    clearInterval(updateIntervalPid);
     for (let node of nodes) {
       node.removeListener('exit', killCb);
       node.kill();
