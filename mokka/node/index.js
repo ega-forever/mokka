@@ -1,6 +1,7 @@
 const TimerController = require('./controllers/timerController'),
   GossipController = require('./controllers/gossipController'),
   _ = require('lodash'),
+  Log = require('../log/log'),
   NodeModel = require('./models/nodeModel'),
   states = require('./factories/stateFactory'),
   decodePacketUtils = require('../utils/decodePacket'),
@@ -46,7 +47,7 @@ class Mokka extends NodeModel {
       priority: 1
     };
 
-    this.Log = options.Log;
+    this.Log = options.Log || Log;
     this.logger = bunyan.createLogger({name: 'mokka.logger', level: options.logLevel || 3});
 
     this.change = change;
@@ -61,6 +62,8 @@ class Mokka extends NodeModel {
 
     this.requestProcessor = new RequestProcessor(this);
     this.gossipRequestProcessor = new GossipRequestProcessor(this);
+
+
     this.log = new this.Log(this, options.logOptions);
 
     this._registerEvents();
