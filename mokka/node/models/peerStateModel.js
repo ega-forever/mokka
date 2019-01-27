@@ -64,9 +64,11 @@ class PeerState extends EventEmitter {
 
   async deltasAfterVersion (lowestVersion) { //todo reimplement
 
-    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, 10);
+/*    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, 10);
+    let maxVersion = lowestVersion + 10 < this.maxVersionSeen ? lowestVersion + 10 : this.maxVersionSeen;*/
 
-    let maxVersion = lowestVersion + 10 < this.maxVersionSeen ? lowestVersion + 10 : this.maxVersionSeen;
+    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey);
+    let maxVersion = this.maxVersionSeen;
 
     let items = await Promise.mapSeries(hashes, async hash => {
       let item = await this.mokka.log.getPending(hash);
@@ -80,7 +82,7 @@ class PeerState extends EventEmitter {
 
     if(!items.length && lowestVersion < this.maxVersionSeen){
       let {hash} = await this.mokka.log.getLastInfo();
-      return [[hash, null, this.maxVersionSeen]]
+      return [[hash, null, maxVersion]]
     }
 
 
