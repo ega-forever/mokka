@@ -1,5 +1,2 @@
 node_modules
-test_scripts
 tests
-test_fall_restore.js
-test_normal.js

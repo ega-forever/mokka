@@ -57,7 +57,7 @@ const initMokka = async () => {
     electionMin: 300,
     electionMax: 1000,
     heartbeat: 200,
-    Log: Log,
+    //Log: Log,
     logOptions: {
       adapter: require('leveldown'),
       path: path.join('./', 'dump', `test.${index}.db`)

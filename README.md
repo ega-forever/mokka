@@ -1,6 +1,10 @@
 # Mokka
 
+ [![Build Status](https://travis-ci.org/ega-forever/mokka.svg?branch=master)](https://travis-ci.org/ega-forever/mokka) 
+
 Mokka Consensus Algorithm implementation for Node.js.
+
+[Concept description](https://arxiv.org/ftp/arxiv/papers/1901/1901.08435.pdf) (PDF)
 
 
 * Persists to LevelDB (or any database exposing a [LevelDown](https://github.com/level/leveldown) interface).
@@ -18,13 +22,13 @@ Client example. In the following example we are going to create the federation o
 
 ```javascript
 const Log = require('mokka').storage,
-  Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   path = require('path'),
-  hashUtils = require('mokka/utils/hashes'),
+  Wallet = require('ethereumjs-wallet'),
+  hashUtils = require('mokka/mokka/utils/hashes'),
   detectPort = require('detect-port'),
   TCPMokka = require('mokka').implementation.TCP,
-  states = require('mokka/node/factories/stateFactory'),
+  states = require('mokka/mokka/node/factories/stateFactory'),
   readline = require('readline');
 
 
@@ -44,6 +48,9 @@ const keys = [
   'fe2054dd406fa09bf8fbf95fb8aa4abdf045ef32b8c8b7f702571bc8723885fb',
   'fe2054dd406fa09bf8fbf95fb8aa4abdf045ef32b8c8b7f702571bc8723885f1'
 ];
+
+const pubKeys = keys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
+
 
 const initMokka = async () => {
 
@@ -68,8 +75,6 @@ const initMokka = async () => {
       continue;
     uris.push(`/ip4/127.0.0.1/tcp/${startPort + index1}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index1])}`);
   }
-
-  const peers = _.chain(pubKeys).cloneDeep().pullAt(index).value();
 
   mokka = new TCPMokka({
     address: `/ip4/127.0.0.1/tcp/${startPort + index}/ipfs/${hashUtils.getIpfsHashFromHex(pubKeys[index])}`,
@@ -148,7 +153,7 @@ const generateTxs = async (mokka, amount) => {
 
 
 const takeOwnership = async (mokka) => {
-    await mokka.processor.claimLeadership();
+  await mokka.processor.claimLeadership();
 };
 
 
@@ -175,10 +180,9 @@ const generateTxsAsSingle = async (mokka, amount) => {
 
 
 module.exports = initMokka();
-
 ```
 Then install required deps:
-```npm install ethereumjs-wallet detect-port readline```
+```npm install ethereumjs-wallet detect-port readline leveldown```
 
 
 Finally, run the code in 4 separate shells under the same localhost. You should see some messages about running system. 
@@ -259,7 +263,7 @@ A Mokka instance emits the following events:
 # Custom transport layer
 
 By default mokka use the tcp transport layer for sending / accepting packets. However all work with networking has been moved to separate interface. An example can be found in ```mokka/implementation/TCP```. In order to write your own implementation you have to implement 2 methods:
-```
+```javascript
 
  initialize () {
     this.logger.info('initializing reply socket on port %s', this.address);
