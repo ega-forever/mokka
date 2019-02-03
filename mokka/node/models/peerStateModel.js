@@ -21,11 +21,7 @@ class PeerState extends EventEmitter {
 
   async updateWithDelta (k, v, n) {
 
-    if(n === this.maxVersionSeen)
-      this.mokka.logger.info(`equal version pending ${k}`);
-    
-
-    if (n > this.maxVersionSeen) 
+    if (n > this.maxVersionSeen)
 
       if (k === '__heartbeat__') {
         let d = new Date();
@@ -35,17 +31,15 @@ class PeerState extends EventEmitter {
         this.mokka.logger.info(`received pending ${k} with next version ${this.maxVersionSeen + 1} for peer ${this.pubKey}`);
         await this.addToDb(v); //todo implement
       }
-    
+
   }
 
-  async _getMaxVersion (){
-    // let {index} = await this.mokka.lastInfo;
-    let count = await this.mokka.log.getPendingCount(this.pubKey);
-    //  return index + count;
-    return count;
+  async _getMaxVersion () {
+    return await this.mokka.log.getPendingCount(this.pubKey);
   }
 
   async addToDb (command) { //todo refactor
+    this.maxVersionSeen = await this._getMaxVersion();
     await this.mokka.log.putPending(command, this.maxVersionSeen + 1, this.pubKey);
     this.maxVersionSeen = await this._getMaxVersion();
   }
@@ -64,42 +58,32 @@ class PeerState extends EventEmitter {
 
   async deltasAfterVersion (lowestVersion) { //todo reimplement
 
-    /*    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, 10);
-    let maxVersion = lowestVersion + 10 < this.maxVersionSeen ? lowestVersion + 10 : this.maxVersionSeen;*/
+    let limit = 10;
 
-    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey);
-    let maxVersion = this.maxVersionSeen;
+    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, limit);
+    let maxVersion = hashes.length < limit ? await this._getMaxVersion() : lowestVersion + hashes.length;
+
+    //let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey);
+    //let maxVersion = await this._getMaxVersion();
 
     let items = await Promise.mapSeries(hashes, async hash => {
       let item = await this.mokka.log.getPending(hash);
 
-      /*   if (!item)
-        console.log('found missed hash');*/
+      if (!item)
+        return;
 
-      return [hash, _.get(item, 'command'), _.get(item, 'version', maxVersion)];
+      return [hash, item.command, item.version];
     });
 
 
-    if(!items.length && lowestVersion < this.maxVersionSeen){
-      let {hash} = await this.mokka.log.getLastInfo();
-      return [[hash, null, maxVersion]];
-    }
+    items = _.compact(items);
 
+    if (!items.length && lowestVersion < maxVersion)
+      return [[null, null, maxVersion]];
 
     return _.chain(items)
       .compact()
       .sortBy(item => item[2])
-    /*      .transform((result, item) => {
-
-        if (result.length) {
-          let prev = _.last(result);
-          if (prev[2] + 1 !== item[2])
-            return;
-        }
-
-        result.push(item);
-
-      }, [])*/
       .value();
 
   }
