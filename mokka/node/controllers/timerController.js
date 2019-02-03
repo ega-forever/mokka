@@ -30,7 +30,7 @@ class TimerController {
 
       if (states.LEADER !== this.mokka.state) {
         //if pendings - the miss
-        let pending = await this.mokka.log.getFirstPending();
+        let pending = await this.mokka.log.pending.getFirst();
 
         if (pending.hash)
           return;

@@ -26,7 +26,7 @@ class GossipController extends EventEmitter {
 
 
   async push (record) {
-    let isCommitted = await this.mokka.log.checkPendingCommitted(record);
+    let isCommitted = await this.mokka.log.pending.checkCommitted(record);
 
     if(isCommitted)
       return;

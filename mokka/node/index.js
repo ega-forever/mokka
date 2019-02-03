@@ -107,14 +107,14 @@ class Mokka extends NodeModel {
 
 
     this.log.on(this.log.eventTypes.LOGS_UPDATED, async () => {
-      this.lastInfo = await this.log.getLastInfo();
+      this.lastInfo = await this.log.entry.getLastInfo();
     });
   }
 
 
   async _initialize (options) {
 
-    this.lastInfo = await this.log.getLastInfo();
+    this.lastInfo = await this.log.entry.getLastInfo();
 
     if (!_.isFunction(this.initialize))
       throw Error('the initialize function needs to be declared!');

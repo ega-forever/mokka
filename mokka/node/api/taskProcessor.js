@@ -5,6 +5,7 @@ const Promise = require('bluebird'),
   web3 = new Web3(),
   _ = require('lodash'),
   eventTypes = require('../factories/eventTypesFactory'),
+  commandTypes = require('../factories/commandTypes'),
   eventEmitter = require('events');
 
 class TaskProcessor extends eventEmitter {
@@ -18,12 +19,16 @@ class TaskProcessor extends eventEmitter {
 
   }
 
-  async push (task) {
+  async push (trigger, value, type) {
+
+    if(!trigger || !Object.values(commandTypes).includes(type))
+      return false;
+
     return await new Promise(res =>
       this.semPending.take(async () => {
-        await this.mokka.gossip.push(task);//todo implement
+        await this.mokka.gossip.push({trigger, value, type});
         this.semPending.leave();
-        res();
+        res(true);
       })
     );
   }
@@ -46,7 +51,7 @@ class TaskProcessor extends eventEmitter {
         continue;
       }
 
-      let lastEntry = await this.mokka.log.getLastEntry();
+      let lastEntry = await this.mokka.log.entry.getLast();
 
       if (lastEntry.index > 0 && lastEntry.owner === this.mokka.publicKey) {//check for leader only
 
@@ -63,7 +68,7 @@ class TaskProcessor extends eventEmitter {
       }
 
 
-      let pending = await this.mokka.log.getFirstPending();
+      let pending = await this.mokka.log.pending.getFirst();
 
       if (!pending.hash) {
         await Promise.delay(this.mokka.time.timeout()); //todo delay for next tick or event on new push
@@ -80,7 +85,7 @@ class TaskProcessor extends eventEmitter {
     return await new Promise(res =>
       this.sem.take(async () => {
 
-        let checkPending = await this.mokka.log.getPending(hash);
+        let checkPending = await this.mokka.log.pending.get(hash);
 
         if (!checkPending) {
           this.sem.leave();
@@ -92,7 +97,7 @@ class TaskProcessor extends eventEmitter {
         await this._broadcast(entry.index, entry.hash);
         this.mokka.logger.trace(`task has been broadcasted ${task}`);
         this.mokka.logger.trace(`pulling pending task ${task} with hash ${hash}`);//todo think about pull
-        await this.mokka.log.pullPending(hash);
+        await this.mokka.log.pending.pull(hash);
 
         this.sem.leave();
         this.emit(eventTypes.QUEUE_AVAILABLE);
@@ -103,7 +108,7 @@ class TaskProcessor extends eventEmitter {
 
   async _lock () {
 
-    const {index, createdAt} = await this.mokka.log.getLastEntry();
+    const {index, createdAt} = await this.mokka.log.entry.getLast();
 
     if (Date.now() - createdAt < this.mokka.election.max && index !== 0) {
       this.mokka.time.heartbeat(this.mokka.election.max);
@@ -142,12 +147,12 @@ class TaskProcessor extends eventEmitter {
     const command = {task: task};
 
     const {signature} = web3.eth.accounts.sign(JSON.stringify(command), `0x${this.mokka.privateKey}`);
-    return await this.mokka.log.saveCommand(command, this.mokka.term, signature);
+    return await this.mokka.log.command.save(command, this.mokka.term, signature);
   }
 
   async _broadcast (index, hash) {
 
-    let entry = await this.mokka.log.get(index);
+    let entry = await this.mokka.log.entry.get(index);
 
     if (!entry || entry.hash !== hash)
       return this.mokka.logger.trace(`can't broadcast entry at index ${index}`);

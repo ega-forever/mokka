@@ -116,14 +116,7 @@ const generateTxs = async (mokka, amount) => {
 
   for (let index = 0; index < amount; index++) {
 
-    let tx = {
-      to: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B',
-      from: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51',
-      nonce: index,
-      timestamp: Date.now()
-    };
-
-    await mokka.processor.push(tx);
+    await mokka.processor.push('0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', index + Date.now(), 'put');
   }
 
 };

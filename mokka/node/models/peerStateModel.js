@@ -35,12 +35,12 @@ class PeerState extends EventEmitter {
   }
 
   async _getMaxVersion () {
-    return await this.mokka.log.getPendingCount(this.pubKey);
+    return await this.mokka.log.pending.getCount(this.pubKey);
   }
 
   async addToDb (command) { //todo refactor
     this.maxVersionSeen = await this._getMaxVersion();
-    await this.mokka.log.putPending(command, this.maxVersionSeen + 1, this.pubKey);
+    await this.mokka.log.pending.put(command, this.maxVersionSeen + 1, this.pubKey);
     this.maxVersionSeen = await this._getMaxVersion();
   }
 
@@ -60,14 +60,14 @@ class PeerState extends EventEmitter {
 
     let limit = 10;
 
-    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, limit);
+    let hashes = await this.mokka.log.pending.getHashesAfterVersion(lowestVersion, this.pubKey, limit);
     let maxVersion = hashes.length < limit ? await this._getMaxVersion() : lowestVersion + hashes.length;
 
-    //let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey);
+    //let hashes = await this.mokka.log.getHashesAfterVersion(lowestVersion, this.pubKey);
     //let maxVersion = await this._getMaxVersion();
 
     let items = await Promise.mapSeries(hashes, async hash => {
-      let item = await this.mokka.log.getPending(hash);
+      let item = await this.mokka.log.pending.get(hash);
 
       if (!item)
         return;

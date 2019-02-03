@@ -110,7 +110,7 @@ class VoteActions {
     }
 
     if (this.mokka.lastInfo.index > packet.last.index) {
-      let log = await this.mokka.log.get(packet.last.index);
+      let log = await this.mokka.log.entry.get(packet.last.index);
 
       if (log && log.hash === packet.last.hash) {
 
@@ -340,7 +340,7 @@ class VoteActions {
         return `${result}${item.share}${item.signature.replace('0x', '')}`;
       }, '').thru(item => `${votedShares.length.toString(16)}x${item}${this.mokka.votes.started}`).value();
 
-    await this.mokka.log.addProof(this.mokka.term, {
+    await this.mokka.log.proof.add(this.mokka.term, {
       index: -1,
       hash: null,
       proof: compacted
