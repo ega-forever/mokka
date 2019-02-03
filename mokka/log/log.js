@@ -24,7 +24,8 @@ class Log extends EventEmitter {
       pending: 3,
       refs: 4,
       pendingRefs: 5,
-      pendingStates: 6
+      pendingStates: 6,
+      states: 7
     };
 
     this.eventTypes = {
@@ -117,7 +118,7 @@ class Log extends EventEmitter {
     });
   }
 
-  static _getBnNumber (num = 0) {
+  static _getBnNumber (num = 0) {//todo move to util
     num = num.toString(2);
     return new Array(64 - num.length).fill('0').join('') + num;
   }
@@ -145,6 +146,10 @@ class Log extends EventEmitter {
 
     let result = await this.db.put(`${this.prefixes.logs}:${Log._getBnNumber(entry.index)}`, entry);
     await this.db.put(`${this.prefixes.refs}:${entry.hash}`, entry.index);
+
+    let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
+    await this.db.put(`${this.prefixes.states}`, state);
+
     this.emit(this.eventTypes.LOGS_UPDATED);
     return result;
   }
@@ -157,7 +162,7 @@ class Log extends EventEmitter {
     return !!record;
   }
 
-  async putPending (command, version, peer) { //todo reimplement
+  async putPending (command, version, peer) {
 
     let record = {command, received: this.node.leader === this.node.publicKey, version};
 
@@ -171,7 +176,7 @@ class Log extends EventEmitter {
     }
 
     await this.db.put(`${this.prefixes.pending}:${hash}`, record);
-    await this.db.put(`${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(version)}`, hash);//todo remove
+    await this.db.put(`${this.prefixes.pendingRefs}:${peer}:${Log._getBnNumber(version)}`, hash);
     await this.db.put(`${this.prefixes.pendingStates}:${peer}`, version);
 
     return {
@@ -180,7 +185,6 @@ class Log extends EventEmitter {
       received: record.received
     };
   }
-
 
   async pullPending (hash) {//todo reimplement
 
@@ -196,7 +200,6 @@ class Log extends EventEmitter {
     for (let ref of refs)
       await this.db.del(ref);
   }
-
 
   async getPendingRefsByHash (hash) {
 
@@ -222,7 +225,6 @@ class Log extends EventEmitter {
 
 
   }
-
 
   async getPending (hash, task = false) {
 
@@ -272,7 +274,7 @@ class Log extends EventEmitter {
     };
   }
 
-  async getPendingCount (peer) {//todo refactor (use limit + part of key)
+  async getPendingCount (peer) {
     try {
       return await this.db.get(`${this.prefixes.pendingStates}:${peer}`);
     } catch (e) {
@@ -280,7 +282,7 @@ class Log extends EventEmitter {
     }
   }
 
-  async getPendingHashesAfterVersion (version, peer, limit) {//todo implement limit
+  async getPendingHashesAfterVersion (version, peer, limit) {
 
     return await new Promise((resolve, reject) => {
 
@@ -307,7 +309,6 @@ class Log extends EventEmitter {
         });
     });
   }
-
 
   async addProof (term, proof) { //do we need to
     return await this.db.put(`${this.prefixes.term}:${Log._getBnNumber(term)}`, proof);
@@ -449,14 +450,17 @@ class Log extends EventEmitter {
    * @return {Promise<Object>} Last entries index, term and committedIndex
    */
   async getLastInfo () {
-    const {index, term, hash, createdAt} = await this.getLastEntry();
-
-    return {
-      index,
-      term,
-      hash,
-      createdAt
-    };
+    try {
+      return await this.db.get(`${this.prefixes.states}`);
+    } catch (e) {
+      return {
+        index: 0,
+        hash: _.fill(new Array(32), 0).join(''),
+        term: 0,
+        committed: true,
+        createdAt: Date.now()
+      };
+    }
   }
 
   /**
@@ -465,32 +469,14 @@ class Log extends EventEmitter {
    * @return {Promise<Entry>} returns {index: 0, term: node.term} if there are no entries in the log
    */
   async getLastEntry () {
-    return await new Promise((resolve, reject) => {
-      let entry = {
-        index: 0,
-        hash: _.fill(new Array(32), 0).join(''),
-        term: 0,
-        committed: true,
-        createdAt: Date.now()
-      };
 
+    let info = await this.getLastInfo();
 
-      this.db.createReadStream({
-        reverse: true,
-        limit: 1,
-        lt: `${this.prefixes.logs + 1}:${Log._getBnNumber(0)}`,
-        gte: `${this.prefixes.logs}:${Log._getBnNumber(0)}`
-      })
-        .on('data', data => {
-          entry = data.value;
-        })
-        .on('error', err => {
-          reject(err);
-        })
-        .on('end', () => {
-          resolve(entry);
-        });
-    });
+    if(!info.index)
+      return info;
+
+    return await this.get(info.index);
+
   }
 
   /**

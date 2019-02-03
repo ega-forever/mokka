@@ -20,8 +20,8 @@ class GossipController extends EventEmitter {
 
 
   start () {
-    this.mokka.time.timers.setInterval('gossip_heart_beat', () => this.myState.beatHeart(), 1000);
-    this.mokka.time.timers.setInterval('gossip', () => this.gossip(), 1000);
+    this.mokka.time.timers.setInterval('gossip_heart_beat', () => this.myState.beatHeart(), this.mokka.gossipOptions.heartbeat);
+    this.mokka.time.timers.setInterval('gossip', () => this.gossip(), this.mokka.gossipOptions.timeout);
   }
 
 
@@ -63,7 +63,7 @@ class GossipController extends EventEmitter {
 
   async gossipToPeer (peer) { //todo refactor
     let data = {
-      digest: this.scuttle.digest()
+      digest: await this.scuttle.digest()
     };
 
     const reply = await this.mokka.actions.message.packet(messageTypes.GOSSIP_REQUEST, data);

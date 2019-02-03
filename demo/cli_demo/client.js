@@ -1,5 +1,4 @@
-const Log = require('../../mokka').storage,
-  Wallet = require('ethereumjs-wallet'),
+const Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   path = require('path'),
   hashUtils = require('../../mokka/utils/hashes'),
@@ -57,7 +56,9 @@ const initMokka = async () => {
     electionMin: 300,
     electionMax: 1000,
     heartbeat: 200,
-    //Log: Log,
+    removeSynced: true,
+    gossipHeartbeat: 200,
+    gossipTimeout: 200,
     logOptions: {
       adapter: require('leveldown'),
       path: path.join('./', 'dump', `test.${index}.db`)
