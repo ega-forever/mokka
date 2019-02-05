@@ -36,7 +36,8 @@ class AppendActions {
 
 
       this.mokka.logger.trace(`should drop ${this.mokka.lastInfo.index - prevTerm.index}, with current index ${this.mokka.lastInfo.index}, current term: ${term} and leader term ${packet.term}`);
-      await this.mokka.log.entry.removeAfter(prevTerm.index); //this clean up term
+      console.log('before 1')
+      await this.mokka.log.entry.removeAfter(prevTerm.index, true); //this clean up term
       this.mokka.term--; // todo check
       return null;
     }
@@ -94,8 +95,7 @@ class AppendActions {
           await this.mokka.processor.push(entry.command.task); //todo putting command back may change leader of log
 
         }
-
-        await this.mokka.log.entry.removeAfter(packet.data.index - 1);
+        await this.mokka.log.entry.removeAfter(packet.data.index - 1, true);
       }
 
 

@@ -67,8 +67,7 @@ class CommandMethods {
           owner: owner,
           responses: [
             {
-              publicKey: owner,
-              ack: true
+              publicKey: owner
             }
           ],
           shares: [],
@@ -79,8 +78,7 @@ class CommandMethods {
 
         if (entry.owner !== this.log.node.publicKey)
           entry.responses.push({
-            publicKey: this.log.node.publicKey, // start with vote from leader
-            ack: true
+            publicKey: this.log.node.publicKey // start with vote from leader
           });
 
         await this.log.entry._put(entry);
@@ -102,13 +100,14 @@ class CommandMethods {
     const entryIndex = entry.responses.findIndex(resp => resp.publicKey === publicKey);
     // node hasn't voted yet. Add response
     if (entryIndex === -1)
-      entry.responses.push({
-        publicKey,
-        ack: true
-      });
+      entry.responses.push({publicKey});
 
+    if (this.log.node.removeSynced && entry.responses.length === this.log.node.nodes.length + 1) {
+      await this.log.entry.removeTo(index, false);
+    } else {
+      await this.log.entry._put(entry);
+    }
 
-    await this.log.entry._put(entry);
 
     return entry;
   }

@@ -37,7 +37,7 @@ class Mokka extends NodeModel {
     };
 
     this.beat = options.heartbeat || 50;
-    // this.removeSynced = options.removeSynced || false;
+    this.removeSynced = options.removeSynced || false;
 
 
     this.gossipOptions = {

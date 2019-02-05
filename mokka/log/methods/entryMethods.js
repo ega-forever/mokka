@@ -2,7 +2,6 @@ const _ = require('lodash'),
   getBnNumber = require('../../utils/getBnNumber');
 
 
-
 class EntryMethods {
 
   constructor (log) {
@@ -48,37 +47,74 @@ class EntryMethods {
     }
   }
 
-  async _getEntriesAfter (index, limit) {
-    const entries = [];
-
-    let query = {
-      gt: `${this.log.prefixes.logs}:${getBnNumber(index)}`,
-      lt: `${this.log.prefixes.logs + 1}:${getBnNumber(0)}`
-    };
-
-    if (limit)
-      query.limit = limit;
-
+  async _getLastEntry () {
     return await new Promise((resolve, reject) => {
-      this.log.db.createReadStream(query)
+      let entry = {
+        index: 0,
+        hash: _.fill(new Array(32), 0).join(''),
+        term: 0,
+        committed: true,
+        createdAt: Date.now()
+      };
+
+      this.log.db.createReadStream({
+        reverse: true,
+        limit: 1,
+        lt: `${this.log.prefixes.logs + 1}:${getBnNumber(0)}`,
+        gte: `${this.log.prefixes.logs}:${getBnNumber(0)}`
+      })
         .on('data', data => {
-          entries.push(data.value);
+          entry = data.value;
         })
         .on('error', err => {
           reject(err);
         })
         .on('end', () => {
-          resolve(entries);
+          resolve(entry);
         });
     });
-
   }
 
-  async removeAfter (index) { //todo implement keep last term
-    const entries = await this._getEntriesAfter(index);
+  async removeAfter (index, updateState = true) {
 
-    for (let entry of entries)
+    let lastEntry = await this._getLastEntry();
+
+    let entry = await this._getBefore(lastEntry.index);
+
+    while (entry.index > index){
       await this.log.db.del(`${this.log.prefixes.logs}:${getBnNumber(entry.index)}`);
+      await this.log.db.del(`${this.log.prefixes.refs}:${entry.hash}`);
+
+      entry = await this._getBefore(index);
+    }
+    if (updateState) {
+      let entry = await this._getLastEntry();
+      let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
+      await this.log.db.put(`${this.log.prefixes.states}`, state);
+    }
+
+    let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
+    this.log.node.term = lastIndex === 0 ? 0 : lastTerm;
+
+    this.log.emit(this.log.eventTypes.LOGS_UPDATED);
+  }
+
+  async removeTo (index, updateState = true) {
+
+    let entry = await this._getBefore(index);
+
+    while (entry.index > 0){
+      await this.log.db.del(`${this.log.prefixes.logs}:${getBnNumber(entry.index)}`);
+      await this.log.db.del(`${this.log.prefixes.refs}:${entry.hash}`);
+
+      entry = await this._getBefore(index);
+    }
+
+    if (updateState) {
+      let entry = await this._getLastEntry();
+      let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
+      await this.log.db.put(`${this.log.prefixes.states}`, state);
+    }
 
 
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
@@ -114,7 +150,7 @@ class EntryMethods {
 
     let info = await this.getLastInfo();
 
-    if(!info.index)
+    if (!info.index)
       return info;
 
     return await this.get(info.index);
@@ -122,7 +158,7 @@ class EntryMethods {
   }
 
   async getInfoBefore (entry) {
-    const {index, term, hash, createdAt} = await this._getBefore(entry);
+    const {index, term, hash, createdAt} = await this._getBefore(entry.index);
 
     return {
       index,
@@ -132,14 +168,14 @@ class EntryMethods {
     };
   }
 
-  _getBefore (entry) {
+  _getBefore (index) {
     const defaultInfo = {
       index: 0,
       term: this.log.node.term,
       hash: ''.padStart(32, '0')
     };
     // We know it is the first entry, so save the query time
-    if (entry.index === 1)
+    if (index === 1)
       return Promise.resolve(defaultInfo);
 
 
@@ -149,7 +185,7 @@ class EntryMethods {
       this.log.db.createReadStream({
         reverse: true,
         limit: 1,
-        lt: `${this.log.prefixes.logs}:${getBnNumber(entry.index)}`,
+        lt: `${this.log.prefixes.logs}:${getBnNumber(index)}`,
         gt: `${this.log.prefixes.logs}:${getBnNumber(0)}`
       })
         .on('data', (data) => {
@@ -200,7 +236,7 @@ class EntryMethods {
 
   }
 
-  async _put (entry) {//todo implement the strategy for update system state
+  async _put (entry) {
 
     let firstEntryByTerm = await this.getFirstByTerm(entry.term);
 
@@ -216,8 +252,12 @@ class EntryMethods {
     let result = await this.log.db.put(`${this.log.prefixes.logs}:${getBnNumber(entry.index)}`, entry);
     await this.log.db.put(`${this.log.prefixes.refs}:${entry.hash}`, entry.index);
 
-    let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-    await this.log.db.put(`${this.log.prefixes.states}`, state);
+    let currentState = await this.getLastInfo();
+
+    if (entry.index > currentState.index) {
+      let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
+      await this.log.db.put(`${this.log.prefixes.states}`, state);
+    }
 
     this.log.emit(this.log.eventTypes.LOGS_UPDATED);
     return result;
