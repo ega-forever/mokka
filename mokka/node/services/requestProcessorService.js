@@ -123,8 +123,12 @@ class RequestProcessor {
 
     this.mokka.time.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.time.timeout());
 
+    const lastInfo = await this.mokka.log.entry.getLastInfo();
 
-    if (this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > this.mokka.lastInfo.index && packet.last.createdAt < Date.now() - this.mokka.beat) {
+    if (this.mokka.state !== states.LEADER &&
+      packet.type === messageTypes.ACK &&
+      packet.last && packet.last.index > lastInfo.index &&
+      packet.last.createdAt < Date.now() - this.mokka.beat) { //todo send delta
 
       let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
       reply = {

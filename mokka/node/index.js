@@ -60,7 +60,6 @@ class Mokka extends NodeModel {
     this.change = change;
     this.networkSecret = options.networkSecret || '1234567';
     this.log = null;
-    this.lastInfo = null;
 
     this.cache = new NodeCache();
     this.processor = new TaskProcessor(this);
@@ -107,16 +106,10 @@ class Mokka extends NodeModel {
       await this.requestProcessor.process(packet);
     });
 
-
-    this.log.on(this.log.eventTypes.LOGS_UPDATED, async () => {
-      this.lastInfo = await this.log.entry.getLastInfo();
-    });
   }
 
 
   async _initialize (options) {
-
-    this.lastInfo = await this.log.entry.getLastInfo();
 
     if (!_.isFunction(this.initialize))
       throw Error('the initialize function needs to be declared!');

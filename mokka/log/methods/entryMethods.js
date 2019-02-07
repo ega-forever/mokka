@@ -81,7 +81,7 @@ class EntryMethods {
 
     let entry = await this._getBefore(lastEntry.index);
 
-    while (entry.index > index){
+    while (entry.index > index) {
       await this.log.db.del(`${this.log.prefixes.logs}:${getBnNumber(entry.index)}`);
       await this.log.db.del(`${this.log.prefixes.refs}:${entry.hash}`);
 
@@ -103,7 +103,7 @@ class EntryMethods {
 
     let entry = await this._getBefore(index);
 
-    while (entry.index > 0){
+    while (entry.index > 0) {
       await this.log.db.del(`${this.log.prefixes.logs}:${getBnNumber(entry.index)}`);
       await this.log.db.del(`${this.log.prefixes.refs}:${entry.hash}`);
 
@@ -203,6 +203,29 @@ class EntryMethods {
         });
     });
   }
+
+  getAfterList (index, limit) {
+    const result = [];
+
+    return new Promise((resolve, reject) => {
+
+      this.log.db.createReadStream({
+        limit: limit,
+        lt: `${this.log.prefixes.logs + 1}:${getBnNumber(0)}`,
+        gt: `${this.log.prefixes.logs}:${getBnNumber(index)}`
+      })
+        .on('data', (data) => {
+          result.push(data.value);
+        })
+        .on('error', (err) => {
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(result);
+        });
+    });
+  }
+
 
   getUncommittedUpToIndex (index) {
     return new Promise((resolve, reject) => {

@@ -6,7 +6,7 @@ class GossipRequestProcessor {
 
   constructor (mokka) {
     this.mokka = mokka;
-    this.sem = semaphore(1);//todo check queue
+    this.sem = semaphore(1);
   }
 
   async process (packet) {
@@ -19,7 +19,7 @@ class GossipRequestProcessor {
       });
     });
 
-    if (!_.has(data, 'who') && !_.has(data, '0.who')) //todo implement
+    if (!_.has(data, 'who') && !_.has(data, '0.who'))
       return;
 
     if (_.isArray(data)) {

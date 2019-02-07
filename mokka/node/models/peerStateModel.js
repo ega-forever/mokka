@@ -60,11 +60,11 @@ class PeerState extends EventEmitter {
 
     let limit = 10;
 
-    let hashes = await this.mokka.log.pending.getHashesAfterVersion(lowestVersion, this.pubKey, limit);
-    let maxVersion = hashes.length < limit ? await this._getMaxVersion() : lowestVersion + hashes.length;
+    //let hashes = await this.mokka.log.pending.getHashesAfterVersion(lowestVersion, this.pubKey, limit);
+    //let maxVersion = hashes.length < limit ? await this._getMaxVersion() : lowestVersion + hashes.length;
 
-    //let hashes = await this.mokka.log.getHashesAfterVersion(lowestVersion, this.pubKey);
-    //let maxVersion = await this._getMaxVersion();
+    let hashes = await this.mokka.log.pending.getHashesAfterVersion(lowestVersion, this.pubKey);
+    let maxVersion = await this._getMaxVersion();
 
     let items = await Promise.mapSeries(hashes, async hash => {
       let item = await this.mokka.log.pending.get(hash);

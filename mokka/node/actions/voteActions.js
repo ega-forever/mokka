@@ -60,7 +60,9 @@ class VoteActions {
     }
 
 
-    if (packet.last.index !== 0 && Date.now() - this.mokka.lastInfo.createdAt < this.mokka.beat) {
+    const lastInfo = await this.mokka.log.entry.getLastInfo();
+
+    if (packet.last.index !== 0 && Date.now() - lastInfo.createdAt < this.mokka.beat) {
       this.mokka.emit(messageTypes.VOTE, packet, false);
 
       this.mokka.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
@@ -77,7 +79,7 @@ class VoteActions {
       };
     }
 
-    if (packet.last.index !== 0 && Date.now() - this.mokka.lastInfo.createdAt < this.mokka.election.max) {
+    if (packet.last.index !== 0 && Date.now() - lastInfo.createdAt < this.mokka.election.max) {
       this.mokka.emit(messageTypes.VOTE, packet, false);
 
       this.mokka.cache.set(`blacklist.${packet.publicKey}`, {term: packet.term, hash: packet.last.hash}, Infinity);
@@ -109,7 +111,7 @@ class VoteActions {
       };
     }
 
-    if (this.mokka.lastInfo.index > packet.last.index) {
+    if (lastInfo.index > packet.last.index) {
       let log = await this.mokka.log.entry.get(packet.last.index);
 
       if (log && log.hash === packet.last.hash) {
@@ -135,7 +137,7 @@ class VoteActions {
     }
 
 
-    if (this.mokka.lastInfo.index === packet.last.index && this.mokka.lastInfo.hash !== packet.last.hash) {
+    if (lastInfo.index === packet.last.index && lastInfo.hash !== packet.last.hash) {
 
       this.mokka.emit(messageTypes.VOTE, packet, false);
 
@@ -182,7 +184,7 @@ class VoteActions {
     if (blackListed)
       this.mokka.cache.del(`blacklist.${packet.publicKey}`);
 
-    if (packet.last.index > this.mokka.lastInfo.index) {
+    if (packet.last.index > lastInfo.index) {
       this.mokka.emit(messageTypes.VOTE, packet, true);
       let reply = await this.mokka.actions.message.packet(messageTypes.VOTED, {
         granted: true,
@@ -194,7 +196,7 @@ class VoteActions {
       };
     }
 
-    if (packet.last.index === this.mokka.lastInfo.index && packet.last.hash !== this.mokka.lastInfo.hash) {
+    if (packet.last.index === lastInfo.index && packet.last.hash !== lastInfo.hash) {
       this.mokka.emit(messageTypes.VOTE, packet, true);
       let reply = await this.mokka.actions.message.packet(messageTypes.VOTED, {
         granted: true,

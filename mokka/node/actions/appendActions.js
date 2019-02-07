@@ -2,6 +2,7 @@ const _ = require('lodash'),
   messageTypes = require('../factories/messageTypesFactory'),
   eventTypes = require('../factories/eventTypesFactory'),
   crypto = require('crypto'),
+  Promise = require('bluebird'),
   states = require('../factories/stateFactory');
 
 class AppendActions {
@@ -12,25 +13,42 @@ class AppendActions {
 
   async append (packet) {
 
-    if ((packet.last.hash !== this.mokka.lastInfo.hash && packet.last.index === this.mokka.lastInfo.index) || (packet.last.hash === this.mokka.lastInfo.hash && packet.last.index !== this.mokka.lastInfo.index)) {
+    let lastInfo = await this.mokka.log.entry.getLastInfo();
 
-      this.mokka.logger.error('found another history root!');
+    if ((packet.last.hash !== lastInfo.hash && packet.last.index === lastInfo.index) || (packet.last.hash === lastInfo.hash && packet.last.index !== lastInfo.index)) {
+
+      this.mokka.logger.error('found another history root!', packet.last.hash === lastInfo.hash, packet.last.index === lastInfo.index);
 
       let term = packet.term > this.mokka.term ? this.mokka.term - 1 : packet.term - 1;
       let prevTerm = await this.mokka.log.entry.getLastByTerm(term);
 
-      this.mokka.logger.trace(`should drop ${this.mokka.lastInfo.index - prevTerm.index}, with current index ${this.mokka.lastInfo.index}, current term: ${term} and leader term ${packet.term}`);
+      this.mokka.logger.trace(`should drop ${lastInfo.index - prevTerm.index}, with current index ${lastInfo.index}, current term: ${term} and leader term ${packet.term}`);
       await this.mokka.log.entry.removeAfter(prevTerm.index - 1, true); //this clean up term
       return null;
     }
 
+
+
+
+    if(!packet.data)
+      return null;
+
+    if(_.isArray(packet.data)){
+      return await Promise.mapSeries(packet.data, async item=> {
+        let newPacket = _.cloneDeep(packet);
+        newPacket.data = item;
+        return await this.append(newPacket);
+      });
+    }
+
+
     let reply = null;
 
-    if (!packet.data || packet.data.index > this.mokka.lastInfo.index + 1)
+    if (packet.data.index > lastInfo.index + 1)
       return null;
 
 
-    if (this.mokka.lastInfo.index === packet.data.index) {
+    if (lastInfo.index === packet.data.index) {
 
       let record = await this.mokka.log.entry.get(packet.data.index);
 
@@ -48,8 +66,8 @@ class AppendActions {
     }
 
 
-    if (this.mokka.lastInfo.index >= packet.data.index) {
-      this.mokka.logger.trace(`the leader has another history. Rewrite mine ${this.mokka.lastInfo.index} -> ${packet.data.index - 1}`);
+    if (lastInfo.index >= packet.data.index) {
+      this.mokka.logger.trace(`the leader has another history. Rewrite mine ${lastInfo.index} -> ${packet.data.index - 1}`);
       await this.mokka.log.entry.removeAfter(packet.data.index - 1, true);
     }
 
@@ -66,10 +84,12 @@ class AppendActions {
     } catch (err) {
       this.mokka.logger.error(`error during save log: ${JSON.stringify(err)}`);
 
+      console.log(`current history ${lastInfo.index}`);
+
       if (err.code === 2 || err.code === 3)
         return;
 
-      reply = await this.mokka.actions.message.packet(messageTypes.APPEND_FAIL, {index: this.mokka.lastInfo.index});
+      reply = await this.mokka.actions.message.packet(messageTypes.APPEND_FAIL, {index: lastInfo.index});
 
       return {
         reply: reply,
@@ -117,20 +137,46 @@ class AppendActions {
     return replies;
   }
 
-  async obtain (packet) {
+  async obtain (packet, limit = 100) { //todo implement the limit, combine by term
 
-    let entry = await this.mokka.log.entry.get(packet.last.index + 1);
-    const reply = await this.mokka.actions.message.appendPacket(entry);
+    let entries = await this.mokka.log.entry.getAfterList(packet.last.index, limit);
+
+    console.log(`!!obtaining ${entries.length} from ${entries[0].index} to ${_.last(entries).index} while current is ${packet.last.index}`)
+
+
+    entries = _.groupBy(entries, 'term');
+
+
+    let replies = [];
+
+    for(let term of Object.keys(entries)){
+
+      let reply = await this.mokka.actions.message.appendPacket(entries[term][0]);
+      reply.data = entries[term];
+
+      replies.push({
+        who: packet.publicKey,
+        reply: reply
+      });
+
+    }
+
+    return replies;
+
+  /*  let reply = await this.mokka.actions.message.appendPacket(entries);
 
     return {
       who: packet.publicKey,
       reply: reply
-    };
+    };*/
+
   }
 
   async appendFail (packet) {
 
-    if (packet.data.index > this.mokka.lastInfo.index) {
+    let lastInfo = await this.mokka.log.entry.getLastInfo();
+
+    if (packet.data.index > lastInfo.index) {
       let reply = await this.mokka.actions.message.packet(messageTypes.ERROR, 'wrong index!');
       return {
         reply: reply,

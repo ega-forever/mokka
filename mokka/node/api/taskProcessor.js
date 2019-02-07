@@ -129,7 +129,7 @@ class TaskProcessor extends eventEmitter {
     if (this.mokka.state !== states.LEADER) {
       this.mokka.logger.trace('trying to propose command again');
       let timeout = this.mokka.time.timeout();
-      const {createdAt} = this.mokka.lastInfo;
+      const {createdAt} = await this.mokka.log.entry.getLastInfo();
       const delta = Date.now() - createdAt;
 
       if (delta < this.mokka.election.max)
