@@ -12,14 +12,14 @@ class CommandMethods {
   }
 
 
-  async save (command, term, signature, index, checkHash) {
+  async save (command, term, signature, index, checkHash, applier) { //todo implement applier
 
     return await new Promise((res, rej) => {
       semaphore.take(async () => {
 
         if (!command || _.isEmpty(command)) {
           semaphore.leave();
-          return rej({code: 0, message: 'task can\'t be empty'});
+          return rej({code: 0, message: 'command can\'t be empty'});
         }
 
 
@@ -80,6 +80,10 @@ class CommandMethods {
           entry.responses.push({
             publicKey: this.log.node.publicKey // start with vote from leader
           });
+
+
+        //todo need to share get, read, update, delete
+        await this.log.node.applier(command, this.log.state);//todo
 
         await this.log.entry._put(entry);
         res(entry);

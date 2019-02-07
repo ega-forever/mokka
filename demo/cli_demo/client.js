@@ -64,7 +64,19 @@ const initMokka = async () => {
       path: path.join('./', 'dump', `test.${index}.db`)
     },
     logLevel: 30,
-    privateKey: keys[index]
+    privateKey: keys[index],
+    applier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) + command.value;
+        await state.put(command.key, value);
+
+      }
+
+    },
+    unapplier: async () => {
+    }
   });
 
 
@@ -98,13 +110,12 @@ const askCommand = (rl, mokka) => {
       await generateTxs(mokka, amount);
     }
 
-    if(command.indexOf('generate_as_single') === 0){
-      let amount = parseInt(command.replace('generate_as_single', '').trim());
-      await generateTxsAsSingle(mokka, amount);
-    }
 
-    if(command.indexOf('take_ownership') === 0)
+    if (command.indexOf('take_ownership') === 0)
       await takeOwnership(mokka);
+
+    if (command.indexOf('get_state') === 0)
+      await getState(mokka);
 
 
     askCommand(rl, mokka);
@@ -115,8 +126,9 @@ const askCommand = (rl, mokka) => {
 const generateTxs = async (mokka, amount) => {
 
   for (let index = 0; index < amount; index++) {
-
-    await mokka.processor.push('0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', index + Date.now(), 'put');
+    let value = _.random(-10, 10);
+    console.log(`changing value to + ${value}`);
+    await mokka.processor.push('0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', value, 'put');
   }
 
 };
@@ -127,26 +139,9 @@ const takeOwnership = async (mokka) => {
 };
 
 
-const generateTxsAsSingle = async (mokka, amount) => {
-
-  let txs = [];
-
-  for (let index = 0; index < amount; index++) {
-
-    let tx = {
-      to: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B',
-      from: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51',
-      nonce: index,
-      timestamp: Date.now()
-    };
-
-    txs.push(tx);
-
-  }
-
-  await mokka.processor.push(txs);
-
+const getState = async (mokka) => {
+  let state = await mokka.log.state.getAll();
+  console.log(require('util').inspect(state, null, 2));
 };
-
 
 module.exports = initMokka();

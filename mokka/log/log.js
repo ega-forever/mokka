@@ -5,6 +5,7 @@ const encode = require('encoding-down'),
   commandMethods = require('./methods/commandMethods'),
   proofMethods = require('./methods/proofMethods'),
   entryMethods = require('./methods/entryMethods'),
+  stateMethods = require('./methods/stateMethods'),
   EventEmitter = require('events');
 
 class Log extends EventEmitter {
@@ -24,7 +25,8 @@ class Log extends EventEmitter {
       refs: 4,
       pendingRefs: 5,
       pendingStates: 6,
-      states: 7
+      states: 7,
+      triggers: 8 //todo implement
     };
 
     this.eventTypes = {
@@ -37,6 +39,7 @@ class Log extends EventEmitter {
     this.entry = new entryMethods(this);
     this.proof = new proofMethods(this);
     this.command = new commandMethods(this);
+    this.state = new stateMethods(this);
 
     this.db = levelup(encode(_options.adapter(`${options.path}_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
   }

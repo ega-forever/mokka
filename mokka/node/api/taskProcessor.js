@@ -19,14 +19,14 @@ class TaskProcessor extends eventEmitter {
 
   }
 
-  async push (trigger, value, type) {
+  async push (key, value, type, meta = {created: Date.now()}) {
 
-    if(!trigger || !Object.values(commandTypes).includes(type))
+    if(!key || !Object.values(commandTypes).includes(type))
       return false;
 
     return await new Promise(res =>
       this.semPending.take(async () => {
-        await this.mokka.gossip.push({trigger, value, type});
+        await this.mokka.gossip.push({key, value, type, meta});
         this.semPending.leave();
         res(true);
       })
@@ -80,7 +80,7 @@ class TaskProcessor extends eventEmitter {
     }
   }
 
-  async _commit (task, hash) {
+  async _commit (command, hash) {
 
     return await new Promise(res =>
       this.sem.take(async () => {
@@ -93,10 +93,10 @@ class TaskProcessor extends eventEmitter {
           return res();
         }
 
-        let entry = await this._save(task);
+        let entry = await this._save(command);
         await this._broadcast(entry.index, entry.hash);
-        this.mokka.logger.trace(`task has been broadcasted ${task}`);
-        this.mokka.logger.trace(`pulling pending task ${task} with hash ${hash}`);//todo think about pull
+        this.mokka.logger.trace(`command has been broadcasted ${command}`);
+        this.mokka.logger.trace(`pulling pending command ${command} with hash ${hash}`);//todo think about pull
         await this.mokka.log.pending.pull(hash);
 
         this.sem.leave();
@@ -127,7 +127,7 @@ class TaskProcessor extends eventEmitter {
     await Promise.delay(this.mokka.election.max);
 
     if (this.mokka.state !== states.LEADER) {
-      this.mokka.logger.trace('trying to propose task again');
+      this.mokka.logger.trace('trying to propose command again');
       let timeout = this.mokka.time.timeout();
       const {createdAt} = this.mokka.lastInfo;
       const delta = Date.now() - createdAt;
@@ -142,9 +142,7 @@ class TaskProcessor extends eventEmitter {
 
   }
 
-  async _save (task) {
-
-    const command = {task: task};
+  async _save (command) {
 
     const {signature} = web3.eth.accounts.sign(JSON.stringify(command), `0x${this.mokka.privateKey}`);
     return await this.mokka.log.command.save(command, this.mokka.term, signature);
@@ -157,7 +155,7 @@ class TaskProcessor extends eventEmitter {
     if (!entry || entry.hash !== hash)
       return this.mokka.logger.trace(`can't broadcast entry at index ${index}`);
 
-    this.mokka.logger.trace(`broadcasting task ${entry.command.task} at index ${index}`);
+    this.mokka.logger.trace(`broadcasting command ${entry.command} at index ${index}`);
 
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;

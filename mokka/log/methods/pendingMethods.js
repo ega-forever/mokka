@@ -9,7 +9,7 @@ class PendingMethods {
   }
 
 
-  async checkCommitted (command) {
+  async checkCommitted (command) { //todo refactor
     const hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
     let record = await this.log.entry._getByHash(hash);
     return !!record;
@@ -79,10 +79,10 @@ class PendingMethods {
 
   }
 
-  async get (hash, task = false) {
+  async get (hash, command = false) {
 
-    if (task)
-      hash = crypto.createHmac('sha256', JSON.stringify(task)).digest('hex');
+    if (command)
+      hash = crypto.createHmac('sha256', JSON.stringify(command)).digest('hex');
 
     try {
       return await this.log.db.get(`${this.log.prefixes.pending}:${hash}`);
