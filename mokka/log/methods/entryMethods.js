@@ -78,15 +78,16 @@ class EntryMethods {
   async removeAfter (index, updateState = true) {
 
     let lastEntry = await this._getLastEntry();
-
-    let entry = await this._getBefore(lastEntry.index);
+    let entry = await this._getBefore(lastEntry.index + 1);
 
     while (entry.index > index) {
       await this.log.db.del(`${this.log.prefixes.logs}:${getBnNumber(entry.index)}`);
       await this.log.db.del(`${this.log.prefixes.refs}:${entry.hash}`);
 
-      entry = await this._getBefore(index);
+      let lastEntry = await this._getLastEntry();
+      entry = await this._getBefore(lastEntry.index);//todo fix
     }
+
     if (updateState) {
       let entry = await this._getLastEntry();
       let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);

@@ -14,7 +14,7 @@ class RequestProcessor {
     this.sem = semaphore(1);
   }
 
-  async process (packet){
+  async process (packet) {
 
     let data = packet.type === messageTypes.ACK ?
       await this._process(packet) :
@@ -100,9 +100,15 @@ class RequestProcessor {
       this.mokka.emit(messageTypes.ERROR, new Error(packet.data));
 
 
-    if (packet.type === messageTypes.APPEND)
-      reply = await this.mokka.actions.append.append(packet);
+    if (packet.type === messageTypes.APPEND) {
 
+      if (packet.data)
+        console.log(`going to append data with size: ${packet.data.length} / ${packet.data.index}`)
+      reply = await this.mokka.actions.append.append(packet);
+      this.mokka.cache.del(`re_append`);
+
+
+    }
 
     if (packet.type === messageTypes.APPEND_ACK)
       reply = await this.mokka.actions.append.appendAck(packet);
@@ -129,6 +135,7 @@ class RequestProcessor {
       packet.type === messageTypes.ACK &&
       packet.last && packet.last.index > lastInfo.index &&
       packet.last.createdAt < Date.now() - this.mokka.beat) { //todo send delta
+
 
       let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
       reply = {

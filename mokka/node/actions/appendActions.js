@@ -34,6 +34,7 @@ class AppendActions {
       return null;
 
     if(_.isArray(packet.data)){
+      console.log(`looping through array ${packet.data[0].index} to ${_.last(packet.data).index}`);
       return await Promise.mapSeries(packet.data, async item=> {
         let newPacket = _.cloneDeep(packet);
         newPacket.data = item;
@@ -65,10 +66,8 @@ class AppendActions {
       }
     }
 
-
-    if (lastInfo.index >= packet.data.index) {
-      this.mokka.logger.trace(`the leader has another history. Rewrite mine ${lastInfo.index} -> ${packet.data.index - 1}`);
-      await this.mokka.log.entry.removeAfter(packet.data.index - 1, true);
+    if (lastInfo.index >= packet.data.index) {//todo send ack
+      return null;
     }
 
 
@@ -160,6 +159,8 @@ class AppendActions {
       });
 
     }
+
+    console.log(`going to send ${replies.length} replies`)
 
     return replies;
 
