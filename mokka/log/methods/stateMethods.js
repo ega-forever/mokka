@@ -1,4 +1,4 @@
-const StateModel = require('../../node/models/stateModel'); //todo move to log
+const StateModel = require('../models/stateModel');
 
 
 class StateMethods {

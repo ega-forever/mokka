@@ -3,7 +3,6 @@ const _ = require('lodash'),
   eventTypes = require('../factories/eventTypesFactory'),
   crypto = require('crypto'),
   Promise = require('bluebird'),
-  stateModel = require('../models/stateModel'),
   states = require('../factories/stateFactory');
 
 class AppendActions {
@@ -151,7 +150,7 @@ class AppendActions {
     let replies = [];
 
 
-    if (!isRecent) {//todo send state
+    if (!isRecent && this.mokka.removeSynced) {//todo send state
 
       let info = await this.mokka.log.entry.getLastDroppedInfo();
 

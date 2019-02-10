@@ -56,7 +56,7 @@ const initMokka = async () => {
     electionMin: 300,
     electionMax: 1000,
     heartbeat: 200,
-    removeSynced: true,
+    removeSynced: false,
     gossipHeartbeat: 200,
     gossipTimeout: 200,
     logOptions: {
@@ -93,7 +93,7 @@ const initMokka = async () => {
     mokka.actions.node.join(peer);
 
   mokka.on('error', function (err) {
-    console.log(err);
+   // console.log(err);
   });
 
   mokka.on('state change', function (state) {
