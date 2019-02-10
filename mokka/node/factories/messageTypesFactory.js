@@ -5,6 +5,7 @@ module.exports = {
   ERROR: 'error',
   APPEND: 'append',
   RE_APPEND: 're_append',
+  STATE: 'state',
   APPEND_FAIL: 'append_fail',
   APPEND_ACK: 'append_ack',
   GOSSIP_REQUEST: 'gossip_request',

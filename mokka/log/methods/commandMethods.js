@@ -12,7 +12,7 @@ class CommandMethods {
   }
 
 
-  async save (command, term, signature, index, checkHash, applier) { //todo implement applier
+  async save (command, term, signature, index, checkHash) {
 
     return await new Promise((res, rej) => {
       semaphore.take(async () => {
@@ -82,9 +82,6 @@ class CommandMethods {
           });
 
 
-        //todo need to share get, read, update, delete
-        await this.log.node.applier(command, this.log.state);//todo
-
         await this.log.entry._put(entry);
         res(entry);
         semaphore.leave();
@@ -106,13 +103,8 @@ class CommandMethods {
     if (entryIndex === -1)
       entry.responses.push({publicKey});
 
-    if (this.log.node.removeSynced && entry.responses.length === this.log.node.nodes.length + 1) {
-      await this.log.entry.removeTo(index, false);
-    } else {
-      await this.log.entry._put(entry);
-    }
 
-
+    await this.log.entry._put(entry);
     return entry;
   }
 
@@ -121,9 +113,9 @@ class CommandMethods {
     const entry = await this.log.db.get(`${this.log.prefixes.logs}:${getBnNumber(index)}`);
 
     entry.committed = true;
-    this.log.committedIndex = entry.index; //todo refactor
+    this.log.committedIndex = entry.index;
 
-    return await this.log.entry._put(entry);
+    await this.log.entry._put(entry);
   }
 
 }

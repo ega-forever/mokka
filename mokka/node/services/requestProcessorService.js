@@ -91,24 +91,14 @@ class RequestProcessor {
     if (packet.type === messageTypes.VOTE)  //add rule - don't vote for node, until this node receive the right history (full history)
       reply = await this.mokka.actions.vote.vote(packet);
 
-
     if (packet.type === messageTypes.VOTED)
       reply = await this.mokka.actions.vote.voted(packet);
-
 
     if (packet.type === messageTypes.ERROR)
       this.mokka.emit(messageTypes.ERROR, new Error(packet.data));
 
-
-    if (packet.type === messageTypes.APPEND) {
-
-      if (packet.data)
-        console.log(`going to append data with size: ${packet.data.length} / ${packet.data.index}`)
+    if (packet.type === messageTypes.APPEND)
       reply = await this.mokka.actions.append.append(packet);
-      this.mokka.cache.del(`re_append`);
-
-
-    }
 
     if (packet.type === messageTypes.APPEND_ACK)
       reply = await this.mokka.actions.append.appendAck(packet);
@@ -118,6 +108,10 @@ class RequestProcessor {
 
     if (packet.type === messageTypes.RE_APPEND)
       reply = await this.mokka.actions.append.obtain(packet);
+
+    if (packet.type === messageTypes.STATE)
+      reply = await this.mokka.actions.append.appendState(packet);
+
 
     if (!Object.values(messageTypes).includes(packet.type)) {
       let response = await this.mokka.actions.message.packet('error', 'Unknown message type: ' + packet.type);

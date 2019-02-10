@@ -75,7 +75,16 @@ const initMokka = async () => {
       }
 
     },
-    unapplier: async () => {
+    unapplier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) - command.value;
+        await state.put(command.key, value);
+
+      }
+
+
     }
   });
 
@@ -140,7 +149,8 @@ const takeOwnership = async (mokka) => {
 
 
 const getState = async (mokka) => {
-  let state = await mokka.log.state.getAll();
+  let info = await mokka.log.entry.getLastInfo();
+  let state = await mokka.log.state.getAll(info.index, mokka.applier);
   console.log(require('util').inspect(state, null, 2));
 };
 

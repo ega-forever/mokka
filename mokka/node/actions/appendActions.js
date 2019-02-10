@@ -3,6 +3,7 @@ const _ = require('lodash'),
   eventTypes = require('../factories/eventTypesFactory'),
   crypto = require('crypto'),
   Promise = require('bluebird'),
+  stateModel = require('../models/stateModel'),
   states = require('../factories/stateFactory');
 
 class AppendActions {
@@ -28,14 +29,12 @@ class AppendActions {
     }
 
 
-
-
-    if(!packet.data)
+    if (!packet.data)
       return null;
 
-    if(_.isArray(packet.data)){
+    if (_.isArray(packet.data)) {
       console.log(`looping through array ${packet.data[0].index} to ${_.last(packet.data).index}`);
-      return await Promise.mapSeries(packet.data, async item=> {
+      return await Promise.mapSeries(packet.data, async item => {
         let newPacket = _.cloneDeep(packet);
         newPacket.data = item;
         return await this.append(newPacket);
@@ -53,7 +52,7 @@ class AppendActions {
 
       let record = await this.mokka.log.entry.get(packet.data.index);
 
-      if (record.hash === packet.data.hash) {
+      if (record && record.hash === packet.data.hash) {
         reply = await this.mokka.actions.message.packet(messageTypes.APPEND_ACK, {
           term: packet.data.term,
           index: packet.data.index
@@ -119,11 +118,18 @@ class AppendActions {
       const entries = await this.mokka.log.entry.getUncommittedUpToIndex(packet.data.index, packet.data.term);
       for (let entry of entries) {
         await this.mokka.log.command.commit(entry.index);
+        await this.mokka.applier(entry.command, this.mokka.log.state);//todo
         this.mokka.emit(eventTypes.ENTRY_COMMITTED, entry.index);
       }
     }
 
-    if (this.mokka.state !== states.LEADER)
+    if (this.mokka.removeSynced && entry.responses.length === this.mokka.nodes.length + 1) {
+      await this.mokka.log.entry.removeTo(entry.index, false);
+      let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
+      await this.mokka.log.entry.setLastDroppedState(state);//todo committed should be state of last removed record
+    }
+
+      if (this.mokka.state !== states.LEADER)
       return;
 
     let peers = _.chain(entry.responses).map(item => item.publicKey).pullAll([this.mokka.publicKey, packet.publicKey]).value();
@@ -136,22 +142,27 @@ class AppendActions {
     return replies;
   }
 
-  async obtain (packet, limit = 100) { //todo implement the limit, combine by term
+  async obtain (packet, limit = 100) { //todo send state along side with logs
 
     let entries = await this.mokka.log.entry.getAfterList(packet.last.index, limit);
 
-    console.log(`!!obtaining ${entries.length} from ${entries[0].index} to ${_.last(entries).index} while current is ${packet.last.index}`)
-
-
+    let isRecent = _.get(entries, '0.index', packet.last.index) === packet.last.index && entries.length === 0;
     entries = _.groupBy(entries, 'term');
-
-
     let replies = [];
 
-    for(let term of Object.keys(entries)){
 
-      let reply = await this.mokka.actions.message.appendPacket(entries[term][0]);
-      reply.data = entries[term];
+    if (!isRecent) {//todo send state
+
+      let info = await this.mokka.log.entry.getLastDroppedInfo();
+
+      if(!info.term)
+        info = await this.mokka.log.entry.getLastInfo();
+
+      let state = await this.mokka.log.state.getAll(info.index, this.mokka.applier); //todo make it possible to get state at each point of history
+
+      let reply = await this.mokka.actions.message.packet(messageTypes.STATE, state);
+      const {proof} = await this.mokka.log.proof.get(info.term);
+      reply.proof = proof;
 
       replies.push({
         who: packet.publicKey,
@@ -160,16 +171,28 @@ class AppendActions {
 
     }
 
-    console.log(`going to send ${replies.length} replies`)
+
+    for (let term of Object.keys(entries)) {
+
+      let reply = await this.mokka.actions.message.appendPacket(entries[term][0]);
+      reply.data = entries[term];
+
+      replies.push({
+        who: packet.publicKey,
+        reply: reply
+      });
+    }
 
     return replies;
+  }
 
-  /*  let reply = await this.mokka.actions.message.appendPacket(entries);
+  async appendState (packet) {
 
-    return {
-      who: packet.publicKey,
-      reply: reply
-    };*/
+    for(let key of Object.keys(packet.data)){
+      await this.mokka.log.state.put(key, packet.data[key]);
+    }
+
+    await this.mokka.log.entry.setLastState(packet.last);
 
   }
 

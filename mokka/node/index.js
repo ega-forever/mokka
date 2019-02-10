@@ -73,6 +73,7 @@ class Mokka extends NodeModel {
     this.log = new this.Log(this, options.logOptions);
 
     this.applier = options.applier; //todo think about default value
+    this.unapplier = options.unapplier; //todo think about default value
 
     this._registerEvents();
     this._initialize(options);

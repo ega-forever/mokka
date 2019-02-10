@@ -75,6 +75,14 @@ class EntryMethods {
     });
   }
 
+  async setLastState (state) {
+    await this.log.db.put(`${this.log.prefixes.states}.last`, state);
+  }
+
+  async setLastDroppedState (state) {
+    await this.log.db.put(`${this.log.prefixes.states}.dropped`, state);
+  }
+
   async removeAfter (index, updateState = true) {
 
     let lastEntry = await this._getLastEntry();
@@ -91,7 +99,7 @@ class EntryMethods {
     if (updateState) {
       let entry = await this._getLastEntry();
       let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-      await this.log.db.put(`${this.log.prefixes.states}`, state);
+      await this.setState(state);
     }
 
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
@@ -114,7 +122,13 @@ class EntryMethods {
     if (updateState) {
       let entry = await this._getLastEntry();
       let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-      await this.log.db.put(`${this.log.prefixes.states}`, state);
+      await this.setLastState(state);
+
+
+      let lastDropped = await this.getLastDroppedInfo();
+
+      if (!lastDropped || lastDropped.index > state.index)
+        await this.setLastDroppedState(state);//todo check
     }
 
 
@@ -135,7 +149,7 @@ class EntryMethods {
 
   async getLastInfo () {
     try {
-      return await this.log.db.get(`${this.log.prefixes.states}`);
+      return await this.log.db.get(`${this.log.prefixes.states}.last`);
     } catch (e) {
       return {
         index: 0,
@@ -146,6 +160,21 @@ class EntryMethods {
       };
     }
   }
+
+  async getLastDroppedInfo () {
+    try {
+      return await this.log.db.get(`${this.log.prefixes.states}.dropped`);
+    } catch (e) {
+      return {
+        index: 0,
+        hash: ''.padStart(32, '0'),
+        term: 0,
+        committed: true,
+        createdAt: Date.now()
+      };
+    }
+  }
+
 
   async getLast () {
 
@@ -280,7 +309,7 @@ class EntryMethods {
 
     if (entry.index > currentState.index) {
       let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-      await this.log.db.put(`${this.log.prefixes.states}`, state);
+      await this.log.db.put(`${this.log.prefixes.states}.last`, state);
     }
 
     this.log.emit(this.log.eventTypes.LOGS_UPDATED);

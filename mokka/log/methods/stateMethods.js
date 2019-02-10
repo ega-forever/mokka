@@ -1,3 +1,6 @@
+const StateModel = require('../../node/models/stateModel'); //todo move to log
+
+
 class StateMethods {
 
   constructor (log) {
@@ -22,10 +25,15 @@ class StateMethods {
   }
 
 
-  getAll () {
-    const state = {};
+  async getAll (index, applier) {
 
-    return new Promise((resolve, reject) => {
+
+    let entries = await this.log.entry.getUncommittedUpToIndex(index);
+
+
+  let state = await new Promise((resolve, reject) => {
+
+      const stateModel = new StateModel({});
 
       this.log.db.createReadStream({
         reverse: true,
@@ -35,16 +43,29 @@ class StateMethods {
       })
         .on('data', (data) => {
           let key = data.key.toString().replace(`${this.log.prefixes.triggers}:`, '');
-          state[key] = data.value;
+          stateModel.put(key, data.value);
         })
         .on('error', (err) => {
           reject(err);
         })
         .on('end', () => {
-            resolve(state);
+            resolve(stateModel);
         });
     });
+
+
+  if(!entries.length)
+    return state.state;
+
+  for(let entry of entries)
+    await applier(entry.command, state);
+
+    return state.state;
+
   }
+
+
+
 
 }
 
