@@ -19,7 +19,7 @@ process.on('message', message => {
     initMokka(message.options);
 
   if (message.command === 'push')
-    sendCommand(message.data);
+    sendCommand(...message.data);
 
   if (message.command === 'status')
     getStatus();
@@ -44,7 +44,29 @@ const initMokka = (options) => {
     Log: Log,
     logLevel: options.logLevel || 10,
     privateKey: options.privateKey,
-    peers: pubKeys
+    peers: pubKeys,
+    removeSynced: false,
+    applier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) + command.value;
+        await state.put(command.key, value);
+
+      }
+
+    },
+    unapplier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) - command.value;
+        await state.put(command.key, value);
+
+      }
+
+
+    }
   });
 
 
@@ -53,7 +75,7 @@ const initMokka = (options) => {
 
 
   mokka.on('error', function (err) {
-    console.log(err);
+   // console.log(err);
   });
 
 
@@ -65,13 +87,13 @@ const initMokka = (options) => {
 
 };
 
-const sendCommand = async (command) => {
-  mokka.processor.push(command);
+const sendCommand = async (...command) => {
+  mokka.processor.push(...command);
   process.send({command: 'pushed', data: command});
 };
 
 const getStatus = async () => {
-  const info = await mokka.log.getLastInfo();
+  const info = await mokka.log.entry.getLastInfo();
   process.send({command: 'status', info: info, pid: process.pid})
 };
 
@@ -80,7 +102,7 @@ const getState = () => {
 };
 
 const getLogs = async () => {
-  const info = await mokka.log.getLastInfo();
+  const info = await mokka.log.entry.getLastInfo();
 
   let items = [];
 

@@ -56,7 +56,7 @@ const initMokka = async () => {
     electionMin: 300,
     electionMax: 1000,
     heartbeat: 200,
-    removeSynced: false,
+    removeSynced: true,
     gossipHeartbeat: 200,
     gossipTimeout: 200,
     logOptions: {

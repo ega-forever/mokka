@@ -111,7 +111,7 @@ module.exports = (ctx) => {
 
     for (let index = 0; index < nodes.length; index++)
       for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
-        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}.${ctx.ports[index]}`]});
+        nodes[index].send({command: 'push', data: [`${Date.now()}.${ctx.ports[index]}`, `${_.random(0, 120000)}`, 'put']});
 
 
     await Promise.delay(10000);
@@ -137,25 +137,10 @@ module.exports = (ctx) => {
         node.send({command: 'status'});
     }, 1000);
 
- //   const pushed = [0];
-
     await new Promise(res => {
 
       let intervalId = setInterval(async () => {
         let records = Object.values(states);
-
-/*
-        if (records.length === nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1) {
-          let nextIndex = records[0].index / taskAmount;
-
-          if (!pushed.includes(nextIndex) && _.isInteger(nextIndex) && nextIndex <= nodes.length - 1) {
-            for (let taskIndex = nextIndex * taskAmount; taskIndex < nextIndex * taskAmount + taskAmount; taskIndex++)
-              nodes[nextIndex].send({command: 'push', data: [taskIndex]});
-
-            pushed.push(nextIndex);
-          }
-        }
-*/
 
         if (records.length === nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1) {
 
@@ -172,9 +157,7 @@ module.exports = (ctx) => {
         for (let node of nodes)
           node.send({command: 'status'});
 
-
       }, 5000);
-
     });
 
     await Promise.delay(5000);
@@ -189,6 +172,5 @@ module.exports = (ctx) => {
 
 
   after('kill environment', async () => {});
-
 
 };
