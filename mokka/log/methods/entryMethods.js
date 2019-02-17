@@ -75,15 +75,7 @@ class EntryMethods {
     });
   }
 
-  async setLastState (state) {
-    await this.log.db.put(`${this.log.prefixes.states}.last`, state);
-  }
-
-  async setLastDroppedState (state) {
-    await this.log.db.put(`${this.log.prefixes.states}.dropped`, state);
-  }
-
-  async removeAfter (index, updateState = true) {
+  async removeAfter (index) {
 
     let lastEntry = await this._getLastEntry();
     let entry = await this._getBefore(lastEntry.index + 1);
@@ -96,19 +88,13 @@ class EntryMethods {
       entry = await this._getBefore(lastEntry.index);//todo fix
     }
 
-    if (updateState) {
-      let entry = await this._getLastEntry();
-      let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-      await this.setState(state);
-    }
-
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
     this.log.node.term = lastIndex === 0 ? 0 : lastTerm;
 
     this.log.emit(this.log.eventTypes.LOGS_UPDATED);
   }
 
-  async removeTo (index, updateState = true) {
+  async removeTo (index) {
 
     let entry = await this._getBefore(index);
 
@@ -118,19 +104,6 @@ class EntryMethods {
 
       entry = await this._getBefore(index);
     }
-
-    if (updateState) {
-      let entry = await this._getLastEntry();
-      let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-      await this.setLastState(state);
-
-
-      let lastDropped = await this.getLastDroppedInfo();
-
-      if (!lastDropped || lastDropped.index > state.index)
-        await this.setLastDroppedState(state);//todo check
-    }
-
 
     let {term: lastTerm, index: lastIndex} = await this.getLastInfo();
     this.log.node.term = lastIndex === 0 ? 0 : lastTerm;
@@ -149,7 +122,7 @@ class EntryMethods {
 
   async getLastInfo () {
     try {
-      return await this.log.db.get(`${this.log.prefixes.states}.last`);
+      return await this.log.db.get(this.log.prefixes.states);
     } catch (e) {
       return {
         index: 0,
@@ -160,21 +133,6 @@ class EntryMethods {
       };
     }
   }
-
-  async getLastDroppedInfo () {
-    try {
-      return await this.log.db.get(`${this.log.prefixes.states}.dropped`);
-    } catch (e) {
-      return {
-        index: 0,
-        hash: ''.padStart(32, '0'),
-        term: 0,
-        committed: true,
-        createdAt: Date.now()
-      };
-    }
-  }
-
 
   async getLast () {
 
@@ -256,15 +214,19 @@ class EntryMethods {
     });
   }
 
-
-  getUncommittedUpToIndex (index) {
+  getUncommittedUpToIndex (index, limit) {
     return new Promise((resolve, reject) => {
       const entries = [];
 
-      this.log.db.createReadStream({
-        gt: `${this.log.prefixes.logs}:${getBnNumber(this.log.committedIndex)}`,
+      const query = {
+        gt: `${this.log.prefixes.logs}:${getBnNumber(this.log.committedIndex)}`,//todo fix
         lte: `${this.log.prefixes.logs}:${getBnNumber(index)}`
-      })
+      };
+
+      if (limit)
+        query.limit = limit;
+
+      this.log.db.createReadStream(query)
         .on('data', data => {
           if (!data.value.committed)
             entries.push(data.value);
@@ -309,7 +271,7 @@ class EntryMethods {
 
     if (entry.index > currentState.index) {
       let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-      await this.log.db.put(`${this.log.prefixes.states}.last`, state);
+      await this.log.db.put(this.log.prefixes.states, state);
     }
 
     this.log.emit(this.log.eventTypes.LOGS_UPDATED);

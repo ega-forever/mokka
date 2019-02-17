@@ -29,7 +29,7 @@ class PeerState extends EventEmitter {
         this.setLocalKey(k, v, n);
       } else {
         this.mokka.logger.info(`received pending ${k} with next version ${this.maxVersionSeen + 1} for peer ${this.pubKey}`);
-        await this.addToDb(v); //todo implement
+        await this.addToDb(v, n); //todo implement
       }
 
   }
@@ -38,8 +38,8 @@ class PeerState extends EventEmitter {
     return await this.mokka.log.pending.getCount(this.pubKey);
   }
 
-  async addToDb (command) { //todo refactor
-    this.maxVersionSeen = await this._getMaxVersion();
+  async addToDb (command, version) {
+    this.maxVersionSeen = command === null ? version - 1  : await this._getMaxVersion();
     await this.mokka.log.pending.put(command, this.maxVersionSeen + 1, this.pubKey);
     this.maxVersionSeen = await this._getMaxVersion();
   }

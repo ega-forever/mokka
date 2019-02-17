@@ -12,7 +12,7 @@ class CommandMethods {
   }
 
 
-  async save (command, term, signature, index, checkHash) {
+  async save (command, term, signature, index, checkHash, responses) {
 
     return await new Promise((res, rej) => {
       semaphore.take(async () => {
@@ -57,7 +57,6 @@ class CommandMethods {
           return rej({code: 2, message: 'can\'t save wrong hash!'});
         }
 
-
         const entry = {
           term: term,
           index: index,
@@ -65,7 +64,7 @@ class CommandMethods {
           createdAt: Date.now(),
           committed: false,
           owner: owner,
-          responses: [
+          responses: responses ? responses : [
             {
               publicKey: owner
             }

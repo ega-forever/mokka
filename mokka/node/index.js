@@ -72,6 +72,11 @@ class Mokka extends NodeModel {
 
     this.log = new this.Log(this, options.logOptions);
 
+    this.sync = {//todo think
+      requested: 0,
+      timestamp: null
+    };
+
     this.applier = options.applier; //todo think about default value
     this.unapplier = options.unapplier; //todo think about default value
 

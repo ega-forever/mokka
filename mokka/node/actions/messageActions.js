@@ -82,7 +82,7 @@ class MessageActions {
 
 
     if (entry) {
-      payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash']);
+      payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash', 'responses', 'committed']);
       payload.last = await this.mokka.log.entry.getInfoBefore(entry);
     } else
       payload.last = await this.mokka.log.entry.getLastInfo();

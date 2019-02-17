@@ -39,7 +39,7 @@ class PendingMethods {
     };
   }
 
-  async pull (hash) {//todo reimplement
+  async pull (hash) {
 
     let pending = await this.get(hash);
 

@@ -1,6 +1,8 @@
 const Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   path = require('path'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
   hashUtils = require('../../mokka/utils/hashes'),
   detectPort = require('detect-port'),
   TCPMokka = require('../../mokka').implementation.TCP,
@@ -119,6 +121,10 @@ const askCommand = (rl, mokka) => {
       await generateTxs(mokka, amount);
     }
 
+    if (command.indexOf('generate_random ') === 0) {
+      let amount = parseInt(command.replace('generate_random', '').trim());
+      await generateRandomTxs(mokka, amount);
+    }
 
     if (command.indexOf('take_ownership') === 0)
       await takeOwnership(mokka);
@@ -143,15 +149,25 @@ const generateTxs = async (mokka, amount) => {
 };
 
 
+const generateRandomTxs = async (mokka, amount) => {
+
+  for (let index = 0; index < amount; index++) {
+    let value = _.random(-10, 10);
+    console.log(`changing value to + ${value}`);
+    await mokka.processor.push(web3.utils.randomHex(20), value, 'put');//tood
+  }
+
+};
+
 const takeOwnership = async (mokka) => {
   await mokka.processor.claimLeadership();
 };
 
 
 const getState = async (mokka) => {
-  let info = await mokka.log.entry.getLastInfo();
-  let state = await mokka.log.state.getAll(info.index, mokka.applier);
+  let state = await mokka.log.state.getAll(false, 0, 1000, mokka.applier);
   console.log(require('util').inspect(state, null, 2));
+  console.log(`total keys: ${Object.keys(state).length}`)
 };
 
 module.exports = initMokka();

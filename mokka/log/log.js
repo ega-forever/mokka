@@ -26,7 +26,8 @@ class Log extends EventEmitter {
       pendingRefs: 5,
       pendingStates: 6,
       states: 7,
-      triggers: 8 //todo implement
+      triggers: 8,
+      snapshots: 9 //todo implement
     };
 
     this.eventTypes = {

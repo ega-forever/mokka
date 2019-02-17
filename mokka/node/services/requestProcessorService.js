@@ -128,10 +128,26 @@ class RequestProcessor {
     if (this.mokka.state !== states.LEADER &&
       packet.type === messageTypes.ACK &&
       packet.last && packet.last.index > lastInfo.index &&
-      packet.last.createdAt < Date.now() - this.mokka.beat) { //todo send delta
+      packet.last.createdAt < Date.now() - this.mokka.beat && this.mokka.sync.requested === 0 && this.mokka.sync.timestamp < this.mokka.beat * 2) {
+
+      this.mokka.sync.timestamp = Date.now();
+      this.mokka.sync.requested = lastInfo.index;
 
 
-      let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
+      let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND); //todo add ttl for request, so we won't ask to re_append extra times
+
+      if (this.mokka.removeSynced) {
+        let lastAppliedIndex = await this.mokka.log.state.getLastApplied();
+        let count = await this.mokka.log.state.getCount();//todo
+
+        _.set(response, 'data.state', {
+          lastAppliedIndex,
+          count
+        });
+
+      }
+
+
       reply = {
         reply: response,
         who: packet.publicKey
