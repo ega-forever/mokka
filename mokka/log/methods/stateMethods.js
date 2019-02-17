@@ -25,12 +25,12 @@ class StateMethods {
   }
 
 
-  getApplierFuncs (index) {
+  getApplierFuncs (index, hash, term) {
 
     return {
       get: this.get.bind(this),
-      put: this.put.bind(this, index),
-      del: this.del.bind(this, index)
+      put: this.put.bind(this, index, hash, term),
+      del: this.del.bind(this, index, hash, term)
     }
 
   }
@@ -47,34 +47,38 @@ class StateMethods {
     try {
       return await this.log.db.get(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`);
     } catch (err) {
-      return 0;
+      return {
+        index: 0,
+        hash: ''.padStart(32, '0'),
+        term: 0
+      };
     }
   }
 
-  async put (index, key, value, rewrite = false) {//todo lock until snapshot is done
+  async put (index, hash, term, key, value, rewrite = false) {//todo lock until snapshot is done
 
     let lastApplied = await this.getLastApplied();
 
-    if (!rewrite && lastApplied >= index)
+    if (!rewrite && lastApplied.index >= index)
       return console.log('already applied');
 
     //  if (this.sem.available())
     await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${key}`, value);
-    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, index);
+    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, {index, hash, term});
 
 
     //return await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.temp}:${key}`, value);//todo scheduler
   }
 
-  async del (index, key) {
+  async del (index, hash, term, key) {
 
     let lastApplied = await this.getLastApplied();
 
-    if (lastApplied >= index)
+    if (lastApplied.index >= index)
       return;
 
     await this.log.db.del(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${key}`);
-    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, index);
+    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, {index, hash, term});
   }
 
   async getAll (confirmed = false, skip = 0, limit = 100, applier) {
@@ -164,7 +168,12 @@ class StateMethods {
       return await this.log.db.get(`${this.log.prefixes.snapshots}.${this.prefixes.snapshots.state}`);
     } catch (err) {
       return {
+      info: {
         index: 0,
+        term: 0,
+        hash: ''.padStart(32, '0')
+
+      },
         count: 0
       };
     }
@@ -187,8 +196,9 @@ class StateMethods {
 
   async _isSnapshotOutdated (index) {
 
-    let lastApplied = await this.getLastApplied();
-    return index > lastApplied
+    let lastSnapshotState = await this.getSnapshotState();
+
+    return index > lastSnapshotState.info.index;
   }
 
   async _cleanupSnapshot () {
@@ -217,8 +227,8 @@ class StateMethods {
   async _createSnapshot () {
 
     let rsCreate = this.log.db.createReadStream({
-      lt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent + 1}:`,
-      gt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:`
+      lt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent + 1}`,
+      gt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}`
     });
 
     let count = 0;
@@ -230,14 +240,15 @@ class StateMethods {
       rsCreate.resume();
     });
 
+    await new Promise(res => rsCreate.once('end', res));
+
     let lastApplied = await this.getLastApplied();
     await this.log.db.put(`${this.log.prefixes.snapshots}.${this.prefixes.snapshots.state}`, {
-      index: lastApplied,
-      count: count,
+      info: lastApplied,
+      count: count,//todo ??
       created: Date.now()
     });
 
-    await new Promise(res => rsCreate.once('end', res));
   }
 
   async getSnapshot (index, skip, limit) {

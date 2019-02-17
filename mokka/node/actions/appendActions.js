@@ -118,7 +118,7 @@ class AppendActions {
     if (this.mokka.quorum(entry.responses.length) && !entry.committed) {
       const entries = await this.mokka.log.entry.getUncommittedUpToIndex(packet.data.index);
       for (let entry of entries) {
-        await this.mokka.applier(entry.command, this.mokka.log.state.getApplierFuncs(entry.index));
+        await this.mokka.applier(entry.command, this.mokka.log.state.getApplierFuncs(entry.index, entry.hash, entry.term));
         await this.mokka.log.command.commit(entry.index);
         this.mokka.emit(eventTypes.ENTRY_COMMITTED, entry.index);
       }
@@ -144,13 +144,15 @@ class AppendActions {
 
   async obtain (packet, limit = 100) { //todo send state along side with logs
 
-    let entries = await this.mokka.log.entry.getAfterList(packet.last.index, limit);
+    if (this.mokka.removeSynced) {
 
-    let isRecent = _.get(entries, '0.index', packet.last.index) === packet.last.index && entries.length === 0;
+      let snapshotState = await this.mokka.log.state.getSnapshotState();
 
-
-    if (this.mokka.removeSynced && !isRecent)
-      return await this._obtainState(packet);
+      if (snapshotState.info.index === 0 ||
+        snapshotState.info.index > packet.data.state.lastAppliedIndex ||
+        (snapshotState.info.index === packet.data.state.lastAppliedIndex && snapshotState.count > packet.data.state.count))
+        return await this._obtainState(packet);
+    }
 
     return await this._obtainLogs(packet);
   }
@@ -160,20 +162,18 @@ class AppendActions {
 
     let snapshotState = await this.mokka.log.state.getSnapshotState();
 
-    if(snapshotState.index === 0 || await this.mokka.log.state._isSnapshotOutdated(packet.last.index)){
-      await this.mokka.log.state.takeSnapshot()//todo
+    if (snapshotState.info.index === 0 || await this.mokka.log.state._isSnapshotOutdated(packet.last.index)) {
+      let info = await this.mokka.log.entry.getLastInfo();
+      await this.mokka.log.state.takeSnapshot(info.index);
+      snapshotState = await this.mokka.log.state.getSnapshotState();
     }
 
     let info = await this.mokka.log.entry.getLastInfo();
 
+    let triggersChunk = await this.mokka.log.state.getSnapshot(packet.last.index, packet.data.state.count, 100);
 
-    let skip = 0;
-
-    if(packet.data.state.lastAppliedIndex === snapshotState.index && snapshotState.count - packet.data.state.count > 0)
-      skip = snapshotState.count - packet.data.state.count;
-
-
-    let triggersChunk = await this.mokka.log.state.getSnapshot(packet.last.index, skip, 100);
+    console.log('triggers', Object.keys(triggersChunk).length, packet.last.index, packet.data.state.count)
+    console.log(snapshotState)
 
     let reply = await this.mokka.actions.message.packet(messageTypes.STATE, {
       state: triggersChunk,
@@ -212,19 +212,26 @@ class AppendActions {
     return replies;
   }
 
-  async appendState (packet) { //todo include index
+  async appendState (packet) {
 
 
-    let lastAppliedIndex = await this.mokka.log.state.getLastApplied();
-    let count = await this.mokka.log.state.getCount();//todo
+    let lastApplied = await this.mokka.log.state.getLastApplied();
+    let count = await this.mokka.log.state.getCount();
 
-    console.log(lastAppliedIndex, count, '/', packet.data.info.index, packet.data.info.count)
+    console.log(lastApplied.index, count, '/', packet.data.info.info.index, packet.data.info.count);
 
-    if(lastAppliedIndex > packet.data.info.index || (lastAppliedIndex === packet.data.info.index && packet.data.info.count === count))
+    if (lastApplied.index > packet.data.info.info.index || (lastApplied.index === packet.data.info.info.index && packet.data.info.count === count))
       return;
 
     for (let key of Object.keys(packet.data.state))
-      await this.mokka.log.state.put(packet.data.info.index, key, packet.data.state[key], true);
+      await this.mokka.log.state.put(packet.data.info.info.index, packet.data.info.info.hash, packet.data.info.info.term, key, packet.data.state[key], true);
+
+    let newCount = await this.mokka.log.state.getCount();
+    let newLastApplied = await this.mokka.log.state.getLastApplied();
+
+    if (newLastApplied.index === packet.data.info.info.index && packet.data.info.count === newCount)
+      await this.mokka.log.entry.setState(packet.data.info.info);
+    //todo set last state
 
   }
 

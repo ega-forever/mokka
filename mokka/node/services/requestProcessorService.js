@@ -125,27 +125,29 @@ class RequestProcessor {
 
     const lastInfo = await this.mokka.log.entry.getLastInfo();
 
+    let stateLastApplied = await this.mokka.log.state.getLastApplied();
+    let stateCount = await this.mokka.log.state.getCount();//todo
+
+    let lock = await this.mokka.cache.get(`re_append.${packet.publicKey}`);
+
     if (this.mokka.state !== states.LEADER &&
       packet.type === messageTypes.ACK &&
-      packet.last && packet.last.index > lastInfo.index &&
-      packet.last.createdAt < Date.now() - this.mokka.beat && this.mokka.sync.requested === 0 && this.mokka.sync.timestamp < this.mokka.beat * 2) {
+      !_.isEqual(lock, {index: lastInfo.index, state: {index: stateLastApplied.index, count: stateCount}}) &&
+      packet.last && packet.last.index > lastInfo.index
+      //todo check by ttl
+   ) {
 
-      this.mokka.sync.timestamp = Date.now();
-      this.mokka.sync.requested = lastInfo.index;
+      this.mokka.cache.set(`re_append.${packet.publicKey}`, {index: lastInfo.index, state: {index: stateLastApplied.index, count: stateCount}}, this.mokka.beat * 2);
 
+      console.log(stateLastApplied, stateCount)
 
-      let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND); //todo add ttl for request, so we won't ask to re_append extra times
+      let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
 
-      if (this.mokka.removeSynced) {
-        let lastAppliedIndex = await this.mokka.log.state.getLastApplied();
-        let count = await this.mokka.log.state.getCount();//todo
-
+      if (this.mokka.removeSynced)
         _.set(response, 'data.state', {
-          lastAppliedIndex,
-          count
+          lastAppliedIndex: stateLastApplied.index,
+          count: stateCount
         });
-
-      }
 
 
       reply = {

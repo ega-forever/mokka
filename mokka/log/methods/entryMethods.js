@@ -271,11 +271,15 @@ class EntryMethods {
 
     if (entry.index > currentState.index) {
       let state = _.pick(entry, ['index', 'term', 'hash', 'createdAt']);
-      await this.log.db.put(this.log.prefixes.states, state);
+      await this.setState(state);
     }
 
     this.log.emit(this.log.eventTypes.LOGS_UPDATED);
     return result;
+  }
+
+  async setState(state){
+    await this.log.db.put(this.log.prefixes.states, state);
   }
 
 }

@@ -167,7 +167,9 @@ const takeOwnership = async (mokka) => {
 const getState = async (mokka) => {
   let state = await mokka.log.state.getAll(false, 0, 1000, mokka.applier);
   console.log(require('util').inspect(state, null, 2));
-  console.log(`total keys: ${Object.keys(state).length}`)
+  console.log(`total keys: ${Object.keys(state).length}`);
+  let snapshotState = await mokka.log.state.getSnapshotState();
+  console.log(snapshotState)
 };
 
 module.exports = initMokka();
