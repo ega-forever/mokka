@@ -1,4 +1,7 @@
 const StateModel = require('../models/stateModel'),
+  fs = require('fs-extra'),
+  lineReader = require('line-reader'),
+  _ = require('lodash'),
   semaphore = require('semaphore');
 
 
@@ -15,13 +18,9 @@ class StateMethods {
         temp: 1,
         permanent: 2,
         state: 3
-      },
-      snapshots: {
-        state: 1,
-        triggers: 2
       }
-
     };
+
   }
 
 
@@ -55,30 +54,43 @@ class StateMethods {
     }
   }
 
-  async put (index, hash, term, key, value, rewrite = false) {//todo lock until snapshot is done
+  async put (index, hash, term, key, value, rewrite = false) {
 
-    let lastApplied = await this.getLastApplied();
+    await new Promise(res => {
 
-    if (!rewrite && lastApplied.index >= index)
-      return console.log('already applied');
+      this.sem.take(async () => {
+        let lastApplied = await this.getLastApplied();
 
-    //  if (this.sem.available())
-    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${key}`, value);
-    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, {index, hash, term});
+        if (!rewrite && lastApplied.index >= index)
+          return;
 
+        await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${key}`, value);
+        await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, {index, hash, term});
+        res();
+        this.sem.leave();
+      });
 
-    //return await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.temp}:${key}`, value);//todo scheduler
+    });
   }
 
-  async del (index, hash, term, key) {
+  async del (index, hash, term, key, rewrite = false) {
 
-    let lastApplied = await this.getLastApplied();
+    await new Promise(res => {
 
-    if (lastApplied.index >= index)
-      return;
+      this.sem.take(async () => {
+        let lastApplied = await this.getLastApplied();
 
-    await this.log.db.del(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${key}`);
-    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, {index, hash, term});
+        if (!rewrite && lastApplied.index >= index)
+          return;
+
+        await this.log.db.del(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${key}`);
+        await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, {index, hash, term});
+        res();
+        this.sem.leave();
+      });
+
+    });
+
   }
 
   async getAll (confirmed = false, skip = 0, limit = 100, applier) {
@@ -94,7 +106,6 @@ class StateMethods {
         gt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}`
       })
         .on('data', (data) => {
-
 
           count++;
 
@@ -125,68 +136,62 @@ class StateMethods {
 
   }
 
-  async delAll () {
+  async _getNextTrigger () {
 
+    return await new Promise(res => {
+      let trigger;
 
-    let rsDel = this.log.db.createKeyStream({
-      lt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent + 1}`,
-      gt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}`
+      this.log.db.createKeyStream({
+        lt: this.log.prefixes.triggers + 1,
+        gt: this.log.prefixes.triggers,
+        limit: 1
+      }).on('data', async data => {//todo refactor
+        trigger = data;
+      }).on('end', () => res(trigger));
+
     });
-
-
-    rsDel.on('data', async data => {
-      rsDel.pause();
-      await this.log.db.del(data);
-      rsDel.resume();
-    });
-
-    await new Promise(res => rsDel.once('end', res));
-
   }
 
+  async dropAll () {
 
-  async getCount () {
+    let trigger = await this._getNextTrigger();
 
-    let count = 0;
-    let rs = this.log.db.createKeyStream({
-      lt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent + 1}`,
-      gt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}`
-    });
-
-
-    rs.on('data', () => {
-      count++
-    });
-
-    await new Promise(res => rs.once('end', res));
-
-    return count;
-  }
-
-  async getSnapshotState () {
-    try {
-      return await this.log.db.get(`${this.log.prefixes.snapshots}.${this.prefixes.snapshots.state}`);
-    } catch (err) {
-      return {
-      info: {
-        index: 0,
-        term: 0,
-        hash: ''.padStart(32, '0')
-
-      },
-        count: 0
-      };
+    while (trigger) {
+      await this.log.db.del(trigger.key);
+      trigger = await this._getNextTrigger();
     }
+
+    await this.log.entry.removeAfter(0);
+    await this.log.db.del(this.log.prefixes.states);
   }
 
-  async takeSnapshot (index) {
+  async takeSnapshot (path) { //todo lock
     await new Promise(res => {
       this.sem.take(async () => {
 
-        if (await this._isSnapshotOutdated(index)) {
-          await this._cleanupSnapshot();
-          await this._createSnapshot();
-        }
+        await fs.remove(path);
+        let info = await this.getLastApplied();
+        let dataWs = fs.createWriteStream(path, {flags: 'a'});
+        dataWs.write(`${JSON.stringify(info)}\n`);
+
+        await new Promise((resolve, reject) => {
+
+          this.log.db.createReadStream({
+            lt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent + 1}`,
+            gt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}`
+          })
+            .on('data', (data) => {
+              let key = data.key.toString().replace(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:`, '');
+              dataWs.write(`${JSON.stringify({key, value: data.value})}\n`);
+            })
+            .on('error', (err) => {
+              reject(err);
+            })
+            .on('end', () => {
+              dataWs.end();
+              resolve();
+            });
+        });
 
         this.sem.leave();
         res();
@@ -194,70 +199,43 @@ class StateMethods {
     })
   }
 
-  async _isSnapshotOutdated (index) {
+  async appendSnapshot (path) {//todo make lock
 
-    let lastSnapshotState = await this.getSnapshotState();
+    await this.dropAll();
 
-    return index > lastSnapshotState.info.index;
+
+    let info = await new Promise((res, rej) => {
+
+      let header;
+
+      lineReader.eachLine(path, async (line, last, callback) => {
+
+        if (!header) {
+          header = JSON.parse(line);
+          return callback();
+        }
+
+        let trigger = JSON.parse(line);
+        await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${trigger.key}`, trigger.value);
+        console.log('after');
+
+
+        callback();
+      }, err => err ? rej() : res(header))
+    });
+
+    if (!info)
+      return;
+
+    console.log('after triggers');
+
+    let defaultState = _.merge({committed: true, created: Date.now()}, info);
+
+    await this.log.db.put(this.log.prefixes.states, defaultState);
+    await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, info);
+    //todo append state, info,
   }
 
-  async _cleanupSnapshot () {
-
-
-    await this.log.db.del(`${this.log.prefixes.snapshots}.${this.prefixes.snapshots.state}`);
-
-
-    let rsDel = this.log.db.createKeyStream({
-      lt: `${this.log.prefixes.snapshots}.${this.prefixes.snapshots.triggers + 1}`,
-      gt: `${this.log.prefixes.snapshots}.${this.prefixes.snapshots.triggers}`
-    });
-
-
-    rsDel.on('data', async data => {
-      rsDel.pause();
-      await this.log.db.del(data);
-      rsDel.resume();
-    });
-
-    await new Promise(res => rsDel.once('end', res));
-
-
-  }
-
-  async _createSnapshot () {
-
-    let rsCreate = this.log.db.createReadStream({
-      lt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent + 1}`,
-      gt: `${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}`
-    });
-
-    let count = 0;
-    rsCreate.on('data', async data => {
-      rsCreate.pause();
-      let key = data.key.toString().replace(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:`, '');
-      await this.log.db.put(`${this.log.prefixes.snapshots}.${this.prefixes.snapshots.triggers}:${key}`, data.value);
-      count++;
-      rsCreate.resume();
-    });
-
-    await new Promise(res => rsCreate.once('end', res));
-
-    let lastApplied = await this.getLastApplied();
-    await this.log.db.put(`${this.log.prefixes.snapshots}.${this.prefixes.snapshots.state}`, {
-      info: lastApplied,
-      count: count,//todo ??
-      created: Date.now()
-    });
-
-  }
-
-  async getSnapshot (index, skip, limit) {
-
-    if (await this._isSnapshotOutdated(index))
-      await this.takeSnapshot(index);
-
-    return await this.getAll(true, skip, limit);
-  }
 
 }
 

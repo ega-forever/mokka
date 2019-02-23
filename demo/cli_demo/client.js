@@ -95,7 +95,7 @@ const initMokka = async () => {
     mokka.actions.node.join(peer);
 
   mokka.on('error', function (err) {
-   // console.log(err);
+    // console.log(err);
   });
 
   mokka.on('state change', function (state) {
@@ -132,6 +132,13 @@ const askCommand = (rl, mokka) => {
     if (command.indexOf('get_state') === 0)
       await getState(mokka);
 
+    if (command.indexOf('take_snapshot') === 0)
+      await takeSnapshot(mokka, command.replace('take_snapshot', '').trim());
+
+    if (command.indexOf('append_snapshot') === 0)
+      await appendSnapshot(mokka, command.replace('append_snapshot', '').trim());
+
+
 
     askCommand(rl, mokka);
   });
@@ -165,11 +172,21 @@ const takeOwnership = async (mokka) => {
 
 
 const getState = async (mokka) => {
-  let state = await mokka.log.state.getAll(false, 0, 1000, mokka.applier);
+  let state = await mokka.log.state.getAll(false, 0, 100000, mokka.applier);
+  state = _.chain(state).toPairs().sortBy(pair=>pair[0]).fromPairs().value();
+
   console.log(require('util').inspect(state, null, 2));
   console.log(`total keys: ${Object.keys(state).length}`);
-  let snapshotState = await mokka.log.state.getSnapshotState();
-  console.log(snapshotState)
+  let info = await mokka.log.entry.getLastInfo();
+  console.log(info)
+};
+
+const takeSnapshot = async (mokka, path) => {
+  await mokka.log.state.takeSnapshot(path);
+};
+
+const appendSnapshot = async (mokka, path) => {
+  await mokka.log.state.appendSnapshot(path);
 };
 
 module.exports = initMokka();

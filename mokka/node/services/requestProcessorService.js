@@ -109,10 +109,6 @@ class RequestProcessor {
     if (packet.type === messageTypes.RE_APPEND)
       reply = await this.mokka.actions.append.obtain(packet);
 
-    if (packet.type === messageTypes.STATE)
-      reply = await this.mokka.actions.append.appendState(packet);
-
-
     if (!Object.values(messageTypes).includes(packet.type)) {
       let response = await this.mokka.actions.message.packet('error', 'Unknown message type: ' + packet.type);
       reply = {
@@ -125,31 +121,13 @@ class RequestProcessor {
 
     const lastInfo = await this.mokka.log.entry.getLastInfo();
 
-    let stateLastApplied = await this.mokka.log.state.getLastApplied();
-    let stateCount = await this.mokka.log.state.getCount();//todo
-
-    let lock = await this.mokka.cache.get(`re_append.${packet.publicKey}`);
-
     if (this.mokka.state !== states.LEADER &&
       packet.type === messageTypes.ACK &&
-      !_.isEqual(lock, {index: lastInfo.index, state: {index: stateLastApplied.index, count: stateCount}}) &&
-      packet.last && packet.last.index > lastInfo.index
-      //todo check by ttl
-   ) {
+      packet.last && packet.last.index > lastInfo.index &&
+      packet.last.createdAt < Date.now() - this.mokka.beat) { //todo send delta
 
-      this.mokka.cache.set(`re_append.${packet.publicKey}`, {index: lastInfo.index, state: {index: stateLastApplied.index, count: stateCount}}, this.mokka.beat * 2);
-
-      console.log(stateLastApplied, stateCount)
 
       let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
-
-      if (this.mokka.removeSynced)
-        _.set(response, 'data.state', {
-          lastAppliedIndex: stateLastApplied.index,
-          count: stateCount
-        });
-
-
       reply = {
         reply: response,
         who: packet.publicKey

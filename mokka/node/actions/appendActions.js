@@ -62,7 +62,7 @@ class AppendActions {
       }
     }
 
-    if (lastInfo.index >= packet.data.index) {//todo send ack
+    if (lastInfo.index >= packet.data.index) {
       return null;
     }
 
@@ -118,14 +118,13 @@ class AppendActions {
     if (this.mokka.quorum(entry.responses.length) && !entry.committed) {
       const entries = await this.mokka.log.entry.getUncommittedUpToIndex(packet.data.index);
       for (let entry of entries) {
-        await this.mokka.applier(entry.command, this.mokka.log.state.getApplierFuncs(entry.index, entry.hash, entry.term));
+        await this.mokka.applier(entry.command, this.mokka.log.state.getApplierFuncs(entry.index, entry.hash, entry.term));//todo lock
         await this.mokka.log.command.commit(entry.index);
         this.mokka.emit(eventTypes.ENTRY_COMMITTED, entry.index);
       }
     }
 
     if (this.mokka.removeSynced && entry.responses.length === this.mokka.nodes.length + 1) { //todo remove old terms as well
-      await this.mokka.log.state.takeSnapshot(entry.index);
       await this.mokka.log.entry.removeTo(entry.index);
     }
 
@@ -143,54 +142,6 @@ class AppendActions {
   }
 
   async obtain (packet, limit = 100) { //todo send state along side with logs
-
-    if (this.mokka.removeSynced) {
-
-      let snapshotState = await this.mokka.log.state.getSnapshotState();
-
-      if (snapshotState.info.index === 0 ||
-        snapshotState.info.index > packet.data.state.lastAppliedIndex ||
-        (snapshotState.info.index === packet.data.state.lastAppliedIndex && snapshotState.count > packet.data.state.count))
-        return await this._obtainState(packet);
-    }
-
-    return await this._obtainLogs(packet);
-  }
-
-
-  async _obtainState (packet) {
-
-    let snapshotState = await this.mokka.log.state.getSnapshotState();
-
-    if (snapshotState.info.index === 0 || await this.mokka.log.state._isSnapshotOutdated(packet.last.index)) {
-      let info = await this.mokka.log.entry.getLastInfo();
-      await this.mokka.log.state.takeSnapshot(info.index);
-      snapshotState = await this.mokka.log.state.getSnapshotState();
-    }
-
-    let info = await this.mokka.log.entry.getLastInfo();
-
-    let triggersChunk = await this.mokka.log.state.getSnapshot(packet.last.index, packet.data.state.count, 100);
-
-    console.log('triggers', Object.keys(triggersChunk).length, packet.last.index, packet.data.state.count)
-    console.log(snapshotState)
-
-    let reply = await this.mokka.actions.message.packet(messageTypes.STATE, {
-      state: triggersChunk,
-      info: snapshotState
-    });
-    const {proof} = await this.mokka.log.proof.get(info.term);
-    reply.proof = proof;
-
-    return {
-      who: packet.publicKey,
-      reply: reply
-    };
-
-  }
-
-  async _obtainLogs (packet) {
-
 
     let entries = await this.mokka.log.entry.getAfterList(packet.last.index, 100);
 
@@ -210,29 +161,6 @@ class AppendActions {
     }
 
     return replies;
-  }
-
-  async appendState (packet) {
-
-
-    let lastApplied = await this.mokka.log.state.getLastApplied();
-    let count = await this.mokka.log.state.getCount();
-
-    console.log(lastApplied.index, count, '/', packet.data.info.info.index, packet.data.info.count);
-
-    if (lastApplied.index > packet.data.info.info.index || (lastApplied.index === packet.data.info.info.index && packet.data.info.count === count))
-      return;
-
-    for (let key of Object.keys(packet.data.state))
-      await this.mokka.log.state.put(packet.data.info.info.index, packet.data.info.info.hash, packet.data.info.info.term, key, packet.data.state[key], true);
-
-    let newCount = await this.mokka.log.state.getCount();
-    let newLastApplied = await this.mokka.log.state.getLastApplied();
-
-    if (newLastApplied.index === packet.data.info.info.index && packet.data.info.count === newCount)
-      await this.mokka.log.entry.setState(packet.data.info.info);
-    //todo set last state
-
   }
 
   async appendFail (packet) {

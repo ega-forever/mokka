@@ -245,6 +245,10 @@ class VoteActions {
 
 
     let localShare = _.find(this.mokka.votes.shares, {publicKey: packet.publicKey});
+
+    if(!localShare)
+      return;
+
     const restoredPublicKey = restorePubKey(localShare.share, packet.data.signature);
 
 
