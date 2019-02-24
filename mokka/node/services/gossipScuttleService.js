@@ -5,11 +5,11 @@ class GossipScuttleService {
   }
 
 
-  digest () {
+  async digest () {
     let digest = {};
     for (let pubKey of Object.keys(this.peers)) {
       let p = this.peers[pubKey];
-      digest[pubKey] = p.maxVersionSeen;
+      digest[pubKey] = await p._getMaxVersion();
     }
     return digest;
   }

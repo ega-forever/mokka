@@ -5,7 +5,7 @@ const Wallet = require('ethereumjs-wallet'),
   hashUtils = require('../../../mokka/utils/hashes');
 
 
-module.exports = async (ports, privKeys, startAtIndexes) => {
+module.exports = async (ports, removeSynced = false, privKeys, startAtIndexes) => {
 
   const nodePath = path.join(__dirname, './node.js');
   const nodes = [];
@@ -38,7 +38,8 @@ module.exports = async (ports, privKeys, startAtIndexes) => {
           heartbeat: 100,
           port: ports[index],
           peers: uris,
-          logLevel: 30,
+          logLevel: process.env.LOG_LEVEL || 30,
+          removeSynced: removeSynced,
           privateKey: privKeys[index]
         }
       });

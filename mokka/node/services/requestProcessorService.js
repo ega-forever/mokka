@@ -14,7 +14,7 @@ class RequestProcessor {
     this.sem = semaphore(1);
   }
 
-  async process (packet){
+  async process (packet) {
 
     let data = packet.type === messageTypes.ACK ?
       await this._process(packet) :
@@ -91,18 +91,14 @@ class RequestProcessor {
     if (packet.type === messageTypes.VOTE)  //add rule - don't vote for node, until this node receive the right history (full history)
       reply = await this.mokka.actions.vote.vote(packet);
 
-
     if (packet.type === messageTypes.VOTED)
       reply = await this.mokka.actions.vote.voted(packet);
-
 
     if (packet.type === messageTypes.ERROR)
       this.mokka.emit(messageTypes.ERROR, new Error(packet.data));
 
-
     if (packet.type === messageTypes.APPEND)
       reply = await this.mokka.actions.append.append(packet);
-
 
     if (packet.type === messageTypes.APPEND_ACK)
       reply = await this.mokka.actions.append.appendAck(packet);
@@ -123,8 +119,13 @@ class RequestProcessor {
 
     this.mokka.time.heartbeat(states.LEADER === this.mokka.state ? this.mokka.beat : this.mokka.time.timeout());
 
+    const lastInfo = await this.mokka.log.entry.getLastInfo();
 
-    if (this.mokka.state !== states.LEADER && packet.type === messageTypes.ACK && packet.last && packet.last.index > this.mokka.lastInfo.index && packet.last.createdAt < Date.now() - this.mokka.beat) {
+    if (this.mokka.state !== states.LEADER &&
+      packet.type === messageTypes.ACK &&
+      packet.last && packet.last.index > lastInfo.index &&
+      packet.last.createdAt < Date.now() - this.mokka.beat) { //todo send delta
+
 
       let response = await this.mokka.actions.message.packet(messageTypes.RE_APPEND);
       reply = {

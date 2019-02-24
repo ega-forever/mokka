@@ -19,13 +19,22 @@ process.on('message', message => {
     initMokka(message.options);
 
   if (message.command === 'push')
-    sendCommand(message.data);
+    sendCommand(...message.data);
 
   if (message.command === 'status')
     getStatus();
 
   if (message.command === 'logs')
     getLogs();
+
+  if (message.command === 'snapshot')
+    takeSnapshot(message.path);
+
+  if (message.command === 'append_snapshot')
+    appendSnapshot(message.path);
+
+  if (message.command === 'claim_leadership')
+    mokka.processor.claimLeadership();
 
 });
 
@@ -44,7 +53,29 @@ const initMokka = (options) => {
     Log: Log,
     logLevel: options.logLevel || 10,
     privateKey: options.privateKey,
-    peers: pubKeys
+    peers: pubKeys,
+    removeSynced: options.removeSynced || false,
+    applier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) + command.value;
+        await state.put(command.key, value);
+
+      }
+
+    },
+    unapplier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) - command.value;
+        await state.put(command.key, value);
+
+      }
+
+
+    }
   });
 
 
@@ -53,25 +84,24 @@ const initMokka = (options) => {
 
 
   mokka.on('error', function (err) {
-    console.log(err);
+   // console.log(err);
   });
 
 
   mokka.on('state change', function (state) {
-    console.log(`state changed: ${state}`);
     getState();
   });
 
 
 };
 
-const sendCommand = async (command) => {
-  mokka.processor.push(command);
+const sendCommand = async (...command) => {
+  mokka.processor.push(...command);
   process.send({command: 'pushed', data: command});
 };
 
 const getStatus = async () => {
-  const info = await mokka.log.getLastInfo();
+  const info = await mokka.log.entry.getLastInfo();
   process.send({command: 'status', info: info, pid: process.pid})
 };
 
@@ -80,7 +110,7 @@ const getState = () => {
 };
 
 const getLogs = async () => {
-  const info = await mokka.log.getLastInfo();
+  const info = await mokka.log.entry.getLastInfo();
 
   let items = [];
 
@@ -91,4 +121,15 @@ const getLogs = async () => {
   }
 
   process.send({command: 'logs', data: items });
+};
+
+const takeSnapshot = async (path) => {
+  await mokka.log.state.takeSnapshot(path);
+  process.send({command: 'snapshot_taken', pid: process.pid})
+};
+
+
+const appendSnapshot = async (path) => {
+  await mokka.log.state.appendSnapshot(path);
+  process.send({command: 'snapshot_appended', pid: process.pid})
 };

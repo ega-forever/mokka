@@ -122,9 +122,11 @@ class NodeActions {
           return res();
         }
 
+        let lastInfo = await this.mokka.log.entry.getLastInfo();
+
         this.mokka.change({
           state: states.CANDIDATE,
-          term: this.mokka.lastInfo.term + 1,
+          term: lastInfo.term + 1,
           leader: ''
         });
 

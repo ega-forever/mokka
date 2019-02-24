@@ -1,7 +1,8 @@
-const Log = require('../../mokka').storage,
-  Wallet = require('ethereumjs-wallet'),
+const Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   path = require('path'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
   hashUtils = require('../../mokka/utils/hashes'),
   detectPort = require('detect-port'),
   TCPMokka = require('../../mokka').implementation.TCP,
@@ -57,13 +58,36 @@ const initMokka = async () => {
     electionMin: 300,
     electionMax: 1000,
     heartbeat: 200,
-    //Log: Log,
+    removeSynced: true,
+    gossipHeartbeat: 200,
+    gossipTimeout: 200,
     logOptions: {
       adapter: require('leveldown'),
       path: path.join('./', 'dump', `test.${index}.db`)
     },
     logLevel: 30,
-    privateKey: keys[index]
+    privateKey: keys[index],
+    applier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) + command.value;
+        await state.put(command.key, value);
+
+      }
+
+    },
+    unapplier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) - command.value;
+        await state.put(command.key, value);
+
+      }
+
+
+    }
   });
 
 
@@ -71,7 +95,7 @@ const initMokka = async () => {
     mokka.actions.node.join(peer);
 
   mokka.on('error', function (err) {
-    console.log(err);
+    // console.log(err);
   });
 
   mokka.on('state change', function (state) {
@@ -97,13 +121,23 @@ const askCommand = (rl, mokka) => {
       await generateTxs(mokka, amount);
     }
 
-    if(command.indexOf('generate_as_single') === 0){
-      let amount = parseInt(command.replace('generate_as_single', '').trim());
-      await generateTxsAsSingle(mokka, amount);
+    if (command.indexOf('generate_random ') === 0) {
+      let amount = parseInt(command.replace('generate_random', '').trim());
+      await generateRandomTxs(mokka, amount);
     }
 
-    if(command.indexOf('take_ownership') === 0)
+    if (command.indexOf('take_ownership') === 0)
       await takeOwnership(mokka);
+
+    if (command.indexOf('get_state') === 0)
+      await getState(mokka);
+
+    if (command.indexOf('take_snapshot') === 0)
+      await takeSnapshot(mokka, command.replace('take_snapshot', '').trim());
+
+    if (command.indexOf('append_snapshot') === 0)
+      await appendSnapshot(mokka, command.replace('append_snapshot', '').trim());
+
 
 
     askCommand(rl, mokka);
@@ -114,45 +148,45 @@ const askCommand = (rl, mokka) => {
 const generateTxs = async (mokka, amount) => {
 
   for (let index = 0; index < amount; index++) {
-
-    let tx = {
-      to: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B',
-      from: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51',
-      nonce: index,
-      timestamp: Date.now()
-    };
-
-    await mokka.processor.push(tx);
+    let value = _.random(-10, 10);
+    console.log(`changing value to + ${value}`);
+    await mokka.processor.push('0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', value, 'put');
   }
 
 };
 
+
+const generateRandomTxs = async (mokka, amount) => {
+
+  for (let index = 0; index < amount; index++) {
+    let value = _.random(-10, 10);
+    console.log(`changing value to + ${value}`);
+    await mokka.processor.push(web3.utils.randomHex(20), value, 'put');//tood
+  }
+
+};
 
 const takeOwnership = async (mokka) => {
   await mokka.processor.claimLeadership();
 };
 
 
-const generateTxsAsSingle = async (mokka, amount) => {
+const getState = async (mokka) => {
+  let state = await mokka.log.state.getAll(false, 0, 100000, mokka.applier);
+  state = _.chain(state).toPairs().sortBy(pair=>pair[0]).fromPairs().value();
 
-  let txs = [];
-
-  for (let index = 0; index < amount; index++) {
-
-    let tx = {
-      to: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B',
-      from: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51',
-      nonce: index,
-      timestamp: Date.now()
-    };
-
-    txs.push(tx);
-
-  }
-
-  await mokka.processor.push(txs);
-
+  console.log(require('util').inspect(state, null, 2));
+  console.log(`total keys: ${Object.keys(state).length}`);
+  let info = await mokka.log.entry.getLastInfo();
+  console.log(info)
 };
 
+const takeSnapshot = async (mokka, path) => {
+  await mokka.log.state.takeSnapshot(path);
+};
+
+const appendSnapshot = async (mokka, path) => {
+  await mokka.log.state.appendSnapshot(path);
+};
 
 module.exports = initMokka();

@@ -1,6 +1,6 @@
 {
   "name": "mokka",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "mokka consensus",
   "main": "mokka/index.js",
   "homepage": "https://github.com/ega-forever/mokka#readme",
@@ -25,15 +25,17 @@
     "distributed"
   ],
   "author": "Egor Zuev",
-  "license": "AGPL",
+  "license": "AGPLv3",
   "dependencies": {
     "axon": "2.0.x",
     "bluebird": "^3.5.2",
     "bunyan": "^1.8.12",
     "encoding-down": "^3.0.1",
     "ethereumjs-wallet": "^0.6.2",
+    "fs-extra": "^7.0.1",
     "leveldown": "^4.0.1",
     "levelup": "^3.1.1",
+    "line-reader": "^0.4.0",
     "lodash": "^4.17.11",
     "memdown": "^3.0.0",
     "merkle-tools": "^1.4.0",

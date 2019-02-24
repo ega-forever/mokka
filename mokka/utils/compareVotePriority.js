@@ -10,12 +10,12 @@ const _getIndex = async (currentTerm, mokka, peers, publicKey)=>{
 
   if (currentTerm > 1)
     for (let termIndex = minTerm; termIndex < currentTerm; termIndex++) {
-      let {index} = await mokka.log.getFirstEntryByTerm(termIndex);
+      let {index} = await mokka.log.entry.getFirstByTerm(termIndex);
 
       if (!index)
         continue;
 
-      let entry =  await mokka.log.get(index);
+      let entry =  await mokka.log.entry.get(index);
       if(!entry)
         continue;
 

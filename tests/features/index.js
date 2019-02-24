@@ -51,10 +51,11 @@ module.exports = (ctx) => {
 
     for (let index = 0; index < nodes.length; index++) {
 
-
       for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
-        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}`]});
-
+        nodes[index].send({
+          command: 'push',
+          data: [`${Date.now()}.${ctx.ports[index]}`, `${_.random(0, 120000)}`, 'put']
+        });
 
       await new Promise(res => {
         let intervalPid = setInterval(() => {
@@ -69,12 +70,8 @@ module.exports = (ctx) => {
     }
 
 
-    await Promise.delay(10000);//todo remove
-
     clearInterval(updateIntervalPid);
     let records = Object.values(states);
-
-    console.log(records)
 
     expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
 
@@ -85,6 +82,7 @@ module.exports = (ctx) => {
     }
 
   });
+
 
   it('run tasks concurrently (50 tasks per each node)', async () => {
 
@@ -115,7 +113,10 @@ module.exports = (ctx) => {
 
     for (let index = 0; index < nodes.length; index++)
       for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
-        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}.${ctx.ports[index]}`]});
+        nodes[index].send({
+          command: 'push',
+          data: [`${Date.now()}.${ctx.ports[index]}`, `${_.random(0, 120000)}`, 'put']
+        });
 
 
     const pushed = [0];
@@ -130,7 +131,11 @@ module.exports = (ctx) => {
 
           if (!pushed.includes(nextIndex) && _.isInteger(nextIndex) && nextIndex <= nodes.length - 1) {
             for (let taskIndex = nextIndex * taskAmount; taskIndex < nextIndex * taskAmount + taskAmount; taskIndex++)
-              nodes[nextIndex].send({command: 'push', data: [taskIndex]});
+              nodes[nextIndex].send({
+                command: 'push',
+                data: [`${Date.now()}.${taskIndex}`, `${_.random(0, 120000)}`, 'put']
+              });
+
 
             pushed.push(nextIndex);
           }
@@ -166,10 +171,10 @@ module.exports = (ctx) => {
       node.kill();
     }
 
-
   });
 
-  after('kill environment', async () => {});
+  after('kill environment', async () => {
+  });
 
 
 };

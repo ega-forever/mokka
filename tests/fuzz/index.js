@@ -6,6 +6,7 @@
 
 const Promise = require('bluebird'),
   _ = require('lodash'),
+  path = require('path'),
   expect = require('chai').expect,
   startPeers = require('../utils/node/startPeers');
 
@@ -111,7 +112,10 @@ module.exports = (ctx) => {
 
     for (let index = 0; index < nodes.length; index++)
       for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
-        nodes[index].send({command: 'push', data: [`${_.random(0, 120000)}.${Date.now()}.${ctx.ports[index]}`]});
+        nodes[index].send({
+          command: 'push',
+          data: [`${Date.now()}.${ctx.ports[index]}`, `${_.random(0, 120000)}`, 'put']
+        });
 
 
     await Promise.delay(10000);
@@ -120,7 +124,7 @@ module.exports = (ctx) => {
     nodes[0].removeListener('exit', killCb);
     nodes[0].kill();
 
-    let {nodes: newNodes} = await startPeers(ctx.ports, privKeys, [0]);
+    let {nodes: newNodes} = await startPeers(ctx.ports, false, privKeys, [0]);
     nodes[0] = newNodes[0];
 
     nodes[0].on('message', (data) => {
@@ -137,25 +141,10 @@ module.exports = (ctx) => {
         node.send({command: 'status'});
     }, 1000);
 
- //   const pushed = [0];
-
     await new Promise(res => {
 
       let intervalId = setInterval(async () => {
         let records = Object.values(states);
-
-/*
-        if (records.length === nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1) {
-          let nextIndex = records[0].index / taskAmount;
-
-          if (!pushed.includes(nextIndex) && _.isInteger(nextIndex) && nextIndex <= nodes.length - 1) {
-            for (let taskIndex = nextIndex * taskAmount; taskIndex < nextIndex * taskAmount + taskAmount; taskIndex++)
-              nodes[nextIndex].send({command: 'push', data: [taskIndex]});
-
-            pushed.push(nextIndex);
-          }
-        }
-*/
 
         if (records.length === nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1) {
 
@@ -172,9 +161,7 @@ module.exports = (ctx) => {
         for (let node of nodes)
           node.send({command: 'status'});
 
-
       }, 5000);
-
     });
 
     await Promise.delay(5000);
@@ -188,7 +175,118 @@ module.exports = (ctx) => {
   });
 
 
-  after('kill environment', async () => {});
+  it('run tasks concurrently (prune mode, 50 tasks per each node, drop one node, reapply snapshot during and restart)', async () => {
 
+    const {nodes, privKeys} = await startPeers(ctx.ports, true);
+    await Promise.delay(3000);
+    let states = {};
+
+    const killCb = () => {
+      console.log('killed by child!');
+      process.exit(0);
+    };
+
+
+    for (let index = 0; index < nodes.length; index++) {
+      nodes[index].on('message', (data) => {
+        if (data.command === 'status')
+          states[index] = data.info;
+      });
+      nodes[index].on('exit', killCb);
+    }
+
+    let taskAmount = 50;
+
+    for (let index = 0; index < nodes.length; index++)
+      for (let taskIndex = 0; taskIndex < taskAmount; taskIndex++)
+        nodes[index].send({
+          command: 'push',
+          data: [`${Date.now()}.${ctx.ports[index]}`, `${_.random(0, 120000)}`, 'put']
+        });
+
+
+    await new Promise(res => {
+
+      let intervalId = setInterval(() => {
+
+        let records = Object.values(states);
+        let hashes = _.uniq(records.map(rec => rec.hash));
+
+        if (hashes.length === 1 && hashes[0] === ''.padEnd(32, '0')) {
+          let syncedNode = _.chain(nodes).tail().sample().value();
+          syncedNode.send({command: 'claim_leadership'});
+          return;
+        }
+
+        clearInterval(intervalId);
+        res();
+      }, 10000);
+
+
+    });
+
+    console.log('killing node...');
+    nodes[0].removeListener('exit', killCb);
+    nodes[0].kill();
+
+    let {nodes: newNodes} = await startPeers(ctx.ports, true, privKeys, [0]);
+    nodes[0] = newNodes[0];
+
+    nodes[0].on('message', (data) => {
+      if (data.command === 'status')
+        states[0] = data.info;
+    });
+    nodes[0].on('exit', killCb);
+
+    let syncedNode = _.chain(nodes).tail().sample().value();
+    let snapshotPath = path.join(__dirname, 'snapshot.json');
+
+    syncedNode.send({command: 'snapshot', path: snapshotPath});
+    await new Promise(res => syncedNode.once('message', res));
+
+    nodes[0].send({command: 'append_snapshot', path: snapshotPath});
+    await new Promise(res => nodes[0].once('message', res));
+
+
+    let updateIntervalPid = setInterval(() => {
+      for (let node of nodes)
+        node.send({command: 'status'});
+    }, 1000);
+
+    await new Promise(res => {
+
+      let intervalId = setInterval(async () => {
+        let records = Object.values(states);
+
+        if (records.length === nodes.length && _.uniq(records.map(rec => rec.hash)).length === 1) {
+
+          expect(_.uniq(records.map(rec => rec.hash)).length).to.eq(1);
+          expect(_.uniq(records.map(rec => rec.index)).length).to.eq(1);
+          expect(_.uniq(records.map(rec => rec.term)).length).to.eq(1);
+
+
+          clearInterval(intervalId);
+          res();
+        }
+
+        for (let node of nodes)
+          node.send({command: 'status'});
+
+      }, 5000);
+    });
+
+    await Promise.delay(5000);
+
+    clearInterval(updateIntervalPid);
+    for (let node of nodes) {
+      node.removeListener('exit', killCb);
+      node.kill();
+    }
+
+  });
+
+
+  after('kill environment', async () => {
+  });
 
 };
