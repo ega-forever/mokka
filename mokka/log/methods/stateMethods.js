@@ -30,7 +30,7 @@ class StateMethods {
       get: this.get.bind(this),
       put: this.put.bind(this, index, hash, term),
       del: this.del.bind(this, index, hash, term)
-    }
+    };
 
   }
 
@@ -165,7 +165,7 @@ class StateMethods {
     await this.log.db.del(this.log.prefixes.states);
   }
 
-  async takeSnapshot (path) { //todo lock
+  async takeSnapshot (path) {
     await new Promise(res => {
       this.sem.take(async () => {
 
@@ -196,13 +196,12 @@ class StateMethods {
         this.sem.leave();
         res();
       });
-    })
+    });
   }
 
-  async appendSnapshot (path) {//todo make lock
+  async appendSnapshot (path) {
 
     await this.dropAll();
-
 
     let info = await new Promise((res, rej) => {
 
@@ -217,23 +216,18 @@ class StateMethods {
 
         let trigger = JSON.parse(line);
         await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.permanent}:${trigger.key}`, trigger.value);
-        console.log('after');
-
 
         callback();
-      }, err => err ? rej() : res(header))
+      }, err => err ? rej() : res(header));
     });
 
     if (!info)
       return;
 
-    console.log('after triggers');
-
     let defaultState = _.merge({committed: true, created: Date.now()}, info);
 
     await this.log.db.put(this.log.prefixes.states, defaultState);
     await this.log.db.put(`${this.log.prefixes.triggers}.${this.prefixes.triggers.state}`, info);
-    //todo append state, info,
   }
 
 

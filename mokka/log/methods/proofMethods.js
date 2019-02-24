@@ -2,7 +2,7 @@ const getBnNumber = require('../../utils/getBnNumber');
 
 class ProofMethods {
 
-  constructor(log){
+  constructor (log){
     this.log = log;
   }
 

@@ -136,13 +136,25 @@ class EntryMethods {
 
   async getLast () {
 
+    let defaultInfo = {
+      index: 0,
+      hash: ''.padStart(32, '0'),
+      term: 0,
+      committed: true,
+      createdAt: Date.now()
+    };
+
     let info = await this.getLastInfo();
 
-    if (!info.index)
-      return info;
+    if (!info)
+      return defaultInfo;
 
-    return await this.get(info.index);
+    let entry = await this.get(info.index);
 
+    if(!entry)
+      return defaultInfo;
+
+    return entry;
   }
 
   async getInfoBefore (entry) {
@@ -278,7 +290,7 @@ class EntryMethods {
     return result;
   }
 
-  async setState(state){
+  async setState (state) {
     await this.log.db.put(this.log.prefixes.states, state);
   }
 

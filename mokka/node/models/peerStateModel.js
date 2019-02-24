@@ -58,7 +58,7 @@ class PeerState extends EventEmitter {
 
   async deltasAfterVersion (lowestVersion) { //todo reimplement
 
-    let limit = 10;
+    //let limit = 10;
 
     //let hashes = await this.mokka.log.pending.getHashesAfterVersion(lowestVersion, this.pubKey, limit);
     //let maxVersion = hashes.length < limit ? await this._getMaxVersion() : lowestVersion + hashes.length;

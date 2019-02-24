@@ -1,6 +1,7 @@
 const TimerController = require('./controllers/timerController'),
   GossipController = require('./controllers/gossipController'),
   _ = require('lodash'),
+  assert = require('assert'),
   Log = require('../log/log'),
   NodeModel = require('./models/nodeModel'),
   states = require('./factories/stateFactory'),
@@ -72,8 +73,11 @@ class Mokka extends NodeModel {
 
     this.log = new this.Log(this, options.logOptions);
 
-    this.applier = options.applier; //todo think about default value
-    this.unapplier = options.unapplier; //todo think about default value
+    assert.strictEqual(typeof options.applier, 'function');
+    assert.strictEqual(typeof options.unapplier, 'function');
+
+    this.applier = options.applier;
+    this.unapplier = options.unapplier;
 
     this._registerEvents();
     this._initialize(options);

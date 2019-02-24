@@ -27,6 +27,15 @@ process.on('message', message => {
   if (message.command === 'logs')
     getLogs();
 
+  if (message.command === 'snapshot')
+    takeSnapshot(message.path);
+
+  if (message.command === 'append_snapshot')
+    appendSnapshot(message.path);
+
+  if (message.command === 'claim_leadership')
+    mokka.processor.claimLeadership();
+
 });
 
 
@@ -45,7 +54,7 @@ const initMokka = (options) => {
     logLevel: options.logLevel || 10,
     privateKey: options.privateKey,
     peers: pubKeys,
-    removeSynced: false,
+    removeSynced: options.removeSynced || false,
     applier: async (command, state) => {
 
       if (command.type === 'put') {
@@ -80,7 +89,6 @@ const initMokka = (options) => {
 
 
   mokka.on('state change', function (state) {
-    console.log(`state changed: ${state}`);
     getState();
   });
 
@@ -113,4 +121,15 @@ const getLogs = async () => {
   }
 
   process.send({command: 'logs', data: items });
+};
+
+const takeSnapshot = async (path) => {
+  await mokka.log.state.takeSnapshot(path);
+  process.send({command: 'snapshot_taken', pid: process.pid})
+};
+
+
+const appendSnapshot = async (path) => {
+  await mokka.log.state.appendSnapshot(path);
+  process.send({command: 'snapshot_appended', pid: process.pid})
 };

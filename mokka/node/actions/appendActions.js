@@ -62,9 +62,9 @@ class AppendActions {
       }
     }
 
-    if (lastInfo.index >= packet.data.index) {
+    if (lastInfo.index >= packet.data.index) 
       return null;
-    }
+    
 
 
     const commandHash = crypto.createHmac('sha256', JSON.stringify(packet.data.command)).digest('hex');
@@ -124,9 +124,9 @@ class AppendActions {
       }
     }
 
-    if (this.mokka.removeSynced && entry.responses.length === this.mokka.nodes.length + 1) { //todo remove old terms as well
+    if (this.mokka.removeSynced && entry.responses.length === this.mokka.nodes.length + 1)  //todo remove old terms as well
       await this.mokka.log.entry.removeTo(entry.index);
-    }
+    
 
     if (this.mokka.state !== states.LEADER)
       return;
@@ -143,7 +143,7 @@ class AppendActions {
 
   async obtain (packet, limit = 100) { //todo send state along side with logs
 
-    let entries = await this.mokka.log.entry.getAfterList(packet.last.index, 100);
+    let entries = await this.mokka.log.entry.getAfterList(packet.last.index, limit);
 
     entries = _.groupBy(entries, 'term');
     let replies = [];
