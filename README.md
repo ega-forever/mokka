@@ -21,14 +21,15 @@ $ npm install mokka --save
 Client example. In the following example we are going to create the federation of clients:
 
 ```javascript
-const Log = require('mokka').storage,
+const Wallet = require('ethereumjs-wallet'),
   _ = require('lodash'),
   path = require('path'),
-  Wallet = require('ethereumjs-wallet'),
-  hashUtils = require('mokka/mokka/utils/hashes'),
+  Web3 = require('web3'),
+  web3 = new Web3(),
+  hashUtils = require('../../mokka/utils/hashes'),
   detectPort = require('detect-port'),
-  TCPMokka = require('mokka').implementation.TCP,
-  states = require('mokka/mokka/node/factories/stateFactory'),
+  TCPMokka = require('../../mokka').implementation.TCP,
+  states = require('../../mokka/node/factories/stateFactory'),
   readline = require('readline');
 
 
@@ -50,7 +51,6 @@ const keys = [
 ];
 
 const pubKeys = keys.map(privKey => Wallet.fromPrivateKey(Buffer.from(privKey, 'hex')).getPublicKey().toString('hex'));
-
 
 const initMokka = async () => {
 
@@ -81,13 +81,36 @@ const initMokka = async () => {
     electionMin: 300,
     electionMax: 1000,
     heartbeat: 200,
-    Log: Log,
-    log_options: {
+    removeSynced: true,
+    gossipHeartbeat: 200,
+    gossipTimeout: 200,
+    logOptions: {
       adapter: require('leveldown'),
       path: path.join('./', 'dump', `test.${index}.db`)
     },
     logLevel: 30,
-    privateKey: keys[index]
+    privateKey: keys[index],
+    applier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) + command.value;
+        await state.put(command.key, value);
+
+      }
+
+    },
+    unapplier: async (command, state) => {
+
+      if (command.type === 'put') {
+        let value = await state.get(command.key);
+        value = (value || 0) - command.value;
+        await state.put(command.key, value);
+
+      }
+
+
+    }
   });
 
 
@@ -95,7 +118,7 @@ const initMokka = async () => {
     mokka.actions.node.join(peer);
 
   mokka.on('error', function (err) {
-    //console.log(err);
+    // console.log(err);
   });
 
   mokka.on('state change', function (state) {
@@ -121,13 +144,23 @@ const askCommand = (rl, mokka) => {
       await generateTxs(mokka, amount);
     }
 
-    if(command.indexOf('generate_as_single') === 0){
-      let amount = parseInt(command.replace('generate_as_single', '').trim());
-      await generateTxsAsSingle(mokka, amount);
+    if (command.indexOf('generate_random ') === 0) {
+      let amount = parseInt(command.replace('generate_random', '').trim());
+      await generateRandomTxs(mokka, amount);
     }
 
-    if(command.indexOf('take_ownership') === 0)
+    if (command.indexOf('take_ownership') === 0)
       await takeOwnership(mokka);
+
+    if (command.indexOf('get_state') === 0)
+      await getState(mokka);
+
+    if (command.indexOf('take_snapshot') === 0)
+      await takeSnapshot(mokka, command.replace('take_snapshot', '').trim());
+
+    if (command.indexOf('append_snapshot') === 0)
+      await appendSnapshot(mokka, command.replace('append_snapshot', '').trim());
+
 
 
     askCommand(rl, mokka);
@@ -138,46 +171,46 @@ const askCommand = (rl, mokka) => {
 const generateTxs = async (mokka, amount) => {
 
   for (let index = 0; index < amount; index++) {
-
-    let tx = {
-      to: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B',
-      from: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51',
-      nonce: index,
-      timestamp: Date.now()
-    };
-
-    await mokka.processor.push(tx);
+    let value = _.random(-10, 10);
+    console.log(`changing value to + ${value}`);
+    await mokka.processor.push('0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', value, 'put');
   }
 
 };
 
+
+const generateRandomTxs = async (mokka, amount) => {
+
+  for (let index = 0; index < amount; index++) {
+    let value = _.random(-10, 10);
+    console.log(`changing value to + ${value}`);
+    await mokka.processor.push(web3.utils.randomHex(20), value, 'put');//tood
+  }
+
+};
 
 const takeOwnership = async (mokka) => {
   await mokka.processor.claimLeadership();
 };
 
 
-const generateTxsAsSingle = async (mokka, amount) => {
+const getState = async (mokka) => {
+  let state = await mokka.log.state.getAll(false, 0, 100000, mokka.applier);
+  state = _.chain(state).toPairs().sortBy(pair=>pair[0]).fromPairs().value();
 
-  let txs = [];
-
-  for (let index = 0; index < amount; index++) {
-
-    let tx = {
-      to: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B',
-      from: '0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51',
-      nonce: index,
-      timestamp: Date.now()
-    };
-
-    txs.push(tx);
-
-  }
-
-  await mokka.processor.push(txs);
-
+  console.log(require('util').inspect(state, null, 2));
+  console.log(`total keys: ${Object.keys(state).length}`);
+  let info = await mokka.log.entry.getLastInfo();
+  console.log(info)
 };
 
+const takeSnapshot = async (mokka, path) => {
+  await mokka.log.state.takeSnapshot(path);
+};
+
+const appendSnapshot = async (mokka, path) => {
+  await mokka.log.state.appendSnapshot(path);
+};
 
 module.exports = initMokka();
 ```
@@ -210,6 +243,9 @@ Arguments:
     * `path`: path, where to store logs (in case you use memdown, then you can ommit this option)
   * `logLevel`: logging level. Please take a look at the [bunyan log levels](https://www.npmjs.com/package/bunyan#level-suggestions) for better understanding
   * `privateKey`: the 64 length private key
+  * `removeSynced`: remove logs, ones all nodes received it. Default is ```false```.
+  * `applier`: applier function. Is used for apply data to state.
+  * `unapplier`: unapplier function. Unapply changes to state (emits only in case of rollback).
 
 ## mokka.processor.push (log)
 
@@ -219,37 +255,55 @@ push new log and replicate it over the cluster.
 
 Runs emmidiate voting process for the current node.
 
-## mokka.log.getPending (hash, isLog = false)
+## mokka.log.pending.get (hash, isLog = false)
 
 Returns the pending log. Also usabe, when you have the object, which you've pushed and you want to make sure that it was committed, you can pass object and second arg as ```true```.
 
-## mokka.log.getFirstPending ()
+## mokka.log.pending.getFirst ()
 
 Returns first pending from queue.
 
-## mokka.log.getPendingCount ()
+## mokka.log.pending.getCount ()
 
 Returns total pendings count.
 
-## mokka.log.getEntriesAfter (index, limit)
+## mokka.log.entry.getAfterList (index, limit)
 
 Returns all committed logs after specified index.
 
-## mokka.log.get (index)
+## mokka.log.entry.get (index)
 
 Returns committed log at specified index.
 
-## mokka.log.getByHash (hash)
-
-Returns committed log by specified hash.
-
-## mokka.log.getLastInfo ()
+## mokka.log.entry.getLastInfo ()
 
 Returns the info about last known state.
 
-## mokka.log.getLastEntry ()
+## mokka.log.state.get (key)
 
-Returns last appended log entry.
+Get state item by key.
+
+## mokka.log.state.getAll (confirmed=flase, skip=0, limit=100, applier)
+
+Get state items. The ```confirmed=true``` will include the not confirmed changes in state.
+
+## mokka.log.state.getLastApplied ()
+
+Get last applied info.
+
+## mokka.log.state.dropAll ()
+
+Completely wipe the state.
+
+## mokka.log.state.takeSnapshot (path)
+
+Create the snapshot of confirmed state.
+
+## mokka.log.state.appendSnapshot (path)
+
+Append the created earlier snapshot.
+
+
 
 ## Events
 
@@ -309,7 +363,7 @@ The ```write``` function fires each time mokka want to broadcast message to othe
 
 # License
 
-[MIT](LICENSE)
+[GNU AGPLv3](LICENSE)
 
 # Copyright
 

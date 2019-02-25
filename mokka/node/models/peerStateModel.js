@@ -29,18 +29,18 @@ class PeerState extends EventEmitter {
         this.setLocalKey(k, v, n);
       } else {
         this.mokka.logger.info(`received pending ${k} with next version ${this.maxVersionSeen + 1} for peer ${this.pubKey}`);
-        await this.addToDb(v); //todo implement
+        await this.addToDb(v, n); //todo implement
       }
 
   }
 
   async _getMaxVersion () {
-    return await this.mokka.log.getPendingCount(this.pubKey);
+    return await this.mokka.log.pending.getCount(this.pubKey);
   }
 
-  async addToDb (command) { //todo refactor
-    this.maxVersionSeen = await this._getMaxVersion();
-    await this.mokka.log.putPending(command, this.maxVersionSeen + 1, this.pubKey);
+  async addToDb (command, version) {
+    this.maxVersionSeen = command === null ? version - 1  : await this._getMaxVersion();
+    await this.mokka.log.pending.put(command, this.maxVersionSeen + 1, this.pubKey);
     this.maxVersionSeen = await this._getMaxVersion();
   }
 
@@ -58,16 +58,16 @@ class PeerState extends EventEmitter {
 
   async deltasAfterVersion (lowestVersion) { //todo reimplement
 
-    let limit = 10;
+    //let limit = 10;
 
-    let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey, limit);
-    let maxVersion = hashes.length < limit ? await this._getMaxVersion() : lowestVersion + hashes.length;
+    //let hashes = await this.mokka.log.pending.getHashesAfterVersion(lowestVersion, this.pubKey, limit);
+    //let maxVersion = hashes.length < limit ? await this._getMaxVersion() : lowestVersion + hashes.length;
 
-    //let hashes = await this.mokka.log.getPendingHashesAfterVersion(lowestVersion, this.pubKey);
-    //let maxVersion = await this._getMaxVersion();
+    let hashes = await this.mokka.log.pending.getHashesAfterVersion(lowestVersion, this.pubKey);
+    let maxVersion = await this._getMaxVersion();
 
     let items = await Promise.mapSeries(hashes, async hash => {
-      let item = await this.mokka.log.getPending(hash);
+      let item = await this.mokka.log.pending.get(hash);
 
       if (!item)
         return;

@@ -59,7 +59,7 @@ class MessageActions {
     };
 
 
-    wrapped.last = this.mokka.lastInfo;
+    wrapped.last = await this.mokka.log.entry.getLastInfo();
 
     if (data)
       wrapped.data = data;
@@ -70,7 +70,7 @@ class MessageActions {
 
   async appendPacket (entry) {
 
-    const {proof} = await this.mokka.log.getProof(entry ? entry.term : this.mokka.term);
+    const {proof} = await this.mokka.log.proof.get(entry ? entry.term : this.mokka.term);
 
     let payload = {
       state: this.mokka.state,
@@ -82,10 +82,10 @@ class MessageActions {
 
 
     if (entry) {
-      payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash']);
-      payload.last = await this.mokka.log.getEntryInfoBefore(entry);
+      payload.data = _.pick(entry, ['command', 'term', 'signature', 'index', 'hash', 'responses', 'committed']);
+      payload.last = await this.mokka.log.entry.getInfoBefore(entry);
     } else
-      payload.last = this.mokka.lastInfo;
+      payload.last = await this.mokka.log.entry.getLastInfo();
 
 
     return payload;

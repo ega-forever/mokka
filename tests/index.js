@@ -4,8 +4,9 @@
  * @author Egor Zuev <zyev.egor@gmail.com>
  */
 
-const
-  fuzzTests = require('./fuzz'),
+process.env.LOG_LEVEL = 'error';
+
+const fuzzTests = require('./fuzz'),
   /*  performanceTests = require('./performance'),
     blockTests = require('./blocks'),*/
   featuresTests = require('./features'),

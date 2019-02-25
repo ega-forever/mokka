@@ -12,14 +12,14 @@ class ProofValidation {
 
   async validate (term, proof, entry) {
 
-    let savedProof = await this.mokka.log.getProof(term);
+    let savedProof = await this.mokka.log.proof.get(term);
 
     if (savedProof && savedProof.proof === proof && !entry)
       return true;
 
     if(savedProof && savedProof.proof !== proof){
       this.mokka.logger.trace(`going to rewrite proof for term ${term}`);
-      let entry = await this.mokka.log.getFirstEntryByTerm(term);
+      let entry = await this.mokka.log.entry.getFirstByTerm(term);
       this.mokka.logger.trace(`first entry by term ${JSON.stringify(entry)}`);
     }
 
@@ -73,7 +73,7 @@ class ProofValidation {
 
     this.mokka.logger.trace(`saving proof at term ${term}`);
 
-    await this.mokka.log.addProof(term, {
+    await this.mokka.log.proof.add(term, {
       proof: proof,
       index: -1,
       hash: null

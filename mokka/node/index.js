@@ -1,6 +1,7 @@
 const TimerController = require('./controllers/timerController'),
   GossipController = require('./controllers/gossipController'),
   _ = require('lodash'),
+  assert = require('assert'),
   Log = require('../log/log'),
   NodeModel = require('./models/nodeModel'),
   states = require('./factories/stateFactory'),
@@ -37,7 +38,7 @@ class Mokka extends NodeModel {
     };
 
     this.beat = options.heartbeat || 50;
-    // this.removeSynced = options.removeSynced || false;
+    this.removeSynced = options.removeSynced || false;
 
 
     this.gossipOptions = {
@@ -60,7 +61,6 @@ class Mokka extends NodeModel {
     this.change = change;
     this.networkSecret = options.networkSecret || '1234567';
     this.log = null;
-    this.lastInfo = null;
 
     this.cache = new NodeCache();
     this.processor = new TaskProcessor(this);
@@ -72,6 +72,12 @@ class Mokka extends NodeModel {
 
 
     this.log = new this.Log(this, options.logOptions);
+
+    assert.strictEqual(typeof options.applier, 'function');
+    assert.strictEqual(typeof options.unapplier, 'function');
+
+    this.applier = options.applier;
+    this.unapplier = options.unapplier;
 
     this._registerEvents();
     this._initialize(options);
@@ -105,16 +111,10 @@ class Mokka extends NodeModel {
       await this.requestProcessor.process(packet);
     });
 
-
-    this.log.on(this.log.eventTypes.LOGS_UPDATED, async () => {
-      this.lastInfo = await this.log.getLastInfo();
-    });
   }
 
 
   async _initialize (options) {
-
-    this.lastInfo = await this.log.getLastInfo();
 
     if (!_.isFunction(this.initialize))
       throw Error('the initialize function needs to be declared!');
