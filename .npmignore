@@ -1,0 +1,7 @@
+.idea
+.travis.yml
+src
+tsconfig.json
+tslint.json
+dist/test
+dist/demo
