@@ -1,37 +1,33 @@
 {
   "name": "mokka",
-  "version": "0.0.2",
-  "description": "mokka consensus",
-  "main": "mokka/index.js",
-  "homepage": "https://github.com/ega-forever/mokka#readme",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ega-forever/mokka.git"
-  },
+  "version": "0.1.0",
+  "description": "",
   "scripts": {
-    "test": "node --max-old-space-size=4096 ./node_modules/mocha/bin/mocha -t 3600000 -gc tests/index.js",
-    "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore mokka",
-    "coverage": "node ./node_modules/istanbul/lib/cli cover mokka/node/index.js"
+    "tsc:watch": "tsc -w",
+    "tsc:build": "tsc",
+    "serve_client1": "set INDEX=0 && nodemon --delay 1000 --inspect=8081 --watch dist/ -d 1 ./dist/demo/client.js",
+    "serve_client2": "set INDEX=1 && nodemon --delay 3000 --inspect=8082 --watch dist/ -d 1 ./dist/demo/client.js",
+    "serve_client3": "set INDEX=2 && nodemon --delay 6000 --inspect=8083 --watch dist/ -d 1 ./dist/demo/client.js",
+    "serve_client4": "set INDEX=3 && nodemon --delay 10000 --inspect=8084 --watch dist/ -d 1 ./dist/demo/client.js",
+    "test": "mocha dist/test --timeout 60000",
+    "lint": "tslint --fix --project tsconfig.json"
   },
-  "files": [
-    "mokka",
-    "LICENSE"
-  ],
-  "keywords": [
-    "mokka",
-    "consensus",
-    "rsm",
-    "raft",
-    "distributed"
-  ],
-  "author": "Egor Zuev",
+  "author": "zyev.egor@gmail.com",
   "license": "AGPLv3",
   "dependencies": {
-    "axon": "2.0.x",
-    "bluebird": "^3.5.2",
+    "@types/bluebird": "^3.5.26",
+    "@types/bn.js": "^4.11.5",
+    "@types/bs58": "^4.0.0",
+    "@types/bunyan": "^1.8.6",
+    "@types/fs-extra": "^5.0.5",
+    "@types/line-reader": "0.0.28",
+    "@types/lodash": "^4.14.123",
+    "@types/semaphore": "^1.1.0",
+    "bluebird": "^3.5.3",
+    "bn.js": "^4.11.8",
+    "bs58": "^4.0.1",
     "bunyan": "^1.8.12",
     "encoding-down": "^3.0.1",
-    "ethereumjs-wallet": "^0.6.2",
     "fs-extra": "^7.0.1",
     "leveldown": "^4.0.1",
     "levelup": "^3.1.1",
@@ -39,23 +35,23 @@
     "lodash": "^4.17.11",
     "memdown": "^3.0.0",
     "merkle-tools": "^1.4.0",
-    "modification": "^1.0.0",
     "multiaddr": "^5.0.0",
-    "node-cache": "^4.2.0",
+    "rlp": "^2.2.3",
     "secrets.js-grempe": "^1.1.0",
     "semaphore": "^1.1.0",
-    "speakeasy": "^2.0.0",
     "tick-tock": "^1.0.0",
-    "ttl-mem-cache": "^4.0.2",
-    "web3": "1.0.0-beta.36"
+    "tweetnacl": "^1.0.1"
   },
   "devDependencies": {
-    "chai": "^4.2.0",
-    "coveralls": "^3.0.2",
+    "axon": "2.0.x",
+    "@types/chai": "^4.1.4",
+    "@types/mocha": "^5.2.4",
+    "@types/node": "~10.5.1",
+    "chai": "~3.5.0",
     "detect-port": "^1.3.0",
-    "eslint": "^5.9.0",
-    "eslint-plugin-async-await": "0.0.0",
-    "istanbul": "^0.4.5",
-    "mocha": "^5.2.0"
+    "mocha": "^5.2.0",
+    "nodemon": "~1.17.5",
+    "tslint": "^5.15.0",
+    "typescript": "^3.4.1"
   }
 }
