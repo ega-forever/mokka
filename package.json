@@ -1,6 +1,6 @@
 {
   "name": "mokka",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "",
   "scripts": {
     "tsc:watch": "tsc -w",
@@ -12,6 +12,15 @@
     "test": "mocha dist/test --timeout 60000",
     "lint": "tslint --fix --project tsconfig.json"
   },
+  "keywords": [
+    "mokka",
+    "consensus",
+    "rsm",
+    "raft",
+    "distributed"
+  ],
+  "main": "dist/components/consensus/main.js",
+  "types": "dist/components/consensus/main.d.ts",
   "author": "zyev.egor@gmail.com",
   "license": "AGPLv3",
   "dependencies": {

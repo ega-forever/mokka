@@ -124,8 +124,8 @@ describe('storage tests', (ctx = {}) => {
       return Date.now() - start;
     });
 
-    expect(deltas[0]).to.be.lt(10);
-    expect(deltas[1]).to.be.lt(10);
+    expect(deltas[0]).to.be.lt(100);
+    expect(deltas[1]).to.be.lt(100);
   });
 
   it('should add 100000 new logs, random access uncommitted list for linear time', async () => {

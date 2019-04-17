@@ -10,6 +10,7 @@ class PacketModel {
     hash: string,
     term: number,
     createdAt: number,
+    responses: string[]
   };
   public proof: string;
 
@@ -23,6 +24,7 @@ class PacketModel {
       hash: string,
       term: number,
       createdAt: number,
+      responses: string[]
     },
     proof: string,
     data: any = null) {
