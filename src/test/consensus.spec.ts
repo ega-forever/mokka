@@ -212,7 +212,7 @@ describe('consensus tests', (ctx = {mokkas: []}) => {
         }, 1000);
         mokka.on('message', (msg: any) => {
 
-          if (msg.type !== 'info' || msg.args[0].index !== 2)
+          if (msg.type !== 'info' || msg.args[0].index !== 2 || msg.args[0].committedIndex !== 2)
             return;
 
           clearInterval(timeoutId);
@@ -236,21 +236,28 @@ describe('consensus tests', (ctx = {mokkas: []}) => {
     ctx.mokkas[2].send({type: 'connect'});
     ctx.mokkas[3].send({type: 'connect'});
 
-    ctx.mokkas[0].send({
-      type: 'push',
-      args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', {
-        nonce: Date.now(),
-        value: Date.now().toString()
-      }]
-    });
+    const recordsCount = _.random(100, 500);
 
-    ctx.mokkas[1].send({
-      type: 'push',
-      args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
-        nonce: Date.now() + 1,
-        value: (Date.now() + 1).toString()
-      }]
-    });
+    for (let i = 0; i < recordsCount; i++)
+      ctx.mokkas[0].send({
+        type: 'push',
+        args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', {
+          nonce: Date.now() + i,
+          value: Date.now().toString()
+        }]
+      });
+
+    const recordsCount2 = _.random(100, 500);
+
+
+    for (let i = 0; i < recordsCount2; i++)
+      ctx.mokkas[1].send({
+        type: 'push',
+        args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
+          nonce: Date.now() + i + 1,
+          value: (Date.now() + i + 1).toString()
+        }]
+      });
 
     const infoAwaitPromises = [ctx.mokkas[0], ctx.mokkas[2], ctx.mokkas[3]].map((mokka: any) =>
       new Promise((res) => {
@@ -259,7 +266,7 @@ describe('consensus tests', (ctx = {mokkas: []}) => {
         }, 1000);
         mokka.on('message', (msg: any) => {
 
-          if (msg.type !== 'info' || msg.args[0].index !== 2)
+          if (msg.type !== 'info' || msg.args[0].index !== recordsCount + recordsCount2)
             return;
 
           clearInterval(timeoutId);
@@ -285,6 +292,47 @@ describe('consensus tests', (ctx = {mokkas: []}) => {
 
     // @ts-ignore
     expect(_.chain(states).uniqBy(_.isEqual).size().value()).to.eq(1);
+  });
+
+  it('should replicate the queued logs and append them', async () => {
+
+    ctx.mokkas[0].send({type: 'connect'});
+    ctx.mokkas[1].send({type: 'connect'});
+    ctx.mokkas[2].send({type: 'connect'});
+    ctx.mokkas[3].send({type: 'connect'});
+
+    for (let i = 0; i < 1000; i++) {
+      ctx.mokkas[0].send({
+        type: 'push',
+        args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
+          nonce: Date.now() + i,
+          value: (Date.now() + i).toString()
+        }]
+      });
+    }
+
+
+    const infoAwaitPromises = ctx.mokkas.map((mokka: any) =>
+      new Promise((res) => {
+        const timeoutId = setInterval(() => {
+          mokka.send({type: 'info'});
+        }, 1000);
+
+        mokka.on('message', (msg: any) => {
+
+          if (msg.type !== 'info' || msg.args[0].committedIndex !== 1000)
+            return;
+
+          clearInterval(timeoutId);
+          res(msg.args[0]);
+
+        });
+      })
+    );
+
+    const infos = await Promise.all(infoAwaitPromises);
+
+    expect(_.chain(infos).map((infos: any) => infos.hash).uniq().size().value()).to.eq(1);
   });
 
   afterEach(async () => {

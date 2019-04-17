@@ -113,16 +113,18 @@ class LogApi {
   }
 
   public async commit(index: number): Promise<void> {
+    this.semaphore.take(async () => {
 
-    const info = await this.stateApi.getInfo();
+      const info = await this.stateApi.getInfo();
 
-    if (info.committedIndex >= index)
-      return;
+      if (info.committedIndex >= index)
+        return this.semaphore.leave();
 
-    info.committedIndex = index;
-    await this.stateApi.setState(info);
+      info.committedIndex = index;
+      await this.stateApi.setState(info);
+      this.semaphore.leave();
+    });
   }
-
 }
 
 export {LogApi};
