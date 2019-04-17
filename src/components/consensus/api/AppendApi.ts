@@ -58,6 +58,10 @@ class AppendApi {
       return null;
 
     try {
+
+      if (!packet.data.responses.includes(this.mokka.publicKey))
+        packet.data.responses.push(this.mokka.publicKey);
+
       await this.mokka.getDb().getLog().save(
         packet.data.log,
         packet.data.term,
@@ -80,28 +84,40 @@ class AppendApi {
       return new ReplyModel(reply, states.LEADER);
     }
 
-    reply = await this.messageApi.packet(messageTypes.APPEND_ACK, {
-      index: packet.data.index,
-      term: packet.data.term
-    });
+    reply = await this.messageApi.packet(messageTypes.APPEND_ACK);
 
     return new ReplyModel(reply, packet.publicKey);
   }
 
   public async appendAck(packet: PacketModel) {
 
-    const entry = await this.mokka.getDb().getLog().ack(
-      packet.data.index,
-      this.mokka.state === states.LEADER ?
-        [packet.publicKey] : packet.data.responses
+    let entry = await this.mokka.getDb().getEntry().get(packet.last.index);
+
+    const isEqual = !entry ? false : _.isEqual(_.sortBy(packet.last.responses), _.sortBy(entry.responses));
+    const includesAllResponses = !entry ? false : _.chain(packet.last.responses)
+      .reject((item: string) => entry.responses.includes(item))
+      .size()
+      .eq(0)
+      .value();
+
+    if (!entry || isEqual || includesAllResponses)
+      return;
+
+    entry = await this.mokka.getDb().getLog().ack(
+      packet.last.index,
+      packet.last.responses
     );
 
-    this.mokka.logger.info(`append ack: ${packet.data.index} / ${entry.responses.length}`);
+    this.mokka.logger.info(`append ack: ${packet.last.index} / ${entry.responses.length}`);
 
     const info = await this.mokka.getDb().getState().getInfo();
 
     if (this.mokka.quorum(entry.responses.length) && info.committedIndex < entry.index) {
-      const entries = await this.mokka.getDb().getEntry().getAfterList(info.committedIndex);
+      const entries = await this.mokka.getDb().getEntry().getAfterList(
+        info.committedIndex,
+        entry.index - info.committedIndex
+      );
+
       for (const entry of entries) {
         await this.mokka.applier(
           entry.log,
@@ -115,11 +131,8 @@ class AppendApi {
     if (this.mokka.state !== states.LEADER)
       return;
 
-    const dataReply = {
-      ...packet.data,
-      responses: entry.responses
-    };
-    const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, dataReply);
+
+    const reply = await this.messageApi.packet(messageTypes.APPEND_ACK);
     return new ReplyModel(reply, states.FOLLOWER);
   }
 

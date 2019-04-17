@@ -2,7 +2,6 @@
 import * as _ from 'lodash';
 import * as path from 'path';
 import * as readline from 'readline';
-import {NodeApi} from '../components/consensus/api/NodeApi';
 import {Mokka} from '../components/consensus/main';
 import TCPMokka from '../implementation/TCP';
 

@@ -46,7 +46,7 @@ class LogApi {
         continue;
       }
 
-      const pendings = await this.mokka.gossip.getPendings(1);
+      const pendings = this.mokka.gossip.getPendings(1);
 
       if (!pendings.length) {
         await Bpromise.delay(this.mokka.timer.timeout()); // todo delay for next tick or event on new push
@@ -79,8 +79,6 @@ class LogApi {
         await this._broadcast(entry.index, entry.hash);
 
         this.mokka.logger.info(`command has been broadcasted ${JSON.stringify(log)}`);
-        await this.mokka.gossip.pullPending(hash);
-
         this.semaphore.leave();
         res();
       })

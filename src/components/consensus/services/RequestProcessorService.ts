@@ -43,6 +43,8 @@ class RequestProcessorService extends AbstractRequestService {
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
     }
 
+    const lastInfo = await this.mokka.getDb().getState().getInfo();
+
     if (packet.type === messageTypes.VOTE)
       reply = await this.voteApi.vote(packet);
 
@@ -71,9 +73,16 @@ class RequestProcessorService extends AbstractRequestService {
 
     this.mokka.timer.heartbeat(states.LEADER === this.mokka.state ? this.mokka.heartbeat : this.mokka.timer.timeout());
 
-    const lastInfo = await this.mokka.getDb().getState().getInfo();
+    if (packet.state === states.LEADER &&
+      lastInfo.index > 0 &&
+      packet.last.index === lastInfo.index &&
+      !packet.last.responses.includes(this.mokka.publicKey)) {
+      const response = await this.messageApi.packet(messageTypes.APPEND_ACK);
+      reply = new ReplyModel(response, packet.publicKey);
+    }
 
-    if (this.mokka.state !== states.LEADER &&
+    if (!reply &&
+      this.mokka.state !== states.LEADER &&
       packet.type === messageTypes.ACK &&
       packet.last && packet.last.index > lastInfo.index &&
       packet.last.createdAt < Date.now() - this.mokka.heartbeat) {
@@ -83,7 +92,6 @@ class RequestProcessorService extends AbstractRequestService {
     }
 
     return reply;
-
   }
 
 }
