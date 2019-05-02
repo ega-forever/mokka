@@ -1,7 +1,6 @@
-import {Mokka} from '../main';
-
-import * as _ from 'lodash';
+import {isArray} from 'lodash';
 import states from '../constants/NodeStates';
+import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
 import encodePacket from '../utils/encodePacket';
@@ -39,7 +38,7 @@ class MessageApi {
 
       default:
         for (const node of this.mokka.nodes)
-          if ((_.isArray(who) && who.includes(node.publicKey)) || who === node.publicKey)
+          if ((isArray(who) && who.includes(node.publicKey)) || who === node.publicKey)
             nodes.push(node);
 
     }

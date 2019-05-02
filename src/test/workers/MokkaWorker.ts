@@ -1,16 +1,12 @@
 import * as bunyan from 'bunyan';
-import encode from 'encoding-down';
-// @ts-ignore
-import * as levelup from 'levelup';
-// @ts-ignore
-import * as memdown from 'memdown';
 import TCPMokka from '../../implementation/TCP';
+
 let mokka: TCPMokka = null;
 
 const init = (params: any) => {
 
   mokka = new TCPMokka({
-    address: `/ip4/127.0.0.1/tcp/${2000 + params.index}/${params.keys[params.index].substring(64, 128)}`,
+    address: `tcp://127.0.0.1:${2000 + params.index}/${params.keys[params.index].substring(64, 128)}`,
     applier: async (command: any, state: any) => {
       let value = await state.get(command.key);
       value = (value || 0) + parseInt(command.value.value, 10);
@@ -22,13 +18,12 @@ const init = (params: any) => {
     gossipTimeout: 200,
     heartbeat: 200,
     logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-    privateKey: params.keys[params.index],
-    storage: levelup(encode(memdown(),  {valueEncoding: 'json', keyEncoding: 'binary'}))
+    privateKey: params.keys[params.index]
   });
 
   for (let i = 0; i < params.keys.length; i++)
     if (i !== params.index)
-      mokka.nodeApi.join(`/ip4/127.0.0.1/tcp/${2000 + i}/${params.keys[i].substring(64, 128)}`);
+      mokka.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${params.keys[i].substring(64, 128)}`);
 
 // @ts-ignore
   mokka.on('error', (err) => {

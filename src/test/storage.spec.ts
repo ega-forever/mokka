@@ -2,12 +2,10 @@ import * as BPromise from 'bluebird';
 import * as bunyan from 'bunyan';
 import {expect} from 'chai';
 import * as crypto from 'crypto';
-import encode from 'encoding-down';
 import * as fs from 'fs-extra';
 // @ts-ignore
 import * as leveldown from 'leveldown';
 // @ts-ignore
-import * as levelup from 'levelup';
 import * as _ from 'lodash';
 import * as path from 'path';
 import {EntryModel} from '../components/storage/models/EntryModel';
@@ -18,13 +16,14 @@ describe('storage tests', (ctx = {}) => {
 
   beforeEach(async () => {
 
+    // tslint: ignore-next-line
     const key = 'f7954a52cb4e6cb8a83ed0d6150a3dd1e4ae2c150054660b14abbdc23e16262b7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15';
     const dbPath = path.join('./', 'dump', 'test.db');
 
     fs.removeSync(dbPath);
 
     ctx.mokka = new TCPMokka({
-      address: `/ip4/127.0.0.1/tcp/2000/${key.substring(64, 128)}`,
+      address: `tcp://127.0.0.1:2000/${key.substring(64, 128)}`,
       applier: async (command: any, state: any) => {
         let value = await state.get(command.key);
         value = (value || 0) + parseInt(command.value.value, 10);
@@ -37,11 +36,7 @@ describe('storage tests', (ctx = {}) => {
       heartbeat: 200,
       logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
       privateKey: key,
-      storage: levelup(encode(leveldown(`${path.join(__dirname, '../..', 'dump', 'test.db')}_db`), {
-        keyEncoding: 'binary',
-        valueEncoding: 'json'
-      }))
-
+      storage: leveldown(`${path.join(__dirname, '../..', 'dump', 'test.db')}_db`)
     });
 
     await BPromise.delay(500);
@@ -66,7 +61,10 @@ describe('storage tests', (ctx = {}) => {
       return Date.now() - start;
     });
 
-    expect(deltas[0] > deltas[1] ? ((deltas[1] - deltas[0]) / deltas[0]) : ((deltas[0] - deltas[1]) / deltas[1])).to.be.lt(0.2);
+    expect(deltas[0] > deltas[1] ?
+      ((deltas[1] - deltas[0]) / deltas[0]) :
+      ((deltas[0] - deltas[1]) / deltas[1])
+    ).to.be.lt(0.2);
   });
 
   it('should add 1000 new logs, random access them for linear time', async () => {

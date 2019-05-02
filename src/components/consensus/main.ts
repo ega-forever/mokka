@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import {random} from 'lodash';
 import {GossipController} from '../gossip/main';
 import {GossipOptions} from '../gossip/models/GossipOptions';
 import {IApplierFunctionInterface} from '../storage/interfaces/IApplierFunctionInterface';
@@ -61,9 +61,6 @@ class Mokka extends NodeModel {
     this.gossipRequestProcessorService = new GossipRequestProcessorService(this);
     this.requestProcessorService = new RequestProcessorService(this);
 
-    if (!options.storage)
-      throw Error('no storage interface provider. Please provide leveldown compatible instance');
-
     this.db = new MokkaStorage(options.storage);
 
     this.logApi = new LogApi(this);
@@ -95,7 +92,7 @@ class Mokka extends NodeModel {
   public connect(): void {
     this.gossip.start();
     this.logApi.runLoop();
-    this.timer.heartbeat(_.random(0, this.election.max));
+    this.timer.heartbeat(random(0, this.election.max));
   }
 
   public async disconnect(): Promise<void> {

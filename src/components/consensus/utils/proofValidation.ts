@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import {transform, values} from 'lodash';
 // @ts-ignore
 import * as secrets from 'secrets.js-grempe';
 import * as nacl from 'tweetnacl';
@@ -36,20 +36,10 @@ const validate = (term: number, proof: string, currentProof: string, publicKeys:
 
   const extracted = _extract(proof);
 
-  /*const items = _.filter(extracted.items, (item) => {
-    return _.find(publicKeys, (publicKey: string) =>
-      nacl.sign.detached.verify(
-        Buffer.from(item.secret),
-        Buffer.from(item.signature, "hex"),
-        Buffer.from(publicKey, "hex")
-      )
-    );
-  });*/
+  const items = values(
+    transform(extracted.items, (result, item) => {
 
-  const items = _.chain(extracted.items)
-    .transform((result, item) => {
-
-      const pubKey = _.find(publicKeys, (publicKey: string) =>
+      const pubKey = publicKeys.find((publicKey: string) =>
         nacl.sign.detached.verify(
           Buffer.from(item.secret),
           Buffer.from(item.signature, 'hex'),
@@ -60,8 +50,7 @@ const validate = (term: number, proof: string, currentProof: string, publicKeys:
       result[pubKey] = item.secret;
       return result;
     }, {})
-    .values()
-    .value();
+  );
 
   let comb = secrets.combine(items);
   comb = secrets.hex2str(comb);

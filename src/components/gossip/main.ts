@@ -1,5 +1,5 @@
 import {EventEmitter} from 'events';
-import * as _ from 'lodash';
+import {flattenDeep, take, toPairs, uniqBy, values} from 'lodash';
 import Timer = NodeJS.Timer;
 import {MessageApi} from '../consensus/api/MessageApi';
 import messageTypes from '../consensus/constants/MessageTypes';
@@ -89,19 +89,15 @@ class GossipController extends EventEmitter {
   }
 
   public livePeersPublicKeys(): string[] {
-    return _.chain(this.peers)
-      .toPairs()
+    return toPairs(this.peers)
       .filter((pair) => pair[1].isAlive())
-      .map((pair) => pair[0])
-      .value();
+      .map((pair) => pair[0]);
   }
 
   public deadPeersPublicKeys(): string[] {
-    return _.chain(this.peers)
-      .toPairs()
+    return toPairs(this.peers)
       .filter((pair) => !pair[1].isAlive())
-      .map((pair) => pair[0])
-      .value();
+      .map((pair) => pair[0]);
   }
 
   public handleNewPeers(pubKeys: string[]) {
@@ -127,14 +123,13 @@ class GossipController extends EventEmitter {
   }
 
   public getPendings(limit = 0): Array<{ hash: string, log: any }> {
-    // @ts-ignore
-    return _.chain(this.peers)
-      .values()
-      .map((peer: PeerModel) => peer.getPendingLogs())
-      .flattenDeep()
-      .uniqBy('hash')
-      .take(limit)
-      .value();
+
+    let data: any = values(this.peers)
+      .map((peer: PeerModel) => peer.getPendingLogs());
+
+    data = flattenDeep(data);
+    data = uniqBy(data, 'hash');
+    return take(data, limit);
   }
 
   public pullPending(hash: string): void {

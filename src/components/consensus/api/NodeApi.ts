@@ -1,5 +1,4 @@
-import * as BPromise from 'bluebird';
-import * as _ from 'lodash';
+import {findIndex, initial, sortBy} from 'lodash';
 // @ts-ignore
 import * as secrets from 'secrets.js-grempe';
 import {Semaphore} from 'semaphore';
@@ -46,7 +45,7 @@ class NodeApi {
 
   public leave(publicKey: string): void {
 
-    const index = _.findIndex(this.mokka.nodes, (node: NodeModel) => node.publicKey === publicKey);
+    const index = findIndex(this.mokka.nodes, (node: NodeModel) => node.publicKey === publicKey);
 
     if (index === -1)
       return;
@@ -67,9 +66,7 @@ class NodeApi {
         const token = startTime.toString();
         const secret = secrets.str2hex(token);
 
-        // @ts-ignore
-        const shares = _.chain(secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority()))
-          .sortBy()
+        const shares = sortBy(secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority()))
           .map((share: string, index: number) => {
 
             if (index === this.mokka.nodes.length) {
@@ -93,27 +90,24 @@ class NodeApi {
               signature: null,
               voted: false
             };
-          })
-          .value();
+          });
 
         this.mokka.vote = new VoteModel(this.mokka.publicKey, shares, secret, startTime);
         this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
         const startVote = Date.now();
-        for (const share of _.initial(shares)) {
+        for (const share of initial(shares)) {
           const packet = await this.messageApi.packet(messageTypes.VOTE, {
-            // @ts-ignore
             share: share.share
           });
 
-          // @ts-ignore
           await this.messageApi.message(share.publicKey, packet);
         }
 
         const timeout = this.mokka.timer.timeout() - (Date.now() - startVote);
 
         if (timeout > 0)
-          await BPromise.delay(timeout);
+          await new Promise((res) => setTimeout(res, timeout));
 
         this.mokka.timer.setVoteTimeout();
         this.semaphore.leave();

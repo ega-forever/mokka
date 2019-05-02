@@ -1,8 +1,7 @@
-import * as Bpromise from 'bluebird';
 import * as crypto from 'crypto';
-import * as _ from 'lodash';
-import semaphore = require('semaphore');
+import {find} from 'lodash';
 import {Semaphore} from 'semaphore';
+import semaphore = require('semaphore');
 import * as nacl from 'tweetnacl';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
@@ -42,14 +41,14 @@ class LogApi {
     while (this.run) {
 
       if (this.mokka.state !== states.LEADER) {
-        await Bpromise.delay(100);
+        await new Promise((res) => setTimeout(res, 100));
         continue;
       }
 
       const pendings = this.mokka.gossip.getPendings(1);
 
       if (!pendings.length) {
-        await Bpromise.delay(this.mokka.timer.timeout()); // todo delay for next tick or event on new push
+        await new Promise((res) => setTimeout(res, this.mokka.timer.timeout()));
         continue;
       }
 
@@ -108,9 +107,9 @@ class LogApi {
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;
 
-    const followers = _.chain(this.mokka.nodes)
-      .reject((node) => _.find(entry.responses, {publicKey: node.publicKey}))
-      .value();
+    const followers = this.mokka.nodes.filter((node) =>
+      !entry.responses.includes(node.publicKey)
+    );
 
     if (followers.length === 0)
       return entry;

@@ -1,11 +1,7 @@
-import * as fs from 'fs-extra';
-import * as lineReader from 'line-reader';
-import * as _ from 'lodash';
 import {Semaphore} from 'semaphore';
 import semaphore = require('semaphore');
 import prefixes from '../constants/prefixes';
 import {IApplierFunctionInterface} from '../interfaces/IApplierFunctionInterface';
-import {ICBFunctionInterface} from '../interfaces/ICBFunctionInterface';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {RSMStateModel} from '../models/RSMStateModel';
 import {StateModel} from '../models/StateModel';
@@ -178,72 +174,6 @@ class StateApi {
 
     await this.entryApi.removeAfter(0);
     await this.db.del(prefixes.states.toString());
-  }
-
-  public async takeSnapshot(path: string): Promise<void> {
-    await new Promise((res) => {
-      this.sem.take(async () => {
-
-        await fs.remove(path);
-        const info = await this.getLastApplied();
-        const dataWs = fs.createWriteStream(path, {flags: 'a'});
-        dataWs.write(`${JSON.stringify(info)}\n`);
-
-        await new Promise((resolve, reject) => {
-
-          this.db.createReadStream({
-            gt: `${prefixes.triggers}.${this.prefixes.permanent}`,
-            lt: `${prefixes.triggers}.${this.prefixes.permanent + 1}`
-          })
-            .on('data', (data: { key: Buffer, value: string }) => {
-              const key = data.key.toString().replace(`${prefixes.triggers}.${this.prefixes.permanent}:`, '');
-              dataWs.write(`${JSON.stringify({key, value: data.value})}\n`);
-            })
-            .on('error', (err: Error) => {
-              reject(err);
-            })
-            .on('end', () => {
-              dataWs.end();
-              resolve();
-            });
-        });
-
-        this.sem.leave();
-        res();
-      });
-    });
-  }
-
-  public async appendSnapshot(path: string) {
-
-    await this.dropAll();
-
-    const info = await new Promise((res, rej) => {
-
-      let header: any;
-
-      // @ts-ignore
-      lineReader.eachLine(path, async (line: string, last: string, callback: ICBFunctionInterface) => {
-
-        if (!header) {
-          header = JSON.parse(line);
-          return callback(null, null);
-        }
-
-        const trigger = JSON.parse(line);
-        await this.db.put(`${prefixes.triggers}.${this.prefixes.permanent}:${trigger.key}`, trigger.value);
-
-        callback(null, null);
-      }, (err: Error | null) => err ? rej() : res(header));
-    });
-
-    if (!info)
-      return;
-
-    const defaultState = _.merge({committed: true, created: Date.now()}, info);
-
-    await this.db.put(prefixes.states.toString(), defaultState);
-    await this.db.put(`${prefixes.triggers}.${this.prefixes.state}`, info);
   }
 
   public async setState(state: StateModel): Promise<void> {

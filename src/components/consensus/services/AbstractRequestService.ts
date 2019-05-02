@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import {has, isArray} from 'lodash';
 import {Semaphore} from 'semaphore';
 import semaphore = require('semaphore');
 import {MessageApi} from '../api/MessageApi';
@@ -32,10 +32,10 @@ class AbstractRequestService {
           });
         });
 
-    if (!_.has(data, 'who') && !_.has(data, '0.who'))
+    if (!has(data, 'who') && !has(data, '0.who'))
       return;
 
-    if (_.isArray(data)) {
+    if (isArray(data)) {
 
       // @ts-ignore
       for (const item of data)

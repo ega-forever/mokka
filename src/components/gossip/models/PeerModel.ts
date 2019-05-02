@@ -1,5 +1,5 @@
 import {EventEmitter} from 'events';
-import * as _ from 'lodash';
+import {toPairs, sortBy} from 'lodash';
 import {IIndexObject} from '../types/IIndexObjectType';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
 
@@ -52,13 +52,13 @@ class PeerModel extends EventEmitter {
 
   public deltasAfterVersion(lowestVersion: number): any[] {
 
-    return _.chain(this.attrs).toPairs().filter((pair: any[]) =>
+    const pairs = toPairs(this.attrs).filter((pair: any[]) =>
       pair[0] !== '__heartbeat__' && pair[1][1] > lowestVersion)
       .map((pair: any[]) =>
         [pair[0], ...pair[1]]
-      )
-      .sortBy((item: any[]) => item[2])
-      .value();
+      );
+
+    return sortBy(pairs, (item: any[]) => item[2]);
   }
 
   public isSuspect(): boolean {
@@ -92,12 +92,12 @@ class PeerModel extends EventEmitter {
   }
 
   public getPendingLogs(): Array<{ hash: string, log: any }> {
-    // @ts-ignore
-    return _.chain(this.attrs).toPairs()
+    const data = toPairs(this.attrs)
       .filter((pair: any[]) => pair[0] !== '__heartbeat__')
-      .map((pair: any[]) => ({hash: pair[0], log: pair[1][0]}))
-      .sortBy((item: any[]) => item[2])
-      .value();
+      .map((pair: any[]) => ({hash: pair[0], log: pair[1][0]}));
+
+    // @ts-ignore
+    return sortBy(data, (item: any[]) => item[2]);
   }
 
   public getPending(key: string): any {

@@ -84,14 +84,6 @@ Returns the RSM registers. The skip and list are used to navigate between regist
 
 Returns trigger's value (i.e. key's value).
 
-### await mokka.getDb().getState().takeSnapshot(path: string): Promise<void>
-
-make the snapshot of node's state + logs.
-
-### await mokka.getDb().getState().appendSnapshot(path: string): Promise<void>
-
-append the snapshot.
-
 ### await mokka.getDb().getEntry().get(index: number): Promise<EntryModel>
 
 Returns entry (i.e. structure with log), by provided index.

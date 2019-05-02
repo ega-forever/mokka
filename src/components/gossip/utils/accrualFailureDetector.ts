@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import {mean} from 'lodash';
 
 class AccrualFailureDetector {
 
@@ -16,7 +16,7 @@ class AccrualFailureDetector {
 
   public phi (currentTime: number) {
     const currentInterval = currentTime - this.lastTime;
-    const exp = -1 * currentInterval / _.mean(this.intervals);
+    const exp = -1 * currentInterval / mean(this.intervals);
 
     const p = Math.pow(Math.E, exp);
     return -1 * (Math.log(p) / Math.log(10));

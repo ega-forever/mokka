@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import {random} from 'lodash';
 // @ts-ignore
 import * as Tick from 'tick-tock';
 import {MessageApi} from '../api/MessageApi';
@@ -73,7 +73,7 @@ class TimerController {
 
   public timeout() {
     // return _.random(this.beat, parseInt(this.beat * 1.5)); //todo use latency
-    return _.random(this.mokka.heartbeat, Math.round(this.mokka.heartbeat * 1.5)) + 200;
+    return random(this.mokka.heartbeat, Math.round(this.mokka.heartbeat * 1.5)) + 200;
   }
 
 }
