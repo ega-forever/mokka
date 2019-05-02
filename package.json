@@ -1,6 +1,6 @@
 {
   "name": "mokka",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "",
   "scripts": {
     "tsc:watch": "tsc -w",
@@ -38,7 +38,7 @@
     "bunyan": "^1.8.12",
     "encoding-down": "^3.0.1",
     "fs-extra": "^7.0.1",
-    "leveldown": "^4.0.1",
+    "leveldown": "^5.0.3",
     "levelup": "^3.1.1",
     "line-reader": "^0.4.0",
     "lodash": "^4.17.11",
