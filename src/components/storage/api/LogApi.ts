@@ -7,10 +7,11 @@ import {EntryModel} from '../models/EntryModel';
 import {StateModel} from '../models/StateModel';
 import {EntryApi} from './EntryApi';
 import {StateApi} from './StateApi';
+import {IStorageInterface} from '../interfaces/IStorageInterface';
 
 class LogApi {
 
-  private db: any;
+  private db: IStorageInterface;
   private entryApi: EntryApi;
   private stateApi: StateApi;
   private semaphore: Semaphore;

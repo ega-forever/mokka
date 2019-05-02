@@ -6,6 +6,7 @@ import semaphore = require('semaphore');
 import prefixes from '../constants/prefixes';
 import {IApplierFunctionInterface} from '../interfaces/IApplierFunctionInterface';
 import {ICBFunctionInterface} from '../interfaces/ICBFunctionInterface';
+import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {RSMStateModel} from '../models/RSMStateModel';
 import {StateModel} from '../models/StateModel';
 import {TriggerStateModel} from '../models/TriggerStateModel';
@@ -14,7 +15,7 @@ import {EntryApi} from './EntryApi';
 class StateApi {
 
   private sem: Semaphore;
-  private db: any;
+  private db: IStorageInterface;
   private entryApi: EntryApi;
   private prefixes: any = {
     permanent: 2,
@@ -171,12 +172,12 @@ class StateApi {
     let trigger = await this._getNextTrigger();
 
     while (trigger) {
-      await this.db.del(trigger.key);
+      await this.db.del(trigger.key.toString());
       trigger = await this._getNextTrigger();
     }
 
     await this.entryApi.removeAfter(0);
-    await this.db.del(prefixes.states);
+    await this.db.del(prefixes.states.toString());
   }
 
   public async takeSnapshot(path: string): Promise<void> {
@@ -241,7 +242,7 @@ class StateApi {
 
     const defaultState = _.merge({committed: true, created: Date.now()}, info);
 
-    await this.db.put(prefixes.states, defaultState);
+    await this.db.put(prefixes.states.toString(), defaultState);
     await this.db.put(`${prefixes.triggers}.${this.prefixes.state}`, info);
   }
 

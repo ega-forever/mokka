@@ -41,10 +41,8 @@ const initMokka = async () => {
     heartbeat: 200,
     gossipHeartbeat: 200,
     gossipTimeout: 200,
-    logOptions: {
-      adapter: require('memdown'),
-      // adapter: require('leveldown'),
-      path: path.join('./', 'dump', `test.${index}.db`)
+    storage: {
+      adapter: require('memdown')
     },
     logLevel: 30,
     privateKey: keys[index],

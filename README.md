@@ -63,10 +63,8 @@ Arguments:
 * `heartbeat` (integer): leader heartbeat timeout
 * `gossipHeartbeat` (integer): gossip heartbeat timeout
 * `gossipTimeout` (integer): gossip sync timeout
-* `logOptions`: 
-    * `adapter`: levelDb compatable adapter (can be leveldown, memdown and so on)
-    * `path`: path, where to store logs (in case you use memdown, then you can ommit this option)
-* `logLevel` (integer): logging level. Please take a look at the [bunyan log levels](https://www.npmjs.com/package/bunyan#level-suggestions) for better understanding
+* `storage`: levelDb compatible instance (can be leveldown, memdown and so on). Also be sure, that your instance satisfy the interface ```IStorageInterface```. 
+* `logger` (ILoggerInterface): logger instance. If omitted, then console.log will be used
 * `privateKey`: the 64 length private key. Please take a look at [tweetnacl](https://www.npmjs.com/package/tweetnacl#naclsignkeypair) key pair generator
 * `applier`: applier function. Is used for apply data to state.
 

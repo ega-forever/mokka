@@ -1,7 +1,13 @@
 import * as BPromise from 'bluebird';
+import * as bunyan from 'bunyan';
 import {expect} from 'chai';
 import * as crypto from 'crypto';
+import encode from 'encoding-down';
 import * as fs from 'fs-extra';
+// @ts-ignore
+import * as leveldown from 'leveldown';
+// @ts-ignore
+import * as levelup from 'levelup';
 import * as _ from 'lodash';
 import * as path from 'path';
 import {EntryModel} from '../components/storage/models/EntryModel';
@@ -29,12 +35,13 @@ describe('storage tests', (ctx = {}) => {
       gossipHeartbeat: 200,
       gossipTimeout: 200,
       heartbeat: 200,
-      logLevel: 60,
-      logOptions: {
-        adapter: require('leveldown'),
-        path: path.join(__dirname, '../..', 'dump', 'test.db')
-      },
-      privateKey: key
+      logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
+      privateKey: key,
+      storage: levelup(encode(leveldown(`${path.join(__dirname, '../..', 'dump', 'test.db')}_db`), {
+        keyEncoding: 'binary',
+        valueEncoding: 'json'
+      }))
+
     });
 
     await BPromise.delay(500);

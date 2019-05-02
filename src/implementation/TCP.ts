@@ -9,7 +9,7 @@ class TCPMokka extends Mokka {
   private sockets: IIndexObject<any> = {};
 
   public initialize() {
-    this.logger.info('initializing reply socket on port %s', this.address);
+    this.logger.info(`initializing reply socket on port  ${this.address}`);
 
     this.sockets[this.address] = msg.socket('rep');
 
@@ -19,7 +19,7 @@ class TCPMokka extends Mokka {
     });
 
     this.sockets[this.address].on('error', () => {
-      this.logger.error('failed to initialize on port: ', this.address);
+      this.logger.error(`failed to initialize on port: ${this.address}`);
     });
   }
 
@@ -36,7 +36,7 @@ class TCPMokka extends Mokka {
 
       this.sockets[address].connect(address);
       this.sockets[address].on('error', () => {
-        this.logger.error('failed to write to: ', this.address);
+        this.logger.error(`failed to write to: ${this.address}`);
       });
     }
 

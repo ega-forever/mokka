@@ -1,4 +1,3 @@
-import * as bunyan from 'bunyan';
 import * as _ from 'lodash';
 import {GossipController} from '../gossip/main';
 import {GossipOptions} from '../gossip/models/GossipOptions';
@@ -8,6 +7,7 @@ import {LogApi} from './api/LogApi';
 import {NodeApi} from './api/NodeApi';
 import messageTypes from './constants/MessageTypes';
 import {TimerController} from './controllers/TimerController';
+import {ILoggerInterface} from './interfaces/ILoggerInterface';
 import {NodeModel} from './models/NodeModel';
 import {VoteModel} from './models/VoteModel';
 import {GossipRequestProcessorService} from './services/GossipRequestProcessorService';
@@ -21,7 +21,7 @@ class Mokka extends NodeModel {
   public heartbeat: number;
   public removeSyncedRecords: boolean;
   public gossip: GossipController;
-  public logger: bunyan;
+  public logger: ILoggerInterface;
   public vote: VoteModel = new VoteModel();
   public applier: IApplierFunctionInterface;
   public timer: TimerController;
@@ -41,7 +41,14 @@ class Mokka extends NodeModel {
 
     this.heartbeat = options.heartbeat || 50;
     this.removeSyncedRecords = options.removeSynced || false;
-    this.logger = bunyan.createLogger({name: 'mokka.logger', level: options.logLevel || 3});
+    this.logger = options.logger || {
+      // tslint:disable-next-line
+      error: console.log,
+      // tslint:disable-next-line
+      info: console.log,
+      // tslint:disable-next-line
+      trace: console.log
+    };
 
     this.timer = new TimerController(this);
 
@@ -54,7 +61,11 @@ class Mokka extends NodeModel {
     this.gossipRequestProcessorService = new GossipRequestProcessorService(this);
     this.requestProcessorService = new RequestProcessorService(this);
 
-    this.db = new MokkaStorage(options.logOptions.adapter, options.logOptions.path);
+    if (!options.storage)
+      throw Error('no storage interface provider. Please provide leveldown compatible instance');
+
+    this.db = new MokkaStorage(options.storage);
+
     this.logApi = new LogApi(this);
     this.nodeApi = new NodeApi(this);
 

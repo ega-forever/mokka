@@ -1,6 +1,10 @@
-import {expect} from 'chai';
+import * as bunyan from 'bunyan';
+import encode from 'encoding-down';
+// @ts-ignore
+import * as levelup from 'levelup';
+// @ts-ignore
+import * as memdown from 'memdown';
 import TCPMokka from '../../implementation/TCP';
-
 let mokka: TCPMokka = null;
 
 const init = (params: any) => {
@@ -17,11 +21,9 @@ const init = (params: any) => {
     gossipHeartbeat: 200,
     gossipTimeout: 200,
     heartbeat: 200,
-    logLevel: 60,
-    logOptions: {
-      adapter: require('memdown')
-    },
-    privateKey: params.keys[params.index]
+    logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
+    privateKey: params.keys[params.index],
+    storage: levelup(encode(memdown(),  {valueEncoding: 'json', keyEncoding: 'binary'}))
   });
 
   for (let i = 0; i < params.keys.length; i++)
