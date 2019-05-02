@@ -1,8 +1,8 @@
 import * as encode from 'encoding-down';
 // @ts-ignore
-import * as leveldown from 'leveldown';
-// @ts-ignore
 import * as levelup from 'levelup';
+// @ts-ignore
+import * as memdown from 'memdown';
 import {EntryApi} from './api/EntryApi';
 import {LogApi} from './api/LogApi';
 import {StateApi} from './api/StateApi';
@@ -14,7 +14,7 @@ class MokkaStorage {
     private state: StateApi;
     private log: LogApi;
 
-    constructor(adapter: any = leveldown, path: string) {
+    constructor(adapter: any = memdown, path: string) {
         this.path = path;
         // @ts-ignore
         this.adapter = levelup(encode(adapter(`${path}_db`), {valueEncoding: 'json', keyEncoding: 'binary'}));
