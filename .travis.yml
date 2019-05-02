@@ -12,6 +12,7 @@ before_install:
 
 install:
   - npm install
+  - npm install leveldown
   - npm run tsc:build
 
 script:
