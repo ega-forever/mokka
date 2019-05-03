@@ -1,7 +1,11 @@
-import * as BPromise from 'bluebird';
+import Promise from 'bluebird';
+import bunyan from 'bunyan';
 import {expect} from 'chai';
-import * as crypto from 'crypto';
-import * as fs from 'fs-extra';
+import {createHmac} from 'crypto';
+import fs from 'fs-extra';
+// @ts-ignore
+import leveldown from 'leveldown';
+// @ts-ignore
 import * as _ from 'lodash';
 import * as path from 'path';
 import {EntryModel} from '../components/storage/models/EntryModel';
@@ -12,13 +16,14 @@ describe('storage tests', (ctx = {}) => {
 
   beforeEach(async () => {
 
+    // tslint:disable-next-line
     const key = 'f7954a52cb4e6cb8a83ed0d6150a3dd1e4ae2c150054660b14abbdc23e16262b7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15';
     const dbPath = path.join('./', 'dump', 'test.db');
 
     fs.removeSync(dbPath);
 
     ctx.mokka = new TCPMokka({
-      address: `/ip4/127.0.0.1/tcp/2000/${key.substring(64, 128)}`,
+      address: `tcp://127.0.0.1:2000/${key.substring(64, 128)}`,
       applier: async (command: any, state: any) => {
         let value = await state.get(command.key);
         value = (value || 0) + parseInt(command.value.value, 10);
@@ -29,25 +34,22 @@ describe('storage tests', (ctx = {}) => {
       gossipHeartbeat: 200,
       gossipTimeout: 200,
       heartbeat: 200,
-      logLevel: 60,
-      logOptions: {
-        adapter: require('leveldown'),
-        path: path.join(__dirname, '../..', 'dump', 'test.db')
-      },
-      privateKey: key
+      logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
+      privateKey: key,
+      storage: leveldown(`${path.join(__dirname, '../..', 'dump', 'test.db')}_db`)
     });
 
-    await BPromise.delay(500);
+    await Promise.delay(500);
 
   });
 
   it('should add 2000 new logs for linear time', async () => {
 
-    const deltas = await BPromise.mapSeries([1, 2], async () => {
+    const deltas = await Promise.mapSeries([1, 2], async () => {
       const start = Date.now();
 
       for (let i = 0; i < 1000; i++) {
-        const hash = crypto.createHmac('sha256', 'data' + i).digest('hex');
+        const hash = createHmac('sha256', 'data' + i).digest('hex');
 
         const entry = new EntryModel({
           hash,
@@ -59,14 +61,17 @@ describe('storage tests', (ctx = {}) => {
       return Date.now() - start;
     });
 
-    expect(deltas[0] > deltas[1] ? ((deltas[1] - deltas[0]) / deltas[0]) : ((deltas[0] - deltas[1]) / deltas[1])).to.be.lt(0.2);
+    expect(deltas[0] > deltas[1] ?
+      ((deltas[1] - deltas[0]) / deltas[0]) :
+      ((deltas[0] - deltas[1]) / deltas[1])
+    ).to.be.lt(0.2);
   });
 
   it('should add 1000 new logs, random access them for linear time', async () => {
 
-    const deltas = await BPromise.mapSeries([1, 2], async () => {
+    const deltas = await Promise.mapSeries([1, 2], async () => {
       for (let i = 0; i < 1000; i++) {
-        const hash = crypto.createHmac('sha256', 'data' + i).digest('hex');
+        const hash = createHmac('sha256', 'data' + i).digest('hex');
 
         const entry = new EntryModel({
           hash,
@@ -86,9 +91,9 @@ describe('storage tests', (ctx = {}) => {
 
   it('should add 1000 new logs, random access last info for linear time', async () => {
 
-    const deltas = await BPromise.mapSeries([1, 2], async () => {
+    const deltas = await Promise.mapSeries([1, 2], async () => {
       for (let i = 0; i < 1000; i++) {
-        const hash = crypto.createHmac('sha256', 'data' + i).digest('hex');
+        const hash = createHmac('sha256', 'data' + i).digest('hex');
 
         const entry = new EntryModel({
           hash,
@@ -108,9 +113,9 @@ describe('storage tests', (ctx = {}) => {
 
   it('should add 10000 new logs, random access random list for linear time', async () => {
 
-    const deltas = await BPromise.mapSeries([1, 2], async (num) => {
+    const deltas = await Promise.mapSeries([1, 2], async (num) => {
       for (let i = 0; i < 10000; i++) {
-        const hash = crypto.createHmac('sha256', 'data' + i).digest('hex');
+        const hash = createHmac('sha256', 'data' + i).digest('hex');
 
         const entry = new EntryModel({
           hash,
@@ -130,9 +135,9 @@ describe('storage tests', (ctx = {}) => {
 
   it('should add 100000 new logs, random access uncommitted list for linear time', async () => {
 
-    const deltas = await BPromise.mapSeries([1, 2], async (num) => {
+    const deltas = await Promise.mapSeries([1, 2], async (num) => {
       for (let i = 0; i < 100000; i++) {
-        const hash = crypto.createHmac('sha256', 'data' + i).digest('hex');
+        const hash = createHmac('sha256', 'data' + i).digest('hex');
 
         const entry = new EntryModel({
           hash,
@@ -146,7 +151,7 @@ describe('storage tests', (ctx = {}) => {
 
       const state = new StateModel({
         committedIndex: randomIndex - 10,
-        hash: crypto.createHmac('sha256', 'data' + 99999).digest('hex'),
+        hash: createHmac('sha256', 'data' + 99999).digest('hex'),
         index: 99999
       });
 
@@ -162,7 +167,7 @@ describe('storage tests', (ctx = {}) => {
 
   afterEach(async () => {
     ctx.mokka.disconnect();
-    await BPromise.delay(1000);
+    await Promise.delay(1000);
   });
 
 });

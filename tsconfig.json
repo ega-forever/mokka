@@ -8,6 +8,7 @@
         "outDir": "./dist",
         "noEmitOnError": true,
         "declaration": true,
+        "esModuleInterop": true,
         "lib": ["es2018","esnext.asynciterable"]
     },
     "exclude": [
