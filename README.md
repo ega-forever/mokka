@@ -57,16 +57,15 @@ Returns a new mokka node, which use tcp layer for communication
 
 Arguments:
 
-* `address` (string):  an address in the [multiaddr](https://github.com/multiformats/js-multiaddr#readme) format (example: `"/ip4/127.0.0.1/tcp/2003/7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15"`)
+* `address` (string):  an address in custom format. The only rule is that address should include the public key in the end
+ (example: `"tcp://127.0.0.1:2003/7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15"`)
 * `electionMin` (integer): minimum time required for voting
 * `electionMax` (integer): max time required for voting
 * `heartbeat` (integer): leader heartbeat timeout
 * `gossipHeartbeat` (integer): gossip heartbeat timeout
 * `gossipTimeout` (integer): gossip sync timeout
-* `logOptions`: 
-    * `adapter`: levelDb compatable adapter (can be leveldown, memdown and so on)
-    * `path`: path, where to store logs (in case you use memdown, then you can ommit this option)
-* `logLevel` (integer): logging level. Please take a look at the [bunyan log levels](https://www.npmjs.com/package/bunyan#level-suggestions) for better understanding
+* `storage`: levelDb compatible instance (can be leveldown, memdown and so on). Also be sure, that your instance satisfy the interface ```IStorageInterface```. 
+* `logger` (ILoggerInterface): logger instance. If omitted, then console.log will be used
 * `privateKey`: the 64 length private key. Please take a look at [tweetnacl](https://www.npmjs.com/package/tweetnacl#naclsignkeypair) key pair generator
 * `applier`: applier function. Is used for apply data to state.
 
@@ -85,14 +84,6 @@ Returns the RSM registers. The skip and list are used to navigate between regist
 ### await mokka.getDb().getState().get(key: string): Promise<string|null>
 
 Returns trigger's value (i.e. key's value).
-
-### await mokka.getDb().getState().takeSnapshot(path: string): Promise<void>
-
-make the snapshot of node's state + logs.
-
-### await mokka.getDb().getState().appendSnapshot(path: string): Promise<void>
-
-append the snapshot.
 
 ### await mokka.getDb().getEntry().get(index: number): Promise<EntryModel>
 

@@ -1,8 +1,8 @@
+import sortBy from 'lodash/sortBy';
 // @ts-ignore
-import * as _ from 'lodash';
+import secrets from 'secrets.js-grempe';
 // @ts-ignore
-import * as secrets from 'secrets.js-grempe';
-import * as nacl from 'tweetnacl';
+import nacl from 'tweetnacl';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import voteTypes from '../constants/VoteTypes';
@@ -100,7 +100,7 @@ class VoteApi {
       return new ReplyModel(reply, packet.publicKey);
     }
 
-    const localShare = _.find(this.mokka.vote.shares, {publicKey: packet.publicKey});
+    const localShare = this.mokka.vote.shares.find((share) => share.publicKey === packet.publicKey);
 
     if (!localShare) {
       const reply = await this.messageApi.packet(messageTypes.ERROR, 'the share has not been found');
@@ -126,12 +126,12 @@ class VoteApi {
     localShare.voted = true;
     localShare.signature = packet.data.signature;
 
-    const votedAmount = _.chain(this.mokka.vote.shares).filter({voted: true}).size().value();
+    const votedAmount = this.mokka.vote.shares.filter((share) => share.voted).length;
 
     if (!this.mokka.quorum(votedAmount))
       return null;
 
-    const badVotes = _.filter(this.mokka.vote.shares, {voted: false});
+    const badVotes = this.mokka.vote.shares.filter((share) => !share.voted);
 
     if (badVotes.length >= votedAmount - badVotes.length) {
 
@@ -146,10 +146,9 @@ class VoteApi {
       return null;
     }
 
-    const validatedShares = _.chain(this.mokka.vote.shares)
-      .filter({voted: true})
-      .map((share: { share: string }) => share.share)
-      .value();
+    const validatedShares = this.mokka.vote.shares
+      .filter((share) => share.voted)
+      .map((share: { share: string }) => share.share);
 
     const comb = secrets.combine(validatedShares);
 
@@ -158,13 +157,15 @@ class VoteApi {
       return null;
     }
 
-    const votedShares = _.chain(this.mokka.vote.shares).compact().filter({voted: true}).value();
+    const votedShares = this.mokka.vote.shares.filter((share) => share.voted);
 
-    const compacted = _.chain(votedShares).sortBy('share')
-      .reverse().reduce((result: string, item: { share: string, signature: string }) => {
+    let compacted = sortBy(votedShares, 'share')
+      .reverse()
+      .reduce((result: string, item: { share: string, signature: string }) => {
         return `${result}${item.share}${item.signature}`;
-      }, '')
-      .thru((item: string) => `${votedShares.length.toString(16)}x${item}${this.mokka.vote.started}`).value();
+      }, '');
+
+    compacted = `${votedShares.length.toString(16)}x${compacted}${this.mokka.vote.started}`;
 
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted);
   }

@@ -1,7 +1,9 @@
-import {Promise} from 'bluebird';
-import * as crypto from 'crypto';
-import * as _ from 'lodash';
-import {EntryModel} from '../../storage/models/EntryModel';
+import {createHmac} from 'crypto';
+import cloneDeep from 'lodash/cloneDeep';
+import groupBy from 'lodash/groupBy';
+import isArray from 'lodash/isArray';
+import isEqual from 'lodash/isEqual';
+import sortBy from 'lodash/sortBy';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -24,13 +26,16 @@ class AppendApi {
     if (!packet.data)
       return null;
 
-    if (_.isArray(packet.data)) {
-      // @ts-ignore
-      return await Promise.mapSeries(packet.data, async (item: EntryModel) => {
-        const newPacket = _.cloneDeep(packet);
+    if (isArray(packet.data)) {
+      const replies: ReplyModel[] = [];
+
+      for (const item of packet.data) {
+        const newPacket = cloneDeep(packet);
         newPacket.data = item;
-        return await this.append(newPacket);
-      });
+        replies.push(await this.append(newPacket) as ReplyModel);
+      }
+
+      return replies;
     }
 
     let reply = null;
@@ -71,7 +76,7 @@ class AppendApi {
         packet.data.hash
       );
 
-      const hash = crypto.createHmac('sha256', JSON.stringify(packet.data.log)).digest('hex');
+      const hash = createHmac('sha256', JSON.stringify(packet.data.log)).digest('hex');
       await this.mokka.gossip.pullPending(hash);
       this.mokka.logger.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
@@ -93,14 +98,12 @@ class AppendApi {
 
     let entry = await this.mokka.getDb().getEntry().get(packet.last.index);
 
-    const isEqual = !entry ? false : _.isEqual(_.sortBy(packet.last.responses), _.sortBy(entry.responses));
-    const includesAllResponses = !entry ? false : _.chain(packet.last.responses)
-      .reject((item: string) => entry.responses.includes(item))
-      .size()
-      .eq(0)
-      .value();
+    const isEqualResponses = !entry ? false : isEqual(sortBy(packet.last.responses), sortBy(entry.responses));
+    const includesAllResponses = !entry ? false : packet.last.responses
+      .filter((item: string) => !entry.responses.includes(item))
+      .length === 0;
 
-    if (!entry || isEqual || includesAllResponses)
+    if (!entry || isEqualResponses || includesAllResponses)
       return;
 
     entry = await this.mokka.getDb().getLog().ack(
@@ -131,7 +134,6 @@ class AppendApi {
     if (this.mokka.state !== states.LEADER)
       return;
 
-
     const reply = await this.messageApi.packet(messageTypes.APPEND_ACK);
     return new ReplyModel(reply, states.FOLLOWER);
   }
@@ -141,7 +143,7 @@ class AppendApi {
     let entries = await this.mokka.getDb().getEntry().getAfterList(packet.last.index, limit);
 
     // @ts-ignore
-    entries = _.groupBy(entries, 'term');
+    entries = groupBy(entries, 'term');
     const replies = [];
 
     for (const term of Object.keys(entries)) {

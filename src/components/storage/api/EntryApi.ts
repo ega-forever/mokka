@@ -1,10 +1,11 @@
 import prefixes from '../constants/prefixes';
+import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {EntryModel} from '../models/EntryModel';
 import getBnNumber from '../utils/getBnNumber';
 
 class EntryApi {
 
-  private db: any;
+  private db: IStorageInterface;
 
   constructor(db: any) {
     this.db = db;

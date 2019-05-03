@@ -1,7 +1,5 @@
-// @ts-ignore
-import * as _ from 'lodash';
-import * as path from 'path';
-import * as readline from 'readline';
+import _ from 'lodash';
+import readline from 'readline';
 import {Mokka} from '../components/consensus/main';
 import TCPMokka from '../implementation/TCP';
 
@@ -31,21 +29,16 @@ const initMokka = async () => {
   for (let index1 = 0; index1 < keys.length; index1++) {
     if (index === index1)
       continue;
-    uris.push(`/ip4/127.0.0.1/tcp/${startPort + index1}/${keys[index1].substring(64, 128)}`);
+    uris.push(`tcp://127.0.0.1:${startPort + index1}/${keys[index1].substring(64, 128)}`);
   }
 
   mokka = new TCPMokka({
-    address: `/ip4/127.0.0.1/tcp/${startPort + index}/${keys[index].substring(64, 128)}`,
+    address: `tcp://127.0.0.1:${startPort + index}/${keys[index].substring(64, 128)}`,
     electionMin: 300,
     electionMax: 1000,
     heartbeat: 200,
     gossipHeartbeat: 200,
     gossipTimeout: 200,
-    logOptions: {
-      adapter: require('memdown'),
-      // adapter: require('leveldown'),
-      path: path.join('./', 'dump', `test.${index}.db`)
-    },
     logLevel: 30,
     privateKey: keys[index],
     applier: async (command: any, state: any) => {
@@ -68,10 +61,6 @@ const initMokka = async () => {
     console.log(err);
   });
 
-  /*  mokka.on('state change', function (state) {
-      console.log(`state changed: ${_.invert(states)[state]}`);
-    });*/
-
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -91,15 +80,6 @@ const askCommand = (rl: any, mokka: Mokka) => {
 
     if (command.indexOf('get_state') === 0)
       await getState(mokka);
-
-    /*
-
-        if (command.indexOf('take_snapshot') === 0)
-          await takeSnapshot(mokka, command.replace('take_snapshot', '').trim());
-
-        if (command.indexOf('append_snapshot') === 0)
-          await appendSnapshot(mokka, command.replace('append_snapshot', '').trim());
-    */
 
     askCommand(rl, mokka);
   });
@@ -125,15 +105,5 @@ const getState = async (mokka: Mokka) => {
   const info = await mokka.getDb().getState().getInfo();
   console.log(info);
 };
-
-/*
-const takeSnapshot = async (mokka, path) => {
-  await mokka.log.state.takeSnapshot(path);
-};
-
-const appendSnapshot = async (mokka, path) => {
-  await mokka.log.state.appendSnapshot(path);
-};
-*/
 
 module.exports = initMokka();

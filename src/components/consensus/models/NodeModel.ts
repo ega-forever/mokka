@@ -1,6 +1,4 @@
-import * as EventEmitter from 'events';
-// @ts-ignore
-import * as Multiaddr from 'multiaddr';
+import {EventEmitter} from 'events';
 import NodeStates from '../constants/NodeStates';
 
 class NodeModel extends EventEmitter {
@@ -25,10 +23,7 @@ class NodeModel extends EventEmitter {
     this.publicKey = multiaddr.match(/\w+$/).toString();
     this._state = state;
 
-    const address = multiaddr.split(/\w+$/)[0];
-    const m = Multiaddr(address);
-    const mOptions = m.toOptions();
-    this.nodeAddress = `${mOptions.transport}://${mOptions.host}:${mOptions.port}`;
+    this.nodeAddress = multiaddr.split(/\w+$/)[0].replace(/\/$/, '');
   }
 
   public write(address: string, packet: Buffer): void {

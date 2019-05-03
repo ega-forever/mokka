@@ -1,9 +1,7 @@
-import * as Bpromise from 'bluebird';
-import * as crypto from 'crypto';
-import * as _ from 'lodash';
-import semaphore = require('semaphore');
+import {createHmac} from 'crypto';
 import {Semaphore} from 'semaphore';
-import * as nacl from 'tweetnacl';
+import semaphore from 'semaphore';
+import nacl from 'tweetnacl';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -29,7 +27,7 @@ class LogApi {
   }
 
   public push(key: string, value: any): void {
-    const hash = crypto.createHmac('sha256', JSON.stringify({key, value})).digest('hex');
+    const hash = createHmac('sha256', JSON.stringify({key, value})).digest('hex');
     this.mokka.logger.info(`pushed unconfirmed ${hash} : ${JSON.stringify(value)}`);
     this.mokka.gossip.push(hash, {key, value});
   }
@@ -42,14 +40,14 @@ class LogApi {
     while (this.run) {
 
       if (this.mokka.state !== states.LEADER) {
-        await Bpromise.delay(100);
+        await new Promise((res) => setTimeout(res, 100));
         continue;
       }
 
       const pendings = this.mokka.gossip.getPendings(1);
 
       if (!pendings.length) {
-        await Bpromise.delay(this.mokka.timer.timeout()); // todo delay for next tick or event on new push
+        await new Promise((res) => setTimeout(res, this.mokka.timer.timeout()));
         continue;
       }
 
@@ -63,7 +61,6 @@ class LogApi {
 
   public async _commit(log: any, hash: string): Promise<void> {
 
-    // @ts-ignore
     return await new Promise((res) =>
       this.semaphore.take(async () => {
 
@@ -108,9 +105,9 @@ class LogApi {
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return entry;
 
-    const followers = _.chain(this.mokka.nodes)
-      .reject((node) => _.find(entry.responses, {publicKey: node.publicKey}))
-      .value();
+    const followers = this.mokka.nodes.filter((node) =>
+      !entry.responses.includes(node.publicKey)
+    );
 
     if (followers.length === 0)
       return entry;

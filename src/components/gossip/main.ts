@@ -1,6 +1,9 @@
 import {EventEmitter} from 'events';
-import * as _ from 'lodash';
-import Timer = NodeJS.Timer;
+import flattenDeep from 'lodash/flattenDeep';
+import take from 'lodash/take';
+import toPairs from 'lodash/toPairs';
+import uniqBy from 'lodash/uniqBy';
+import values from 'lodash/values';
 import {MessageApi} from '../consensus/api/MessageApi';
 import messageTypes from '../consensus/constants/MessageTypes';
 import {Mokka} from '../consensus/main';
@@ -8,6 +11,7 @@ import {GossipOptions} from './models/GossipOptions';
 import {PeerModel} from './models/PeerModel';
 import {GossipScuttleService} from './services/GossipScuttleService';
 import {IIndexObject} from './types/IIndexObjectType';
+import Timer = NodeJS.Timer;
 
 class GossipController extends EventEmitter {
   public ownState: PeerModel;
@@ -89,19 +93,15 @@ class GossipController extends EventEmitter {
   }
 
   public livePeersPublicKeys(): string[] {
-    return _.chain(this.peers)
-      .toPairs()
+    return toPairs(this.peers)
       .filter((pair) => pair[1].isAlive())
-      .map((pair) => pair[0])
-      .value();
+      .map((pair) => pair[0]);
   }
 
   public deadPeersPublicKeys(): string[] {
-    return _.chain(this.peers)
-      .toPairs()
+    return toPairs(this.peers)
       .filter((pair) => !pair[1].isAlive())
-      .map((pair) => pair[0])
-      .value();
+      .map((pair) => pair[0]);
   }
 
   public handleNewPeers(pubKeys: string[]) {
@@ -127,14 +127,13 @@ class GossipController extends EventEmitter {
   }
 
   public getPendings(limit = 0): Array<{ hash: string, log: any }> {
-    // @ts-ignore
-    return _.chain(this.peers)
-      .values()
-      .map((peer: PeerModel) => peer.getPendingLogs())
-      .flattenDeep()
-      .uniqBy('hash')
-      .take(limit)
-      .value();
+
+    let data: any = values(this.peers)
+      .map((peer: PeerModel) => peer.getPendingLogs());
+
+    data = flattenDeep(data);
+    data = uniqBy(data, 'hash');
+    return take(data, limit);
   }
 
   public pullPending(hash: string): void {
