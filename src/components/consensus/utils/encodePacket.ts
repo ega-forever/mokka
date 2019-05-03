@@ -1,6 +1,7 @@
-import * as RLP from 'rlp';
+// @ts-ignore
+import {encode} from 'rlp';
 import {PacketModel} from '../models/PacketModel';
 
 export default (packet: PacketModel) => {
-  return RLP.encode(JSON.stringify(packet));
+  return encode(JSON.stringify(packet));
 };

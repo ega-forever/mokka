@@ -1,5 +1,9 @@
-import * as crypto from 'crypto';
-import {cloneDeep, isArray, isEqual, sortBy} from 'lodash';
+import {createHmac} from 'crypto';
+import cloneDeep from 'lodash/cloneDeep';
+import groupBy from 'lodash/groupBy';
+import isArray from 'lodash/isArray';
+import isEqual from 'lodash/isEqual';
+import sortBy from 'lodash/sortBy';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -72,7 +76,7 @@ class AppendApi {
         packet.data.hash
       );
 
-      const hash = crypto.createHmac('sha256', JSON.stringify(packet.data.log)).digest('hex');
+      const hash = createHmac('sha256', JSON.stringify(packet.data.log)).digest('hex');
       await this.mokka.gossip.pullPending(hash);
       this.mokka.logger.info(`the ${packet.data.index} has been saved`);
     } catch (err) {
@@ -139,7 +143,7 @@ class AppendApi {
     let entries = await this.mokka.getDb().getEntry().getAfterList(packet.last.index, limit);
 
     // @ts-ignore
-    entries = _.groupBy(entries, 'term');
+    entries = groupBy(entries, 'term');
     const replies = [];
 
     for (const term of Object.keys(entries)) {

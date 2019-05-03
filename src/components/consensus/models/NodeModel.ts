@@ -1,4 +1,4 @@
-import * as EventEmitter from 'events';
+import {EventEmitter} from 'events';
 import NodeStates from '../constants/NodeStates';
 
 class NodeModel extends EventEmitter {

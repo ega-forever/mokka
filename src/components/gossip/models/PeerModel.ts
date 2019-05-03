@@ -1,5 +1,6 @@
 import {EventEmitter} from 'events';
-import {toPairs, sortBy} from 'lodash';
+import sortBy from 'lodash/sortBy';
+import toPairs from 'lodash/toPairs';
 import {IIndexObject} from '../types/IIndexObjectType';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
 

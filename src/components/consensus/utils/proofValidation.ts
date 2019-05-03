@@ -1,7 +1,8 @@
-import {transform, values} from 'lodash';
+import transform from 'lodash/transform';
+import values from 'lodash/values';
 // @ts-ignore
-import * as secrets from 'secrets.js-grempe';
-import * as nacl from 'tweetnacl';
+import secrets from 'secrets.js-grempe';
+import nacl from 'tweetnacl';
 
 const _extract = (proof: string): { time: number, items: Array<{ secret: string, signature: string }> } => {
 

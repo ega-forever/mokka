@@ -1,8 +1,16 @@
 const path = require('path');
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+
 module.exports = {
   entry: './src/components/consensus/main.ts',
   module: {
     rules: [
+      {
+        test: /\.ts$/,
+        loader: 'lodash-ts-webpack-plugin',
+        exclude: /node_modules/,
+        enforce: 'pre'
+      },
       {
         test: /\.tsx?$/,
         use: 'ts-loader',
@@ -10,8 +18,11 @@ module.exports = {
       }
     ]
   },
+  plugins: [
+    new BundleAnalyzerPlugin()
+  ],
   resolve: {
-    extensions: [".ts", ".js"]
+    extensions: ['.ts', '.js']
   },
   output: {
     filename: 'bundle.js',

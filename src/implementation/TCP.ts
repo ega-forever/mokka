@@ -1,5 +1,5 @@
 // @ts-ignore
-import * as msg from 'axon';
+import msg from 'axon';
 
 import {Mokka} from '../components/consensus/main';
 import {IIndexObject} from '../components/gossip/types/IIndexObjectType';

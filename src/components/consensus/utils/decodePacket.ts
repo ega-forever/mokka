@@ -1,5 +1,6 @@
-import * as RLP from 'rlp';
+// @ts-ignore
+import {decode} from 'rlp';
 
 export default (packet: Buffer) => {
-  return JSON.parse(RLP.decode(packet).toString());
+  return JSON.parse(decode(packet).toString());
 };

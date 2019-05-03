@@ -1,6 +1,9 @@
 import {EventEmitter} from 'events';
-import {flattenDeep, take, toPairs, uniqBy, values} from 'lodash';
-import Timer = NodeJS.Timer;
+import flattenDeep from 'lodash/flattenDeep';
+import take from 'lodash/take';
+import toPairs from 'lodash/toPairs';
+import uniqBy from 'lodash/uniqBy';
+import values from 'lodash/values';
 import {MessageApi} from '../consensus/api/MessageApi';
 import messageTypes from '../consensus/constants/MessageTypes';
 import {Mokka} from '../consensus/main';
@@ -8,6 +11,7 @@ import {GossipOptions} from './models/GossipOptions';
 import {PeerModel} from './models/PeerModel';
 import {GossipScuttleService} from './services/GossipScuttleService';
 import {IIndexObject} from './types/IIndexObjectType';
+import Timer = NodeJS.Timer;
 
 class GossipController extends EventEmitter {
   public ownState: PeerModel;

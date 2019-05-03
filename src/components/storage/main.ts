@@ -1,8 +1,9 @@
+// @ts-ignore
 import encode from 'encoding-down';
 // @ts-ignore
-import * as levelup from 'levelup';
+import levelup from 'levelup';
 // @ts-ignore
-import * as memdown from 'memdown';
+import memdown from 'memdown';
 import {EntryApi} from './api/EntryApi';
 import {LogApi} from './api/LogApi';
 import {StateApi} from './api/StateApi';

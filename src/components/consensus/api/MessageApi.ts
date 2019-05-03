@@ -1,4 +1,4 @@
-import {isArray} from 'lodash';
+import isArray from 'lodash/isArray';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';

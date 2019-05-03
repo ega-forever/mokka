@@ -1,6 +1,6 @@
-import {random} from 'lodash';
+import random from 'lodash/random';
 // @ts-ignore
-import * as Tick from 'tick-tock';
+import Tick from 'tick-tock';
 import {MessageApi} from '../api/MessageApi';
 import {NodeApi} from '../api/NodeApi';
 import messageTypes from '../constants/MessageTypes';

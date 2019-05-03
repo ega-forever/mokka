@@ -1,4 +1,4 @@
-import {random} from 'lodash';
+import random from 'lodash/random';
 import {GossipController} from '../gossip/main';
 import {GossipOptions} from '../gossip/models/GossipOptions';
 import {IApplierFunctionInterface} from '../storage/interfaces/IApplierFunctionInterface';
@@ -12,7 +12,6 @@ import {NodeModel} from './models/NodeModel';
 import {VoteModel} from './models/VoteModel';
 import {GossipRequestProcessorService} from './services/GossipRequestProcessorService';
 import {RequestProcessorService} from './services/RequestProcessorService';
-// @ts-ignore
 import decodePacket from './utils/decodePacket';
 
 class Mokka extends NodeModel {

@@ -1,4 +1,4 @@
-import {mean} from 'lodash';
+import mean from 'lodash/mean';
 
 class AccrualFailureDetector {
 

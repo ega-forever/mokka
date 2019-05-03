@@ -1,7 +1,8 @@
-import {isNumber, pick} from 'lodash';
+import isNumber from 'lodash/isNumber';
+import pick from 'lodash/pick';
 // @ts-ignore
-import * as MerkleTools from 'merkle-tools';
-import * as semaphore from 'semaphore';
+import MerkleTools from 'merkle-tools';
+import semaphore from 'semaphore';
 import {Semaphore} from 'semaphore';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {EntryModel} from '../models/EntryModel';
@@ -84,6 +85,7 @@ class LogApi {
 
         if (entry.index > currentState.index) {
           const state: StateModel = {
+            // @ts-ignore
             ...pick(entry, ['index', 'term', 'hash', 'createdAt']),
             committedIndex: currentState.committedIndex
           };

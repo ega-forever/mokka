@@ -1,4 +1,5 @@
-import {has, isArray} from 'lodash';
+import has from 'lodash/has';
+import isArray from 'lodash/isArray';
 import {Semaphore} from 'semaphore';
 import semaphore = require('semaphore');
 import {MessageApi} from '../api/MessageApi';
@@ -36,15 +37,12 @@ class AbstractRequestService {
       return;
 
     if (isArray(data)) {
-
-      // @ts-ignore
       for (const item of data)
         await this.messageApi.message(item.who, item.reply);
 
       return;
     }
 
-    // @ts-ignore
     await this.messageApi.message(data.who, data.reply);
   }
 

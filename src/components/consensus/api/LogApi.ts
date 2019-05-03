@@ -1,8 +1,7 @@
-import * as crypto from 'crypto';
-import {find} from 'lodash';
+import {createHmac} from 'crypto';
 import {Semaphore} from 'semaphore';
-import semaphore = require('semaphore');
-import * as nacl from 'tweetnacl';
+import semaphore from 'semaphore';
+import nacl from 'tweetnacl';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -28,7 +27,7 @@ class LogApi {
   }
 
   public push(key: string, value: any): void {
-    const hash = crypto.createHmac('sha256', JSON.stringify({key, value})).digest('hex');
+    const hash = createHmac('sha256', JSON.stringify({key, value})).digest('hex');
     this.mokka.logger.info(`pushed unconfirmed ${hash} : ${JSON.stringify(value)}`);
     this.mokka.gossip.push(hash, {key, value});
   }
@@ -62,7 +61,6 @@ class LogApi {
 
   public async _commit(log: any, hash: string): Promise<void> {
 
-    // @ts-ignore
     return await new Promise((res) =>
       this.semaphore.take(async () => {
 

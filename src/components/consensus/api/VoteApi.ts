@@ -1,7 +1,8 @@
-import {sortBy} from 'lodash';
+import sortBy from 'lodash/sortBy';
 // @ts-ignore
-import * as secrets from 'secrets.js-grempe';
-import * as nacl from 'tweetnacl';
+import secrets from 'secrets.js-grempe';
+// @ts-ignore
+import nacl from 'tweetnacl';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import voteTypes from '../constants/VoteTypes';

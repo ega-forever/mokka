@@ -1,9 +1,11 @@
-import {findIndex, initial, sortBy} from 'lodash';
+import findIndex from 'lodash/findIndex';
+import initial from 'lodash/initial';
+import sortBy from 'lodash/sortBy';
 // @ts-ignore
-import * as secrets from 'secrets.js-grempe';
+import secrets from 'secrets.js-grempe';
 import {Semaphore} from 'semaphore';
-import semaphore = require('semaphore');
-import * as nacl from 'tweetnacl';
+import semaphore from 'semaphore';
+import nacl from 'tweetnacl';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';

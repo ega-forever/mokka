@@ -1,4 +1,4 @@
-import * as BPromise from 'bluebird';
+import Promise from 'bluebird';
 import {expect} from 'chai';
 import {fork} from 'child_process';
 import * as path from 'path';
@@ -8,11 +8,15 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
   beforeEach(() => {
 
     const mokkas: any = [];
-    // @ts-ignore
+
     ctx.keys = [
+      // tslint:disable-next-line
       'f7954a52cb4e6cb8a83ed0d6150a3dd1e4ae2c150054660b14abbdc23e16262b7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15',
+      // tslint:disable-next-line
       '5530a97b921df76755c34e2dddee729072c425b5de4a273df60418f869eb2c9d796d8cf388c2a4ed8cb9f4c6fe9cfc1b1cdbdcf5edf238961f8915b9979f89b1',
+      // tslint:disable-next-line
       '459136f8dbf054aa9c7be317d98f8bfea97dfe2726e6c56caf548680c074b05df9177556775896385a3e525e53f77fed09f2a88def0d1ebb67f539b33cbd98b1',
+      // tslint:disable-next-line
       '644ae3a446e8d48760155dbf53167664bc89831039ab8f86957a00e411055b943b44191e5d19513dc5df07aa776943a9ef985c1546bcdcee0d74de66b095272c'
     ];
 
@@ -20,13 +24,13 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
       const instance = fork(path.join(__dirname, 'workers/MokkaWorker.js'));
       mokkas.push(instance);
       instance.send({
-        type: 'init',
         args: [
           {
-            keys: ctx.keys,
-            index
+            index,
+            keys: ctx.keys
           }
-        ]
+        ],
+        type: 'init'
       });
     }
 
@@ -64,18 +68,18 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         });
       }),
       ctx.mokkas[0].send({
-        type: 'push',
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', {
           nonce: Date.now(),
           value: Date.now().toString()
-        }]
+        }],
+        type: 'push'
       }),
       ctx.mokkas[1].send({
-        type: 'push',
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
           nonce: Date.now() + 1,
           value: (Date.now() + 1).toString()
-        }]
+        }],
+        type: 'push'
       })
     ]);
 
@@ -122,7 +126,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     );
 
     await Promise.all(infoAwaitPromises);
-    await BPromise.delay(1000);
+    await Promise.delay(1000);
 
     const newPendingState: any = await new Promise((res) => {
       ctx.mokkas[0].send({type: 'pendings'});
@@ -171,18 +175,18 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         });
       }),
       ctx.mokkas[0].send({
-        type: 'push',
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', {
           nonce: Date.now(),
           value: Date.now().toString()
-        }]
+        }],
+        type: 'push'
       }),
       ctx.mokkas[1].send({
-        type: 'push',
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
           nonce: Date.now() + 1,
           value: (Date.now() + 1).toString()
-        }]
+        }],
+        type: 'push'
       })
     ]);
 
@@ -243,7 +247,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     for (const node of ctx.mokkas)
       node.kill();
 
-    await BPromise.delay(1000);
+    await Promise.delay(1000);
   });
 
 });
