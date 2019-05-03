@@ -6,12 +6,6 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.ts$/,
-        loader: 'lodash-ts-webpack-plugin',
-        exclude: /node_modules/,
-        enforce: 'pre'
-      },
-      {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/

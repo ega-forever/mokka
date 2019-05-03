@@ -57,7 +57,8 @@ Returns a new mokka node, which use tcp layer for communication
 
 Arguments:
 
-* `address` (string):  an address in the [multiaddr](https://github.com/multiformats/js-multiaddr#readme) format (example: `"/ip4/127.0.0.1/tcp/2003/7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15"`)
+* `address` (string):  an address in custom format. The only rule is that address should include the public key in the end
+ (example: `"tcp://127.0.0.1:2003/7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15"`)
 * `electionMin` (integer): minimum time required for voting
 * `electionMax` (integer): max time required for voting
 * `heartbeat` (integer): leader heartbeat timeout
