@@ -94,7 +94,9 @@ class NodeApi {
             };
           });
 
-        this.mokka.vote = new VoteModel(this.mokka.publicKey, shares, secret, startTime);
+        this.mokka.setVote(
+          new VoteModel(this.mokka.publicKey, shares, secret, startTime)
+        );
         this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
         const startVote = Date.now();

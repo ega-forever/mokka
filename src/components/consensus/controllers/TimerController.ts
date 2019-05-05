@@ -22,6 +22,19 @@ class TimerController {
     this.nodeApi = new NodeApi(mokka);
   }
 
+  public election(duration: number = random(this.mokka.election.min, this.mokka.election.max)) {
+    if (this.timers.active('election'))
+      return;
+
+    this.timers.setTimeout('election', async () => {
+      if (states.LEADER !== this.mokka.state) {
+        this.election(duration + this.mokka.election.max); // todo validate
+        return this.nodeApi.promote();
+      }
+    }, duration);
+
+  }
+
   public heartbeat(duration: number = this.mokka.heartbeat): void {
 
     if (this.timers.active('heartbeat') && this.mokka.state !== states.LEADER) {
@@ -36,7 +49,7 @@ class TimerController {
 
       if (states.LEADER !== this.mokka.state) {
         this.mokka.emit('heartbeat timeout'); // todo move to eventTypes
-        return this.nodeApi.promote();
+        return this.election();
       }
 
       const packet = await this.messageApi.packet(messageTypes.ACK);
@@ -70,6 +83,12 @@ class TimerController {
     if (this.timers.active('heartbeat'))
       this.timers.clear('heartbeat');
   }
+
+  public clearElectionTimeout(): void {
+    if (this.timers.active('election'))
+      this.timers.clear('election');
+  }
+
 
   public timeout() {
     // return _.random(this.beat, parseInt(this.beat * 1.5)); //todo use latency

@@ -38,7 +38,6 @@ const initMokka = async () => {
     electionMax: 1000,
     heartbeat: 200,
     gossipHeartbeat: 200,
-    gossipTimeout: 200,
     logLevel: 30,
     privateKey: keys[index],
     applier: async (command: any, state: any) => {
@@ -78,8 +77,8 @@ const askCommand = (rl: any, mokka: Mokka) => {
       await generateTxs(mokka, amount);
     }
 
-    if (command.indexOf('get_state') === 0)
-      await getState(mokka);
+    if (command.indexOf('get_info') === 0)
+      await getInfo(mokka);
 
     askCommand(rl, mokka);
   });
@@ -96,12 +95,7 @@ const generateTxs = async (mokka: Mokka, amount: number) => {
 
 };
 
-const getState = async (mokka: Mokka) => {
-  let state = await mokka.getDb().getState().getAll(false, 0, 100000, mokka.applier);
-  state = _.chain(state).toPairs().sortBy((pair) => pair[0]).fromPairs().value();
-
-  console.log(require('util').inspect(state, null, 2));
-  console.log(`total keys: ${Object.keys(state).length}`);
+const getInfo = async (mokka: Mokka) => {
   const info = await mokka.getDb().getState().getInfo();
   console.log(info);
 };

@@ -41,6 +41,7 @@ class RequestProcessorService extends AbstractRequestService {
       }
 
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
+      this.mokka.timer.clearElectionTimeout();
     }
 
     const lastInfo = await this.mokka.getDb().getState().getInfo();

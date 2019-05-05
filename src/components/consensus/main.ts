@@ -1,7 +1,5 @@
 import random from 'lodash/random';
 import {GossipController} from '../gossip/main';
-import {GossipOptions} from '../gossip/models/GossipOptions';
-import {IApplierFunctionInterface} from '../storage/interfaces/IApplierFunctionInterface';
 import {MokkaStorage} from '../storage/main';
 import {LogApi} from './api/LogApi';
 import {NodeApi} from './api/NodeApi';
@@ -22,7 +20,6 @@ class Mokka extends NodeModel {
   public gossip: GossipController;
   public logger: ILoggerInterface;
   public vote: VoteModel = new VoteModel();
-  public applier: IApplierFunctionInterface;
   public timer: TimerController;
   public logApi: LogApi;
   public nodeApi: NodeApi;
@@ -51,11 +48,7 @@ class Mokka extends NodeModel {
 
     this.timer = new TimerController(this);
 
-    const gossipOptions = new GossipOptions({
-      heartbeat: options.gossipHeartbeat || 1000,
-      timeout: options.gossipTimeout || 1000
-    });
-    this.gossip = new GossipController(this, gossipOptions);
+    this.gossip = new GossipController(this, options.gossipHeartbeat);
 
     this.gossipRequestProcessorService = new GossipRequestProcessorService(this);
     this.requestProcessorService = new RequestProcessorService(this);
@@ -64,8 +57,6 @@ class Mokka extends NodeModel {
 
     this.logApi = new LogApi(this);
     this.nodeApi = new NodeApi(this);
-
-    this.applier = options.applier;
 
     this._registerEvents();
   }
