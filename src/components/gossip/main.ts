@@ -7,7 +7,6 @@ import values from 'lodash/values';
 import {MessageApi} from '../consensus/api/MessageApi';
 import messageTypes from '../consensus/constants/MessageTypes';
 import {Mokka} from '../consensus/main';
-import {GossipOptions} from './models/GossipOptions';
 import {PeerModel} from './models/PeerModel';
 import {GossipScuttleService} from './services/GossipScuttleService';
 import {IIndexObject} from './types/IIndexObjectType';
@@ -19,15 +18,15 @@ class GossipController extends EventEmitter {
 
   private peers: IIndexObject<PeerModel> = {};
   private timers: IIndexObject<Timer> = {};
-  private options: GossipOptions;
+  private timeout: number;
   private messageApi: MessageApi;
   private mokka: Mokka;
 
-  constructor(mokka: Mokka, options: GossipOptions) {
+  constructor(mokka: Mokka, timeout: number) {
     super();
 
     this.ownState = new PeerModel(mokka.publicKey);
-    this.options = options;
+    this.timeout = timeout;
 
     this.peers[mokka.publicKey] = this.ownState;
     this.scuttle = new GossipScuttleService(this.peers);
@@ -37,19 +36,21 @@ class GossipController extends EventEmitter {
 
   public start(): void {
 
-    if (!this.timers.gossip_heart_beat)
-      this.timers.gossip_heart_beat = setInterval(() => this.ownState.beatHeart(), this.options.heartbeat);
-
     if (!this.timers.gossip)
-      this.timers.gossip = setInterval(() => this.gossip(), this.options.timeout);
+      this.timers.gossip = setInterval(() => {
+        this.ownState.beatHeart();
+        this.gossip();
+      }, this.timeout);
   }
 
   public stop(): void {
     this.peers = {};
-    for (const timerKey of Object.keys(this.timers)) {
-      clearInterval(this.timers[timerKey]);
-      delete this.timers[timerKey];
-    }
+
+    if (!this.timers.gossip)
+      return;
+
+    clearInterval(this.timers.gossip);
+    delete this.timers.gossip;
   }
 
   public push(hash: string, record: any) {

@@ -1,5 +1,7 @@
 import * as bunyan from 'bunyan';
 import TCPMokka from '../../implementation/TCP';
+import states from '../../components/consensus/constants/NodeStates';
+import * as _ from 'lodash';
 
 let mokka: TCPMokka = null;
 
@@ -7,17 +9,11 @@ const init = (params: any) => {
 
   mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${2000 + params.index}/${params.keys[params.index].substring(64, 128)}`,
-    applier: async (command: any, state: any) => {
-      let value = await state.get(command.key);
-      value = (value || 0) + parseInt(command.value.value, 10);
-      await state.put(command.key, value);
-    },
-    electionMax: 1000,
-    electionMin: 300,
+    electionMax: 300,
+    electionMin: 150,
     gossipHeartbeat: 200,
-    gossipTimeout: 200,
-    heartbeat: 200,
-    logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
+    heartbeat: 100,
+    logger: bunyan.createLogger({name: 'mokka.logger', level: 50}),
     privateKey: params.keys[params.index]
   });
 
@@ -25,9 +21,12 @@ const init = (params: any) => {
     if (i !== params.index)
       mokka.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${params.keys[i].substring(64, 128)}`);
 
-// @ts-ignore
   mokka.on('error', (err) => {
-    // console.log(err);
+     //console.log(`index #${params.index} ${err}`);
+  });
+
+  mokka.on('state', () => {
+     //console.log(`index #${params.index} state ${ _.invert(states)[mokka.state]}`);
   });
 
   mokka.gossip.on('update', (peer: string, key: string, value: any) => {
@@ -54,12 +53,6 @@ const getPending = () => {
   process.send({type: 'pendings', args: [pendings]});
 };
 
-const getState = async () => {
-  const state = await mokka.getDb().getState().getAll(false, 0, 100000, mokka.applier);
-  process.send({type: 'state', args: [state]});
-
-};
-
 process.on('message', (m) => {
   if (m.type === 'init')
     init(m.args[0]);
@@ -75,8 +68,5 @@ process.on('message', (m) => {
 
   if (m.type === 'pendings')
     getPending();
-
-  if (m.type === 'state')
-    getState();
 
 });
