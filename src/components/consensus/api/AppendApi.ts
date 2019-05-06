@@ -121,14 +121,8 @@ class AppendApi {
         entry.index - info.committedIndex
       );
 
-      for (const entry of entries) {
-        await this.mokka.applier(
-          entry.log,
-          this.mokka.getDb().getState().getApplierFuncs(entry.index, entry.hash, entry.term)
-        );
-
+      for (const entry of entries)
         await this.mokka.getDb().getLog().commit(entry.index);
-      }
     }
 
     if (this.mokka.state !== states.LEADER)

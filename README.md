@@ -45,7 +45,7 @@ generate N
 ```
 To get RSM state, type:
 ```
-get_state
+get_info
 ```
 
 
@@ -53,7 +53,9 @@ get_state
 
 ### new Mokka (options)
 
-Returns a new mokka node, which use tcp layer for communication
+Returns a new mokka instance. As mokka is agnostic to protocol implementation, 
+you have to create your own.
+Please check the ``Custom transport layer`` section.
 
 Arguments:
 
@@ -63,11 +65,9 @@ Arguments:
 * `electionMax` (integer): max time required for voting
 * `heartbeat` (integer): leader heartbeat timeout
 * `gossipHeartbeat` (integer): gossip heartbeat timeout
-* `gossipTimeout` (integer): gossip sync timeout
 * `storage`: levelDb compatible instance (can be leveldown, memdown and so on). Also be sure, that your instance satisfy the interface ```IStorageInterface```. 
 * `logger` (ILoggerInterface): logger instance. If omitted, then console.log will be used
 * `privateKey`: the 64 length private key. Please take a look at [tweetnacl](https://www.npmjs.com/package/tweetnacl#naclsignkeypair) key pair generator
-* `applier`: applier function. Is used for apply data to state.
 
 ### mokka.logApi.push (key: string, value: any): void
 
@@ -76,14 +76,6 @@ push new log and replicate it over the cluster.
 ### await mokka.getDb().getState().getInfo(): Promise<StateModel>
 
 Returns the current state of node (last log index, last committed log index, merkle root)
-
-### await mokka.getDb().getState().getState(confirmed = false, skip = 0, limit = 100, applier: IApplierFunctionInterface): Promise<RSMStateModel>
-
-Returns the RSM registers. The skip and list are used to navigate between registers (i.e. keys).
-
-### await mokka.getDb().getState().get(key: string): Promise<string|null>
-
-Returns trigger's value (i.e. key's value).
 
 ### await mokka.getDb().getEntry().get(index: number): Promise<EntryModel>
 

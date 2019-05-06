@@ -34,22 +34,15 @@ class VoteApi {
       return new ReplyModel(reply, packet.publicKey);
     }
 
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(packet.data.share),
-        Buffer.from(this.mokka.privateKey, 'hex')
-      )
-    ).toString('hex');
-
     const lastInfo = await this.mokka.getDb().getState().getInfo();
 
     if (lastInfo.term <= packet.term || lastInfo.index > packet.last.index) {
 
       const reply = await this.messageApi.packet(messageTypes.VOTED, {
-        granted: false,
+//        granted: false, // todo replace with null token (no need to give back signature for false candidate)
         reason: lastInfo.term <= packet.term ?
           voteTypes.CANDIDATE_OUTDATED_BY_TERM : voteTypes.CANDIDATE_OUTDATED_BY_HISTORY,
-        signature
+        signature: null
       });
 
       return new ReplyModel(reply, packet.publicKey);
@@ -58,13 +51,20 @@ class VoteApi {
     if (lastInfo.index === packet.last.index && lastInfo.hash !== packet.last.hash) {
 
       const reply = await this.messageApi.packet(messageTypes.VOTED, {
-        granted: false,
         reason: voteTypes.CANDIDATE_HAS_WRONG_HISTORY,
-        signature
+        signature: null
       });
 
       return new ReplyModel(reply, packet.publicKey);
     }
+
+    const signature = Buffer.from(
+      nacl.sign.detached(
+        Buffer.from(packet.data.share),
+        Buffer.from(this.mokka.privateKey, 'hex')
+      )
+    ).toString('hex');
+
 
     const vote = new VoteModel(
       packet.publicKey,
@@ -81,7 +81,6 @@ class VoteApi {
     this.mokka.setVote(vote);
 
     const reply = await this.messageApi.packet(messageTypes.VOTED, {
-      granted: true,
       signature
     });
 
@@ -131,20 +130,21 @@ class VoteApi {
     if (!this.mokka.quorum(votedAmount))
       return null;
 
-    const badVotes = this.mokka.vote.shares.filter((share) => !share.voted);
 
-    if (badVotes.length >= votedAmount - badVotes.length) {
+    /*    const badVotes = this.mokka.vote.shares.filter((share) => !share.voted);
 
-      this.mokka.vote = new VoteModel();
+        if (badVotes.length >= votedAmount - badVotes.length) {
 
-      if (this.mokka.state === states.CANDIDATE) {
-        this.mokka.setState(states.FOLLOWER, this.mokka.term + -1, '');
-        this.mokka.vote = new VoteModel();
-        this.mokka.timer.clearVoteTimeout();
-      }
 
-      return null;
-    }
+          if (this.mokka.state === states.CANDIDATE) {
+            console.log(`bad vote with bad ${badVotes.length} of ${votedAmount} in ${this.mokka.vote.shares.length}`)
+            this.mokka.setState(states.FOLLOWER, this.mokka.term + -1, '');
+            this.mokka.timer.clearVoteTimeout();
+          }
+          this.mokka.vote = new VoteModel();
+
+          return null;
+        }*/
 
     const validatedShares = this.mokka.vote.shares
       .filter((share) => share.voted)
