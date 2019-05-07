@@ -2,7 +2,7 @@
 import msg from 'axon';
 
 import {Mokka} from '../components/consensus/main';
-import {IIndexObject} from '../components/gossip/types/IIndexObjectType';
+import {IIndexObject} from '../components/shared/types/IIndexObjectType';
 
 class TCPMokka extends Mokka {
 

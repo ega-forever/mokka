@@ -1,17 +1,19 @@
+import * as bunyan from 'bunyan';
 import _ from 'lodash';
 import readline from 'readline';
 import {Mokka} from '../components/consensus/main';
+import eventTypes from '../components/shared/constants/EventTypes';
 import TCPMokka from '../implementation/TCP';
 
+// tslint:disable
 let mokka: Mokka = null;
+const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
 
 process.on('unhandledRejection', (reason, p) => {
-  console.log('Possibly Unhandled Rejection at: Promise ', p, ' reason: ', reason);
+  logger.error('Possibly Unhandled Rejection at: Promise ', p, ' reason: ', reason);
   // application specific logging here
   process.exit(0);
 });
-
-console.log('index ' + process.env.INDEX);
 
 const startPort = 2000;
 const keys = [
@@ -39,25 +41,21 @@ const initMokka = async () => {
     heartbeat: 200,
     gossipHeartbeat: 200,
     logLevel: 30,
-    privateKey: keys[index],
-    applier: async (command: any, state: any) => {
-      let value = await state.get(command.key);
-      value = (value || 0) + parseInt(command.value.value, 10);
-      await state.put(command.key, value);
-    }
+    logger,
+    privateKey: keys[index]
   });
 
   mokka.connect();
 
-  mokka.on('state', () => {
-    console.log(`changed state ${mokka.state} with term ${mokka.term}`);
+  mokka.on(eventTypes.STATE, () => {
+    logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
   });
 
   for (const peer of uris)
     mokka.nodeApi.join(peer);
 
-  mokka.on('error', (err) => {
-    console.log(err);
+  mokka.on(eventTypes.ERROR, (err) => {
+    logger.error(err);
   });
 
   const rl = readline.createInterface({
@@ -89,7 +87,7 @@ const generateTxs = async (mokka: Mokka, amount: number) => {
 
   for (let index = 0; index < amount; index++) {
     const value = _.random(-10, Date.now());
-    console.log(`changing value to + ${value}`);
+    logger.info(`changing value to ${value}`);
     await mokka.logApi.push('0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', {value: value.toString(), nonce: Date.now()});
   }
 
@@ -97,7 +95,7 @@ const generateTxs = async (mokka: Mokka, amount: number) => {
 
 const getInfo = async (mokka: Mokka) => {
   const info = await mokka.getDb().getState().getInfo();
-  console.log(info);
+  logger.info(info);
 };
 
 module.exports = initMokka();

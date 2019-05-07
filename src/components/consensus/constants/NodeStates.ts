@@ -1,3 +1,4 @@
+// tslint:disable
 export default {
     STOPPED: 0,
     LEADER: 1,

@@ -1,7 +1,8 @@
 import {EventEmitter} from 'events';
 import sortBy from 'lodash/sortBy';
 import toPairs from 'lodash/toPairs';
-import {IIndexObject} from '../types/IIndexObjectType';
+import eventTypes from '../../shared/constants/EventTypes';
+import {IIndexObject} from '../../shared/types/IIndexObjectType';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
 
 class PeerModel extends EventEmitter {
@@ -43,7 +44,7 @@ class PeerModel extends EventEmitter {
 
     // @ts-ignore
     this.attrs[k] = [v, n];
-    this.emit('update', k, v);
+    this.emit(eventTypes.GOSSIP_PEER_UPDATE, k, v);
   }
 
   public beatHeart(): void {
@@ -81,14 +82,14 @@ class PeerModel extends EventEmitter {
   public markAlive(): void {
     if (!this.alive) {
       this.alive = true;
-      this.emit('peer_alive');
+      this.emit(eventTypes.GOSSIP_PEER_ALIVE);
     }
   }
 
   public markDead(): void {
     if (this.alive) {
       this.alive = false;
-      this.emit('peer_failed');
+      this.emit(eventTypes.GOSSIP_PEER_FAILED);
     }
   }
 

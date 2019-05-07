@@ -32,6 +32,10 @@ class LogApi {
     this.mokka.gossip.push(hash, {key, value});
   }
 
+  public stop() {
+    this.run = false;
+  }
+
   public async runLoop() { // loop for checking new packets
 
     if (!this.run)
@@ -55,11 +59,7 @@ class LogApi {
     }
   }
 
-  public stop() {
-    this.run = false;
-  }
-
-  public async _commit(log: any, hash: string): Promise<void> {
+  private async _commit(log: any, hash: string): Promise<void> {
 
     return await new Promise((res) =>
       this.semaphore.take(async () => {
@@ -82,7 +82,7 @@ class LogApi {
     );
   }
 
-  public async _save(log: string) {
+  private async _save(log: string) {
     const signature = Buffer.from(
       nacl.sign.detached(
         Buffer.from(JSON.stringify(log)),
@@ -93,7 +93,7 @@ class LogApi {
     return await this.mokka.getDb().getLog().save(log, this.mokka.term, signature, [this.mokka.publicKey]);
   }
 
-  public async _broadcast(index: number, hash: string) {
+  private async _broadcast(index: number, hash: string) {
 
     const entry = await this.mokka.getDb().getEntry().get(index);
 

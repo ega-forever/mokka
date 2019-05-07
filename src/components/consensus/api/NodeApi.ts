@@ -6,6 +6,7 @@ import secrets from 'secrets.js-grempe';
 import {Semaphore} from 'semaphore';
 import semaphore from 'semaphore';
 import nacl from 'tweetnacl';
+import eventTypes from '../../shared/constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -38,7 +39,7 @@ class NodeApi {
     node.once('end', () => this.leave(node.publicKey));
 
     this.mokka.nodes.push(node);
-    this.mokka.emit('join', node);
+    this.mokka.emit(eventTypes.NODE_JOIN, node);
 
     this.mokka.gossip.handleNewPeers([publicKey]);
 
@@ -55,7 +56,7 @@ class NodeApi {
     this.mokka.nodes.splice(index, 1);
 
     const node = this.mokka.nodes[index];
-    this.mokka.emit('leave', node);
+    this.mokka.emit(eventTypes.NODE_LEAVE, node);
   }
 
   public async promote() {

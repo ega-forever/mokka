@@ -1,5 +1,5 @@
+import {IIndexObject} from '../../shared/types/IIndexObjectType';
 import {PeerModel} from '../models/PeerModel';
-import {IIndexObject} from '../types/IIndexObjectType';
 
 class GossipScuttleService {
 
