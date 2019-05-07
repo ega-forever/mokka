@@ -1,3 +1,4 @@
+import eventTypes from '../../shared/constants/EventTypes';
 import {AppendApi} from '../api/AppendApi';
 import {VoteApi} from '../api/VoteApi';
 import messageTypes from '../constants/MessageTypes';
@@ -20,7 +21,7 @@ class RequestProcessorService extends AbstractRequestService {
     this.appendApi = new AppendApi(mokka);
   }
 
-  public async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
+  protected async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
 
     if (packet == null)
       return null;
@@ -53,7 +54,7 @@ class RequestProcessorService extends AbstractRequestService {
       reply = await this.voteApi.voted(packet);
 
     if (packet.type === messageTypes.ERROR)
-      this.mokka.emit('error', new Error(packet.data));
+      this.mokka.emit(eventTypes.ERROR, new Error(packet.data));
 
     if (packet.type === messageTypes.APPEND)
       reply = await this.appendApi.append(packet);

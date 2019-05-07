@@ -46,7 +46,7 @@ class AbstractRequestService {
     await this.messageApi.message(data.who, data.reply);
   }
 
-  public async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
+  protected async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
     throw new Error('process should be implemented');
   }
 

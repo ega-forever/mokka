@@ -1,6 +1,7 @@
 import random from 'lodash/random';
 // @ts-ignore
 import Tick from 'tick-tock';
+import eventTypes from '../../shared/constants/EventTypes';
 import {MessageApi} from '../api/MessageApi';
 import {NodeApi} from '../api/NodeApi';
 import messageTypes from '../constants/MessageTypes';
@@ -48,7 +49,7 @@ class TimerController {
     this.timers.setTimeout('heartbeat', async () => {
 
       if (states.LEADER !== this.mokka.state) {
-        this.mokka.emit('heartbeat timeout'); // todo move to eventTypes
+        this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
         return this.election();
       }
 
@@ -88,7 +89,6 @@ class TimerController {
     if (this.timers.active('election'))
       this.timers.clear('election');
   }
-
 
   public timeout() {
     // return _.random(this.beat, parseInt(this.beat * 1.5)); //todo use latency

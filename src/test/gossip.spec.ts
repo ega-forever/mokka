@@ -1,8 +1,8 @@
 import Promise from 'bluebird';
+import {Buffer} from 'buffer';
 import {expect} from 'chai';
 import {fork} from 'child_process';
 import * as path from 'path';
-import {Buffer} from 'buffer';
 import * as nacl from 'tweetnacl';
 
 describe('gossip tests', (ctx = {mokkas: []}) => {

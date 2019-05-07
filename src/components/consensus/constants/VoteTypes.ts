@@ -1,3 +1,4 @@
+// tslint:disable
 export default {
     NO_SHARE: 0,
     CANDIDATE_OUTDATED_BY_TERM: 1,

@@ -1,11 +1,14 @@
 import * as bunyan from 'bunyan';
-import TCPMokka from '../../implementation/TCP';
-import states from '../../components/consensus/constants/NodeStates';
 import * as _ from 'lodash';
+import states from '../../components/consensus/constants/NodeStates';
+import eventTypes from '../../components/shared/constants/EventTypes';
+import TCPMokka from '../../implementation/TCP';
 
 let mokka: TCPMokka = null;
 
 const init = (params: any) => {
+
+  const logger = bunyan.createLogger({name: 'mokka.logger', level: 50});
 
   mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${2000 + params.index}/${params.keys[params.index].substring(64, 128)}`,
@@ -13,7 +16,7 @@ const init = (params: any) => {
     electionMin: 150,
     gossipHeartbeat: 200,
     heartbeat: 100,
-    logger: bunyan.createLogger({name: 'mokka.logger', level: 50}),
+    logger,
     privateKey: params.keys[params.index]
   });
 
@@ -21,18 +24,17 @@ const init = (params: any) => {
     if (i !== params.index)
       mokka.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${params.keys[i].substring(64, 128)}`);
 
-  mokka.on('error', (err) => {
-     //console.log(`index #${params.index} ${err}`);
+  mokka.on(eventTypes.ERROR, (err) => {
+    logger.error(`index #${params.index} ${err}`);
   });
 
-  mokka.on('state', () => {
-     //console.log(`index #${params.index} state ${ _.invert(states)[mokka.state]}`);
+  mokka.on(eventTypes.STATE, () => {
+    logger.info(`index #${params.index} state ${_.invert(states)[mokka.state]}`);
   });
 
-  mokka.gossip.on('update', (peer: string, key: string, value: any) => {
+  mokka.gossip.on(eventTypes.GOSSIP_PEER_UPDATE, (peer: string, key: string, value: any) => {
     process.send({type: 'gossip_update', args: [peer, key, value]});
   });
-
 };
 
 const connect = () => {
