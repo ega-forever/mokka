@@ -8,6 +8,8 @@ import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {MessageApi} from './MessageApi';
 import {NodeApi} from './NodeApi';
+import voteTypes from '../../shared/constants/EventTypes';
+import {EntryModel} from '../../storage/models/EntryModel';
 
 class LogApi {
 
@@ -82,7 +84,7 @@ class LogApi {
     );
   }
 
-  private async _save(log: string) {
+  private async _save(log: string): Promise<EntryModel> {
     const signature = Buffer.from(
       nacl.sign.detached(
         Buffer.from(JSON.stringify(log)),
@@ -90,7 +92,10 @@ class LogApi {
       )
     ).toString('hex');
 
-    return await this.mokka.getDb().getLog().save(log, this.mokka.term, signature, [this.mokka.publicKey]);
+    const entry = await this.mokka.getDb().getLog().save(log, this.mokka.term, signature, [this.mokka.publicKey]);
+    this.mokka.emit(voteTypes.LOG, entry.index);
+    this.mokka.emit(voteTypes.LOG_ACK, entry.index);
+    return entry;
   }
 
   private async _broadcast(index: number, hash: string) {
