@@ -65,7 +65,6 @@ class VoteApi {
       )
     ).toString('hex');
 
-
     const vote = new VoteModel(
       packet.publicKey,
       [{
@@ -130,11 +129,9 @@ class VoteApi {
     if (!this.mokka.quorum(votedAmount))
       return null;
 
-
     /*    const badVotes = this.mokka.vote.shares.filter((share) => !share.voted);
 
         if (badVotes.length >= votedAmount - badVotes.length) {
-
 
           if (this.mokka.state === states.CANDIDATE) {
             console.log(`bad vote with bad ${badVotes.length} of ${votedAmount} in ${this.mokka.vote.shares.length}`)

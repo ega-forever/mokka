@@ -89,12 +89,24 @@ Returns N (specified in limit) logs after specified index.
 
 ## Events
 
-A Mokka instance emits the following events:
+A Mokka instance emits the following events (available at ``/components/shared/EventTypes.ts``):
 
 * `join`: once we add new peer
 * `leave`: once we remove peer
 * `error`: once error happens (for instance, bad voting)
-* `heartbeat timeout`: once we can't receive the heartbeat from leader in certain time (specified in config)
+* `heartbeat_timeout`: once we can't receive the heartbeat from leader in certain time (specified in config)
+* `state`: once the state of node changed (i.e. leader, candidate, follower)
+* `log`: once node received new log
+* `log_ack`: once node acked the log
+
+Also gossip expose events. To use them, you have to listen events from gossip instance:
+`<mokka_instance>.gossip.on(<event_type>, ()=>{})`
+
+* `peer_new`: once gossip connects to new peer
+* `peer_update`: once gossip update information about certain peer
+* `peer_alive`: once gossip checked that certain peer alive
+* `peer_failed`: once gossip can't receive any answer from certain peer
+
 
 
 # Custom transport layer

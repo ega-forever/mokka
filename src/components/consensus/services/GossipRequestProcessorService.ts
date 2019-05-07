@@ -14,7 +14,7 @@ class GossipRequestProcessorService extends AbstractRequestService {
     this._gossipApi = new GossipApi(mokka);
   }
 
-  public async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
+  protected async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
 
     let reply = null;
 

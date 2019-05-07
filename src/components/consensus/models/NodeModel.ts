@@ -1,4 +1,5 @@
 import {EventEmitter} from 'events';
+import eventTypes from '../../shared/constants/EventTypes';
 import NodeStates from '../constants/NodeStates';
 
 class NodeModel extends EventEmitter {
@@ -35,7 +36,7 @@ class NodeModel extends EventEmitter {
     this._term = term;
     this._leaderPublicKey = leaderPublicKey;
     this._proof = proof;
-    this.emit('state');
+    this.emit(eventTypes.STATE);
   }
 
   get state(): number {

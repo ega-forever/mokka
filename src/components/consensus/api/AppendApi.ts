@@ -4,6 +4,7 @@ import groupBy from 'lodash/groupBy';
 import isArray from 'lodash/isArray';
 import isEqual from 'lodash/isEqual';
 import sortBy from 'lodash/sortBy';
+import eventTypes from '../../shared/constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -79,6 +80,7 @@ class AppendApi {
       const hash = createHmac('sha256', JSON.stringify(packet.data.log)).digest('hex');
       await this.mokka.gossip.pullPending(hash);
       this.mokka.logger.info(`the ${packet.data.index} has been saved`);
+      this.mokka.emit(eventTypes.LOG, packet.data.index);
     } catch (err) {
       this.mokka.logger.error(`error during save log: ${JSON.stringify(err)}`);
 
@@ -121,8 +123,10 @@ class AppendApi {
         entry.index - info.committedIndex
       );
 
-      for (const entry of entries)
+      for (const entry of entries) {
         await this.mokka.getDb().getLog().commit(entry.index);
+        this.mokka.emit(eventTypes.LOG_ACK, entry.index);
+      }
     }
 
     if (this.mokka.state !== states.LEADER)

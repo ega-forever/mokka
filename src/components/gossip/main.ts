@@ -7,10 +7,11 @@ import values from 'lodash/values';
 import {MessageApi} from '../consensus/api/MessageApi';
 import messageTypes from '../consensus/constants/MessageTypes';
 import {Mokka} from '../consensus/main';
+import Timer = NodeJS.Timer;
+import eventTypes from '../shared/constants/EventTypes';
+import {IIndexObject} from '../shared/types/IIndexObjectType';
 import {PeerModel} from './models/PeerModel';
 import {GossipScuttleService} from './services/GossipScuttleService';
-import {IIndexObject} from './types/IIndexObjectType';
-import Timer = NodeJS.Timer;
 
 class GossipController extends EventEmitter {
   public ownState: PeerModel;
@@ -108,7 +109,7 @@ class GossipController extends EventEmitter {
   public handleNewPeers(pubKeys: string[]) {
     for (const pubKey of pubKeys) {
       this.peers[pubKey] = new PeerModel(pubKey);
-      this.emit('new_peer', pubKey);
+      this.emit(eventTypes.GOSSIP_NEW_PEER, pubKey);
       const peer = this.peers[pubKey];
       this.listenToPeer(peer);
     }
@@ -116,14 +117,14 @@ class GossipController extends EventEmitter {
 
   public listenToPeer(peer: PeerModel) {
 
-    peer.on('update', (k: string, v: any) => {
-      this.emit('update', peer.publicKey, k, v);
+    peer.on(eventTypes.GOSSIP_PEER_UPDATE, (k: string, v: any) => {
+      this.emit(eventTypes.GOSSIP_PEER_UPDATE, peer.publicKey, k, v);
     });
-    peer.on('peer_alive', () => {
-      this.emit('peer_alive', peer.publicKey);
+    peer.on(eventTypes.GOSSIP_PEER_ALIVE, () => {
+      this.emit(eventTypes.GOSSIP_PEER_ALIVE, peer.publicKey);
     });
-    peer.on('peer_failed', () => {
-      this.emit('peer_failed', peer.publicKey);
+    peer.on(eventTypes.GOSSIP_PEER_FAILED, () => {
+      this.emit(eventTypes.GOSSIP_PEER_FAILED, peer.publicKey);
     });
   }
 
