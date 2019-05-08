@@ -6,6 +6,7 @@ import {NodeApi} from './api/NodeApi';
 import messageTypes from './constants/MessageTypes';
 import {TimerController} from './controllers/TimerController';
 import {ILoggerInterface} from './interfaces/ILoggerInterface';
+import {ISettingsInterface} from './interfaces/ISettingsInterface';
 import {NodeModel} from './models/NodeModel';
 import {VoteModel} from './models/VoteModel';
 import {GossipRequestProcessorService} from './services/GossipRequestProcessorService';
@@ -16,7 +17,6 @@ class Mokka extends NodeModel {
 
   public election: { min: number, max: number };
   public heartbeat: number;
-  public removeSyncedRecords: boolean;
   public gossip: GossipController;
   public logger: ILoggerInterface;
   public vote: VoteModel = new VoteModel();
@@ -27,7 +27,7 @@ class Mokka extends NodeModel {
   private gossipRequestProcessorService: GossipRequestProcessorService;
   private requestProcessorService: RequestProcessorService;
 
-  constructor(options: any = {}) { // todo make strict
+  constructor(options: ISettingsInterface) {
     super(options.privateKey, options.address);
 
     this.election = {
@@ -36,7 +36,6 @@ class Mokka extends NodeModel {
     };
 
     this.heartbeat = options.heartbeat || 50;
-    this.removeSyncedRecords = options.removeSynced || false;
     this.logger = options.logger || {
       // tslint:disable-next-line
       error: console.log,

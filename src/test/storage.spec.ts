@@ -24,15 +24,9 @@ describe('storage tests', (ctx = {}) => {
 
     ctx.mokka = new TCPMokka({
       address: `tcp://127.0.0.1:2000/${key.substring(64, 128)}`,
-      applier: async (command: any, state: any) => {
-        let value = await state.get(command.key);
-        value = (value || 0) + parseInt(command.value.value, 10);
-        await state.put(command.key, value);
-      },
       electionMax: 1000,
       electionMin: 300,
       gossipHeartbeat: 200,
-      gossipTimeout: 200,
       heartbeat: 200,
       logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
       privateKey: key,
