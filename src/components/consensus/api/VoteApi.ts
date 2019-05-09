@@ -36,11 +36,10 @@ class VoteApi {
 
     const lastInfo = await this.mokka.getDb().getState().getInfo();
 
-    if (lastInfo.term <= packet.term || lastInfo.index > packet.last.index) {
+    if (lastInfo.term >= packet.term || lastInfo.index > packet.last.index) {
 
       const reply = await this.messageApi.packet(messageTypes.VOTED, {
-//        granted: false, // todo replace with null token (no need to give back signature for false candidate)
-        reason: lastInfo.term <= packet.term ?
+        reason: lastInfo.term >= packet.term ?
           voteTypes.CANDIDATE_OUTDATED_BY_TERM : voteTypes.CANDIDATE_OUTDATED_BY_HISTORY,
         signature: null
       });
@@ -129,20 +128,6 @@ class VoteApi {
     if (!this.mokka.quorum(votedAmount))
       return null;
 
-    /*    const badVotes = this.mokka.vote.shares.filter((share) => !share.voted);
-
-        if (badVotes.length >= votedAmount - badVotes.length) {
-
-          if (this.mokka.state === states.CANDIDATE) {
-            console.log(`bad vote with bad ${badVotes.length} of ${votedAmount} in ${this.mokka.vote.shares.length}`)
-            this.mokka.setState(states.FOLLOWER, this.mokka.term + -1, '');
-            this.mokka.timer.clearVoteTimeout();
-          }
-          this.mokka.vote = new VoteModel();
-
-          return null;
-        }*/
-
     const validatedShares = this.mokka.vote.shares
       .filter((share) => share.voted)
       .map((share: { share: string }) => share.share);
@@ -162,8 +147,7 @@ class VoteApi {
         return `${result}${item.share}${item.signature}`;
       }, '');
 
-    compacted = `${votedShares.length.toString(16)}x${compacted}${this.mokka.vote.started}`;
-
+    compacted = `${votedShares.length.toString(16)}x${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted);
   }
 }

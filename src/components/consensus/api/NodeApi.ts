@@ -66,7 +66,7 @@ class NodeApi {
       this.semaphore.take(async () => {
 
         const startTime = Date.now();
-        const token = startTime.toString();
+        const token = `${this.mokka.term + 1}x${startTime}`;
         const secret = secrets.str2hex(token);
 
         const shares = sortBy(secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority()))

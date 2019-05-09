@@ -117,7 +117,6 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
 
     for (const state of newPendingStates)
       expect(state.length).to.eq(0);
-
   });
 
   it('should handle the log after emitter death', async () => {

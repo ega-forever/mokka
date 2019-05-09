@@ -37,7 +37,7 @@ class PeerModel extends EventEmitter {
     }
   }
 
-  public setLocalKey(k: string, v: string, n: number): void {
+  public setLocalKey(k: string, v: any, n: number): void {
 
     if (n > this.maxVersionSeen)
       this.maxVersionSeen = n;
