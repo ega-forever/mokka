@@ -9,7 +9,7 @@
     "serve_client2": "set INDEX=1 && nodemon --delay 3000 --inspect=8082 --watch dist/ -d 1 ./dist/demo/client.js",
     "serve_client3": "set INDEX=2 && nodemon --delay 6000 --inspect=8083 --watch dist/ -d 1 ./dist/demo/client.js",
     "serve_client4": "set INDEX=3 && nodemon --delay 10000 --inspect=8084 --watch dist/ -d 1 ./dist/demo/client.js",
-    "test": "mocha dist/test/*spec.js --timeout 60000",
+    "test": "mocha dist/test/*spec.js --timeout 120000",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack"
   },
