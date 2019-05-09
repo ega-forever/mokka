@@ -2,7 +2,7 @@ class VoteModel {
 
   private _candidate: string;
   private _shares: Array<{ share: string, publicKey: string, voted: boolean, signature: string }>;
-  private _secret: string; // todo remove - use last index instead
+  private _secret: string;
   private _started: number;
 
   constructor(

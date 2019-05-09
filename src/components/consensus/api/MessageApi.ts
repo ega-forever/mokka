@@ -48,7 +48,7 @@ class MessageApi {
 
   }
 
-  public async packet(type: number, data: any = null) {
+  public async packet(type: number, data: any = null): Promise<PacketModel> {
     const last = await this.mokka.getDb().getState().getInfo();
     const entry = await this.mokka.getDb().getEntry().get(last.index);
     const responses = entry ? entry.responses : [this.mokka.publicKey];

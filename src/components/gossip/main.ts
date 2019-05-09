@@ -54,7 +54,7 @@ class GossipController extends EventEmitter {
     delete this.timers.gossip;
   }
 
-  public push(hash: string, record: any) {
+  public push(hash: string, record: {key: string, value: any, signature: string}) {
     this.ownState.setLocalKey(hash, record, this.ownState.maxVersion + 1);
   }
 

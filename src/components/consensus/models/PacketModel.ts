@@ -30,6 +30,7 @@ class PacketModel {
     data: any = null) {
     this.state = state;
     this.type = type;
+    this.term = term;
     this.publicKey = publicKey;
     this.last = last;
     this.data = data;

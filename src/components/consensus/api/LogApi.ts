@@ -2,14 +2,14 @@ import {createHmac} from 'crypto';
 import {Semaphore} from 'semaphore';
 import semaphore from 'semaphore';
 import nacl from 'tweetnacl';
+import voteTypes from '../../shared/constants/EventTypes';
+import {EntryModel} from '../../storage/models/EntryModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {MessageApi} from './MessageApi';
 import {NodeApi} from './NodeApi';
-import voteTypes from '../../shared/constants/EventTypes';
-import {EntryModel} from '../../storage/models/EntryModel';
 
 class LogApi {
 
@@ -31,7 +31,13 @@ class LogApi {
   public push(key: string, value: any): void {
     const hash = createHmac('sha256', JSON.stringify({key, value})).digest('hex');
     this.mokka.logger.info(`pushed unconfirmed ${hash} : ${JSON.stringify(value)}`);
-    this.mokka.gossip.push(hash, {key, value});
+    const signature = Buffer.from(
+      nacl.sign.detached(
+        Buffer.from(hash),
+        Buffer.from(this.mokka.privateKey, 'hex')
+      )
+    ).toString('hex');
+    this.mokka.gossip.push(hash, {key, value, signature});
   }
 
   public stop() {
@@ -57,11 +63,28 @@ class LogApi {
         continue;
       }
 
-      await this._commit(pendings[0].log, pendings[0].hash);
+      const pending = pendings[0];
+
+      if (!pending.log.signature) {
+        return this.mokka.gossip.pullPending(pending.hash);
+      }
+
+      const isSigned = this.mokka.nodes.find((node) =>
+        nacl.sign.detached.verify(
+          Buffer.from(pending.hash),
+          Buffer.from(pending.log.signature, 'hex'),
+          Buffer.from(node.publicKey, 'hex')
+        )
+      ) !== null;
+
+      if (!isSigned)
+        return this.mokka.gossip.pullPending(pending.hash);
+
+      await this._commit({key: pending.log.key, value: pending.log.value}, pending.hash);
     }
   }
 
-  private async _commit(log: any, hash: string): Promise<void> {
+  private async _commit(log: {key: string, value: any}, hash: string): Promise<void> {
 
     return await new Promise((res) =>
       this.semaphore.take(async () => {
@@ -84,7 +107,7 @@ class LogApi {
     );
   }
 
-  private async _save(log: string): Promise<EntryModel> {
+  private async _save(log: {key: string, value: any}): Promise<EntryModel> {
     const signature = Buffer.from(
       nacl.sign.detached(
         Buffer.from(JSON.stringify(log)),

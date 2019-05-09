@@ -40,7 +40,6 @@ const initMokka = async () => {
     electionMax: 1000,
     heartbeat: 200,
     gossipHeartbeat: 200,
-    logLevel: 30,
     logger,
     privateKey: keys[index]
   });
