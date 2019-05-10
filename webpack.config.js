@@ -13,7 +13,10 @@ module.exports = {
     ]
   },
   plugins: [
-    new BundleAnalyzerPlugin()
+    new BundleAnalyzerPlugin({
+      analyzerMode: 'static',
+      reportFilename: path.join(__dirname, 'webpack_report.html')
+    })
   ],
   resolve: {
     extensions: ['.ts', '.js']

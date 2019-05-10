@@ -1,6 +1,6 @@
 {
   "name": "mokka",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "",
   "scripts": {
     "tsc:watch": "tsc -w",
@@ -11,7 +11,8 @@
     "serve_client4": "set INDEX=3 && nodemon --delay 10000 --inspect=8084 --watch dist/ -d 1 ./dist/demo/client.js",
     "test": "mocha dist/test/*spec.js --timeout 120000",
     "lint": "tslint --fix --project tsconfig.json",
-    "build_web": "webpack"
+    "build_web": "webpack",
+    "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"
   },
   "keywords": [
     "mokka",
