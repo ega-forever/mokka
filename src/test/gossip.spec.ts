@@ -206,6 +206,102 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     expect(newPendingState.length).to.eq(0);
   });
 
+  it('should remove logs from bad nodes', async () => {
+
+    ctx.mokkas[0].send({type: 'connect'});
+    ctx.mokkas[1].kill();
+
+    ctx.mokkas[1] = fork(path.join(__dirname, 'workers/MokkaWorker.js'));
+
+    const fakeKeys = ctx.keys.slice(0);
+    fakeKeys[1] = Buffer.from(nacl.sign.keyPair().secretKey).toString('hex');
+
+    ctx.mokkas[1].send({
+      args: [
+        {
+          index: 1,
+          keys: fakeKeys,
+          publicKey: ctx.keys[1].substring(64, 128)
+        }
+      ],
+      type: 'init'
+    });
+
+    ctx.mokkas[1].send({type: 'connect'});
+
+    await Promise.all([
+      await Promise.delay(2000),
+      new Promise((res) => {
+        ctx.mokkas[1].on('message', (msg: any) => {
+          if (msg.type !== 'gossip_update')
+            return;
+          expect(msg.args[0]).to.eq(ctx.keys[0].substring(64, 128));
+          res();
+        });
+      }),
+      ctx.mokkas[0].send({
+        args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D5B', {
+          nonce: Date.now(),
+          value: Date.now().toString()
+        }],
+        type: 'push'
+      }),
+      ctx.mokkas[1].send({
+        args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
+          nonce: Date.now() + 1,
+          value: (Date.now() + 1).toString()
+        }],
+        type: 'push'
+      })
+    ]);
+
+    const pendingStatePromises: Array<Promise<[]>> = ctx.mokkas.slice(0, 2).map((mokka: any) =>
+      new Promise((res) => {
+        mokka.send({type: 'pendings'});
+
+        mokka.on('message', (msg: any) => {
+          if (msg.type !== 'pendings')
+            return;
+          res(msg.args[0]);
+        });
+      })
+    );
+
+    const pendingStates = await Promise.all(pendingStatePromises);
+
+    expect(pendingStates[0].length).to.eq(1);
+    expect(pendingStates[1].length).to.eq(0);
+
+    for (const mokka of ctx.mokkas.slice(2))
+      mokka.send({type: 'connect'});
+
+    await new Promise((res) => {
+      const timeoutId = setInterval(() => {
+        ctx.mokkas[0].send({type: 'info'});
+      }, 1000);
+      ctx.mokkas[0].on('message', (msg: any) => {
+
+        if (msg.type !== 'info' || msg.args[0].index !== 1)
+          return;
+
+        clearInterval(timeoutId);
+        res(msg.args[0]);
+      });
+    });
+
+    const newPendingState: any = await new Promise((res) => {
+      ctx.mokkas[0].send({type: 'pendings'});
+
+      ctx.mokkas[0].on('message', (msg: any) => {
+        if (msg.type !== 'pendings')
+          return;
+        res(msg.args[0]);
+      });
+    });
+
+    expect(newPendingState.length).to.eq(0);
+  });
+
   afterEach(async () => {
     for (const node of ctx.mokkas)
       node.kill();

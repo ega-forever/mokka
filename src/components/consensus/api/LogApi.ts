@@ -69,22 +69,11 @@ class LogApi {
         return this.mokka.gossip.pullPending(pending.hash);
       }
 
-      const isSigned = this.mokka.nodes.find((node) =>
-        nacl.sign.detached.verify(
-          Buffer.from(pending.hash),
-          Buffer.from(pending.log.signature, 'hex'),
-          Buffer.from(node.publicKey, 'hex')
-        )
-      ) !== null;
-
-      if (!isSigned)
-        return this.mokka.gossip.pullPending(pending.hash);
-
       await this._commit({key: pending.log.key, value: pending.log.value}, pending.hash);
     }
   }
 
-  private async _commit(log: {key: string, value: any}, hash: string): Promise<void> {
+  private async _commit(log: { key: string, value: any }, hash: string): Promise<void> {
 
     return await new Promise((res) =>
       this.semaphore.take(async () => {
@@ -107,7 +96,7 @@ class LogApi {
     );
   }
 
-  private async _save(log: {key: string, value: any}): Promise<EntryModel> {
+  private async _save(log: { key: string, value: any }): Promise<EntryModel> {
     const signature = Buffer.from(
       nacl.sign.detached(
         Buffer.from(JSON.stringify(log)),

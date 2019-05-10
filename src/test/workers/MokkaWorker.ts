@@ -11,7 +11,7 @@ const init = (params: any) => {
   const logger = bunyan.createLogger({name: 'mokka.logger', level: 50});
 
   mokka = new TCPMokka({
-    address: `tcp://127.0.0.1:${2000 + params.index}/${params.keys[params.index].substring(64, 128)}`,
+    address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].substring(64, 128)}`,
     electionMax: 300,
     electionMin: 150,
     gossipHeartbeat: 200,
