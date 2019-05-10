@@ -1,6 +1,7 @@
 import {EventEmitter} from 'events';
 import sortBy from 'lodash/sortBy';
 import toPairs from 'lodash/toPairs';
+import nacl from 'tweetnacl';
 import eventTypes from '../../shared/constants/EventTypes';
 import {IIndexObject} from '../../shared/types/IIndexObjectType';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
@@ -14,6 +15,7 @@ class PeerModel extends EventEmitter {
   private heartBeatVersion: number = 0;
   private maxVersionSeen: number = 0;
   private PHI: number = 8;
+  private HEARTBEAT_KEY = '__heartbeat__';
 
   constructor(pubKey: string) {
     super();
@@ -39,6 +41,21 @@ class PeerModel extends EventEmitter {
 
   public setLocalKey(k: string, v: any, n: number): void {
 
+    if (k !== this.HEARTBEAT_KEY) {
+
+      if (!v.signature)
+        return;
+
+      const isSigned = nacl.sign.detached.verify(
+        Buffer.from(k),
+        Buffer.from(v.signature, 'hex'),
+        Buffer.from(this.pubKey, 'hex')
+      );
+
+      if (!isSigned)
+        return;
+    }
+
     if (n > this.maxVersionSeen)
       this.maxVersionSeen = n;
 
@@ -49,13 +66,13 @@ class PeerModel extends EventEmitter {
 
   public beatHeart(): void {
     this.heartBeatVersion += 1;
-    this.setLocalKey('__heartbeat__', this.heartBeatVersion.toString(), this.maxVersionSeen);
+    this.setLocalKey(this.HEARTBEAT_KEY, this.heartBeatVersion.toString(), this.maxVersionSeen);
   }
 
   public deltasAfterVersion(lowestVersion: number): any[] {
 
     const pairs = toPairs(this.attrs).filter((pair: any[]) =>
-      pair[0] !== '__heartbeat__' && pair[1][1] > lowestVersion)
+      pair[0] !== this.HEARTBEAT_KEY && pair[1][1] > lowestVersion)
       .map((pair: any[]) =>
         [pair[0], ...pair[1]]
       );
@@ -95,7 +112,7 @@ class PeerModel extends EventEmitter {
 
   public getPendingLogs(): Array<{ hash: string, log: any }> {
     const data = toPairs(this.attrs)
-      .filter((pair: any[]) => pair[0] !== '__heartbeat__')
+      .filter((pair: any[]) => pair[0] !== this.HEARTBEAT_KEY)
       .map((pair: any[]) => ({hash: pair[0], log: pair[1][0]}));
 
     // @ts-ignore
