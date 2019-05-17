@@ -24,8 +24,7 @@ const init = (index, keys, settings) => {
     address: `${index}/${keys[index].substring(64, 128)}`,
     electionMax: settings.election.max,
     electionMin: settings.election.min,
-    gossipHeartbeat: 200,
-    gossipTimeout: 200,
+    gossipHeartbeat: settings.gossip.heartbeat,
     heartbeat: settings.heartbeat,
     logger: {
       info: (text) => console.log(`worker#${index} ${text}`),
