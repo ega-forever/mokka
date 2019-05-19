@@ -1,0 +1,19 @@
+{
+  "name": "mokka_cluster_example",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "run_1": "set INDEX=0 && node src/cluster_node.js",
+    "run_2": "set INDEX=1 && node src/cluster_node.js",
+    "run_3": "set INDEX=2 && node src/cluster_node.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axon": "^2.0.3",
+    "bunyan": "^1.8.12",
+    "mokka": "^0.3.1",
+    "readline": "^1.3.0"
+  }
+}
