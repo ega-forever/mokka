@@ -70,6 +70,11 @@ const askCommand = (rl, mokka) => {
     if (args[0] === 'add_log') {
       await addLog(mokka, args[1], args[2]);
     }
+
+    if (args[0] === 'get_log') {
+      await getLog(mokka, args[1]);
+    }
+
     if (args[0] === 'info')
       await getInfo(mokka);
     askCommand(rl, mokka);
@@ -79,6 +84,12 @@ const askCommand = (rl, mokka) => {
 // add new log
 const addLog = async (mokka, key, value) => {
   await mokka.logApi.push(key, {value, nonce: Date.now()});
+};
+
+// get log by index
+const getLog = async (mokka, index) => {
+  const entry = await mokka.getDb().getEntry().get(parseInt(index));
+  mokka.logger.info(entry);
 };
 
 // get info of current instance
