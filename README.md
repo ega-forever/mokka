@@ -29,26 +29,6 @@ $ npm install mokka --save
 $ npm run build
 ```
 
-## Usage
-
-Client example can be found under: ```src/demo/client.ts```
-
-The package.json already includes the script for running demo client. By default, the cluster has 4 members. So, you have to open 4 terminals and type in each terminal the appropriate command:
-terminal 1: ```npm run serve_client1```
-terminal 2: ```npm run serve_client2```
-terminal 3: ```npm run serve_client3```
-terminal 4: ```npm run serve_client4```
-
-In order to generate new random logs count (N), type: 
-```
-generate N
-```
-To get RSM state, type:
-```
-get_info
-```
-
-
 # API
 
 ### new Mokka (options)
@@ -107,8 +87,6 @@ Also gossip expose events. To use them, you have to listen events from gossip in
 * `peer_alive`: once gossip checked that certain peer alive
 * `peer_failed`: once gossip can't receive any answer from certain peer
 
-
-
 # Custom transport layer
 
 In order to communicate between nodes, you have to implement the interface by yourself. As an example you can take a look at TCP implementation: ```src/implementation/TCP```.
@@ -118,6 +96,11 @@ In order to communicate between nodes, you have to implement the interface by yo
 
 * The ```async write(address: string, packet: Buffer)``` function, which fires each time mokka wants to broadcast message to other peer (address param).
 
+# Examples
+
+| Node.js | Browser |
+| --- | --- |
+| [running cluster](examples/node/cluster/cluster.md) | [running cluster](examples/node/cluster/cluster.md) |
 
 
 

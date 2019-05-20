@@ -3,6 +3,7 @@ import values from 'lodash/values';
 // @ts-ignore
 import secrets from 'secrets.js-grempe';
 import nacl from 'tweetnacl';
+import {IIndexObject} from '../../shared/types/IIndexObjectType';
 
 const _extract = (proof: string):
   { term: number, time: number, items: Array<{ secret: string, signature: string }> } => {
@@ -39,7 +40,7 @@ const validate = (term: number, proof: string, currentProof: string, publicKeys:
   const extracted = _extract(proof);
 
   const items = values(
-    transform(extracted.items, (result, item) => {
+    transform(extracted.items, (result: IIndexObject<string>, item) => {
 
       const pubKey = publicKeys.find((publicKey: string) =>
         nacl.sign.detached.verify(
