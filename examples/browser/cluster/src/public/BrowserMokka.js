@@ -12,7 +12,6 @@ class BrowserMokka extends Mokka.Mokka {
     this.socket.emit('pub_key', this.publicKey);
     this.socket.on('data', data => {
       window.mokka.emit('data', new Uint8Array(data.data));
-      //window.mokka.emit('data', new Uint8Array(data));
     });
 
     this.socket.on('connect_error', console.log);

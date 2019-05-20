@@ -19,7 +19,13 @@ io.sockets.on('connection', function (socket) {
 
   socket.once('pub_key', publicKey => {
     clients[publicKey] = socket;
-    console.log(publicKey)
+    socket.publicKey = publicKey;
+    console.log(`client registered: ${publicKey}`)
+  });
+
+  socket.once('disconnect', reason=>{
+    console.log(`client (${socket.publicKey}) disconnected: ${reason}`);
+    delete clients[socket.publicKey];
   });
 
 });

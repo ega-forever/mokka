@@ -23,7 +23,7 @@ window.mokka = new BrowserMokka({
   electionMax: 1000,
   electionMin: 300,
   gossipHeartbeat: 200,
-  heartbeat: 100,
+  heartbeat: 200,
   privateKey: keys[index].secretKey
 });
 

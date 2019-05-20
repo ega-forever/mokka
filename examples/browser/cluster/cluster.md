@@ -1,13 +1,103 @@
 # Running cluster
 
-In this tutorial we are going to create a simple cluster with 3 members.
+In this tutorial we are going to create a simple cluster with 3 members, running in browser.
+For running cluster, we have to implement the frontend and backend parts. 
+
+
+# Backend
+The backend will be a static server with socket.io.
 
 ## Installation
  
-First of all, let's install mokka (via npm):
+First of all, let's install mokka, express and socket.io (via npm):
 
 ```bash
-$ npm install mokka --save
+$ npm install express socket.io mokka --save
+```
+
+Then let's create the ``src/server.js`` and place the following:
+
+```javascript
+const express = require('express'),
+  path = require('path'),
+  io = require('socket.io')(3000),
+  app = express();
+
+const clients = {};
+
+app.use('/mokka', express.static(path.join(__dirname, '../node_modules/mokka/dist/web')));
+app.use('/socket.io', express.static(path.join(__dirname, '../node_modules/socket.io-client/dist')));
+app.use('/', express.static(path.join(__dirname, 'public')));
+
+io.sockets.on('connection', function (socket) {
+  socket.on('data', (data)=>{
+    if(!clients[data[0]])
+      return;
+
+    clients[data[0]].emit('data', data[1]);
+  });
+
+  socket.once('pub_key', publicKey => {
+    clients[publicKey] = socket;
+    socket.publicKey = publicKey;
+    console.log(`client registered: ${publicKey}`)
+  });
+
+  socket.once('disconnect', reason=>{
+    console.log(`client (${socket.publicKey}) disconnected: ${reason}`);
+    delete clients[socket.publicKey];
+  });
+
+});
+
+app.listen(8080, () => {
+  console.log('server started!');
+});
+```
+
+Here, we boot the express server on port 8080, and socket.io on 3000 port.
+In socket.io implementation we are going to register each client (through ``pub_key`` event).
+
+# Frontend
+Now, it's time for frontend. The frontend will run the consensus algorithm, 
+and use socket.io as main transport protocol.
+
+## Mokka implementation
+First of all, let's create mokka's implementation ``src/public/BrowserMokka.js``:
+
+```javascript
+class BrowserMokka extends Mokka.Mokka {
+
+  constructor (settings) {
+    super(settings);
+    this.socket = io('http://localhost:3000');
+  }
+
+  async initialize () {
+    // wait for socket connection
+    await new Promise(res => this.socket.on('connect', res));
+
+    // assoc our socket with our public key (on server side)
+    this.socket.emit('pub_key', this.publicKey);
+    this.socket.on('data', data => {
+      window.mokka.emit('data', new Uint8Array(data.data));
+    });
+
+    this.socket.on('connect_error', console.log);
+    this.socket.on('error', console.log);
+  }
+
+  async write (address, packet) {
+    const node = this.nodes.find(node => node.address === address);
+    this.socket.emit('data', [node.publicKey, packet]);
+  }
+
+  async connect () {
+    await this.initialize();
+    super.connect();
+  }
+
+}
 ```
 
 ## Prepare keys
@@ -31,101 +121,14 @@ pair[2] {publicKey: a757d4dbbeb8564e1a3575ba89a12fccaacf2940d86c453da8b3f881d1fc
 pair[3] {publicKey: 009d53a3733c81375c2b5dfd4e7c51c14be84919d6e118198d35afd80965a52c, secretKey: 7144046b5c55f38cf9b3b7ec53e3263ebb01ed7caf46fe8758d6337c87686077009d53a3733c81375c2b5dfd4e7c51c14be84919d6e118198d35afd80965a52c
 ```
 
-## Mokka implementation
+## Main code
 
-As mokka is agnostic to protocol, we have to implement it (in our case we will use TCP).
-First, install the a socket lib for messages exchange: 
-```bash
-$ npm install axon --save
-```
-Then create ``src/TCPMokka.js`` and place this:
-```javascript
-
-const Mokka = require('mokka');
-const msg = require('axon');
-
-class TCPMokka extends Mokka.Mokka {
-
-  constructor (settings){
-    super(settings);
-    this.sockets = {};
-  }
-
-  /**
-   * the init function (fires during mokka's init process
-   */
-  initialize () {
-    this.logger.info(`initializing reply socket on port  ${this.address}`);
-
-    this.sockets[this.address] = msg.socket('rep');
-
-    this.sockets[this.address].bind(this.address);
-
-    // here we bind sockets between peers and start listening to new packets
-    this.sockets[this.address].on('message', (data) => {
-      this.emit('data', data);
-    });
-
-    this.sockets[this.address].on('error', () => {
-      this.logger.error(`failed to initialize on port: ${this.address}`);
-    });
-  }
-
-  /**
-   * The message to write.
-   *
-   * @param address the address, to which write msg
-   * @param packet the packet to write
-   */
-  async write (address, packet) {
-
-    if (!this.sockets[address]) {
-      this.sockets[address] = msg.socket('req');
-
-      this.sockets[address].connect(address);
-      this.sockets[address].on('error', () => {
-        this.logger.error(`failed to write to: ${this.address}`);
-      });
-    }
-
-    this.sockets[address].send(packet);
-  }
-
-  async disconnect () {
-    await super.disconnect();
-    for (const socket of Object.values(this.sockets)) {
-      socket.close();
-    }
-  }
-
-  connect () {
-    this.initialize();
-    super.connect();
-  }
-
-}
-
-module.exports = TCPMokka;
-
-
-```
-
-## Cluster implementation
-
-Now we need a code, which will boot up the Mokka with certain params. 
-Also, this code should accept user input for interaction purpose (in our case via console), 
-and logger - for getting logs in appropriate format.
-Todo that, type:
-```bash
-$ npm install readline bunyan --save
-```
-Now we need to write the cluster implementation ``src/cluster_node.js``
+Now we need to call mokka somewhere. For this purpose, let's create ``src/public/main.js``:
 
 ```javascript
-const TCPMokka = require('./TCPMokka'),
-  MokkaEvents = require('mokka/dist/components/shared/constants/EventTypes'),
-  bunyan = require('bunyan'),
-  readline = require('readline');
+// we will choose, which key pair use, by hash in browser url, for instance http://localhost:8080/#0 -> 0 index
+const index = window.location.hash.replace('#', '');
+
 
 // our generated key pairs
 const keys = [
@@ -143,124 +146,90 @@ const keys = [
   }
 ];
 
-const startPort = 2000;
 
-// init mokka instance, bootstrap other nodes, and call the askCommand
-const initMokka = async () => {
-  const index = parseInt(process.env.INDEX, 10);
-  const uris = [];
-  for (let index1 = 0; index1 < keys.length; index1++) {
-    if (index === index1)
-      continue;
-    uris.push(`tcp://127.0.0.1:${startPort + index1}/${keys[index1].publicKey}`);
-  }
+window.mokka = new BrowserMokka({
+  address: `${index}/${keys[index].publicKey}`,
+  electionMax: 1000,
+  electionMin: 300,
+  gossipHeartbeat: 200,
+  heartbeat: 200,
+  privateKey: keys[index].secretKey
+});
 
-  const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
+for (let i = 0; i < keys.length; i++)
+  if (i !== index)
+    window.mokka.nodeApi.join(`${i}/${keys[i].publicKey}`);
 
+window.mokka.connect();
 
-  const mokka = new TCPMokka({
-    address: `tcp://127.0.0.1:${startPort + index}/${keys[index].publicKey}`,
-    electionMin: 300,
-    electionMax: 1000,
-    heartbeat: 200,
-    gossipHeartbeat: 200,
-    logger,
-    privateKey: keys[index].secretKey
-  });
-  mokka.connect();
-  mokka.on(MokkaEvents.default.STATE, () => {
-    logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
-  });
-  for (const peer of uris)
-    mokka.nodeApi.join(peer);
-  mokka.on(MokkaEvents.default.ERROR, (err) => {
-    logger.error(err);
-  });
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
+window.mokka.on('error', (err) => {
+  console.log(err);
+});
 
-  askCommand(rl, mokka);
-};
-
-
-// listens to user's input via console
-const askCommand = (rl, mokka) => {
-  rl.question('enter command > ', async (command) => {
-
-    const args = command.split(' ');
-
-    if (args[0] === 'add_log') {
-      await addLog(mokka, args[1], args[2]);
-    }
-
-    if (args[0] === 'get_log') {
-      await getLog(mokka, args[1]);
-    }
-
-    if (args[0] === 'info')
-      await getInfo(mokka);
-    askCommand(rl, mokka);
-  });
-};
-
-// add new log
-const addLog = async (mokka, key, value) => {
-  await mokka.logApi.push(key, {value, nonce: Date.now()});
-};
-
-// get log by index
-const getLog = async (mokka, index) => {
-  const entry = await mokka.getDb().getEntry().get(parseInt(index));
-  mokka.logger.info(entry);
-};
-
-// get info of current instance
-const getInfo = async (mokka) => {
-  const info = await mokka.getDb().getState().getInfo();
-  mokka.logger.info(info);
-};
-
-module.exports = initMokka();
+window.mokka.on('log', async (index)=>{
+  const info = await window.mokka.getDb().getState().getInfo();
+  console.log(info);
+});
 ```
 
-Each instance should have its own index, specified in env.
-By this index, we will pick up the current key pair and port 
-for tcp server (i.e. 2000 + index).
+## Html
 
-Also, you can move the start script to ``scripts`` section in package.json:
-```
-...
-  "scripts": {
-    "run_1": "set INDEX=0 && node src/cluster_node.js",
-    "run_2": "set INDEX=1 && node src/cluster_node.js",
-    "run_3": "set INDEX=2 && node src/cluster_node.js"
-  },
-  ...
-```
+The final point, will be our index.html file ``src/public/index.html``:
 
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mokka cluster</title>
+    <script src="http://localhost:8080/socket.io/socket.io.js"></script>
+    <script src="http://localhost:8080/mokka/bundle.js"></script>
+    <script src="BrowserMokka.js"></script>
+    <script src="main.js"></script>
+</head>
+<body>
 
-
-## Usage
-
-Now we can run out cluster. So, you have to open 3 terminals and type in each terminal the appropriate command:
-terminal 1: ```npm run run_1```
-terminal 2: ```npm run run_2```
-terminal 3: ```npm run run_3```
-
-In order to generate new log with key "super" and value "test", type: 
-```
-add_log super test
-```
-To get instance state, type:
-```
-info
+</body>
+</html>
 ```
 
-To get log by index, for instance 3, type:
-```
-get_log 3
+# Usage
+
+Now it's time to run our app: 
+```bash
+$ node src/server.js
 ```
 
-That's all, now you can easily boot your own cluster. 
+Then open browser and open 3 tabs (with console):
+1) ``http://localhost:8080/#0``
+2) ``http://localhost:8080/#1``
+3) ``http://localhost:8080/#2``
+
+Now we are ready, the cluster should sync and we are ready to go.
+First, let's create first log with key ``test`` and value ``super`` (type in console in any tab):
+```javascript
+mokka.logApi.push('test', 'value')
+```
+
+then you should see the following output:
+```
+pushed unconfirmed 90f3a5efebc7af8f5a0cb7f8fbc1f0435cb1ca41a9e3a233618c1da20b23f6f3 : "value"
+main.js:42 {index: 1, term: 1, hash: "4239036bbd5863c306a51078b309449f6c7eed43b49c8e005ceffc832ecf735d", createdAt: 1558340624085, committedIndex: 0}
+bundle.js:41 broadcasting command {"key":"test","value":"value"} at index 1
+bundle.js:41 command has been broadcasted {"key":"test","value":"value"}
+bundle.js:41 append ack: 1 / 2
+bundle.js:41 append ack: 1 / 3
+```
+
+Also, don't afraid if you see such messages:
+```
+Error: No longer a candidate, ignoring vote
+    at e.RequestProcessorService._process (bundle.js:41)
+    at :8080/async http:/localhost:8080/mokka/bundle.js:23
+```
+
+They only mean, that current node changed its state to follower because of vote timeout.
+
+
+That's all, now you can easily boot your own distributed system in browser. 
+All source code can be found under ``examples/browser/cluster``.

@@ -264,3 +264,4 @@ get_log 3
 ```
 
 That's all, now you can easily boot your own cluster. 
+All source code can be found under ``examples/node/cluster``.
