@@ -4,8 +4,8 @@ src
 tsconfig.json
 tslint.json
 dist/test
-dist/demo
 _config.yml
 webpack.config.js
 webpack_report.html
 dump
+examples
