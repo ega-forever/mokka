@@ -96,7 +96,7 @@ const init = async () => {
     await mokka.logApi.push(blockJSON.hash, {value: block.serialize().toString('hex'), nonce: Date.now()});
   });
 
-  mokka.on(MokkaEvents.default.LOG, (index) => { //todo make mutex
+  mokka.on(MokkaEvents.default.LOG, (index) => {
 
     if (mokka.state === MokkaStates.default.LEADER)
       return;
