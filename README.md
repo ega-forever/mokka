@@ -100,7 +100,7 @@ In order to communicate between nodes, you have to implement the interface by yo
 
 | Node.js | Browser |
 | --- | --- |
-| [running cluster](examples/node/cluster/cluster.md) | [running cluster](examples/node/cluster/cluster.md) |
+| [running cluster](examples/node/cluster/README.md) | [running cluster](examples/node/cluster/README.md) |
 
 
 

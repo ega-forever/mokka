@@ -1,0 +1,23 @@
+{
+  "name": "decentralized-ganache",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axon": "^2.0.3",
+    "bunyan": "^1.8.12",
+    "detect-port": "^1.3.0",
+    "ganache-core": "^2.5.5",
+    "mokka": "^0.3.1",
+    "semaphore": "^1.1.0",
+    "web3": "^1.0.0-beta.55"
+  },
+  "devDependencies": {
+    "tweetnacl": "^1.0.1"
+  }
+}
