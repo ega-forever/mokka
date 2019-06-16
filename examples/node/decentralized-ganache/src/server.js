@@ -3,7 +3,6 @@ const ganache = require('ganache-core'),
   TCPMokka = require('./TCPMokka'),
   bunyan = require('bunyan'),
   Web3 = require('web3'),
-  request = require('request-promise'),
   sem = require('semaphore')(1),
   Tx = require('ganache-core/lib/utils/transaction'),
   Block = require('ganache-core/node_modules/ethereumjs-block'),
@@ -23,7 +22,8 @@ const startGanache = async (node) => {
   const server = ganache.server({
     accounts: accounts,
     default_balance_ether: 500,
-    network_id: 86
+    network_id: 86,
+    time: new Date('12-12-2018')
   });
 
   await new Promise(res => {
@@ -84,10 +84,6 @@ const init = async () => {
   const server = await startGanache(node, mokka);
 
 
-  //todo retranslate send_tx request to leader
-  // todo we should send to mokka the transaction
-
-
   server.provider.engine.on('rawBlock', async blockJSON => {
 
     const block = await new Promise((res, rej) => {
@@ -132,9 +128,7 @@ const init = async () => {
 
   server.provider.send = async (payload, cb) => {
 
-    console.log(payload)
-
-    if (payload.method === 'eth_sendTransaction' && mokka.state !== MokkaStates.default.LEADER) {
+    if (mokka.state !== MokkaStates.default.LEADER && payload.method === 'eth_sendTransaction') {
 
       const node = config.nodes.find(node => node.publicKey === mokka.leaderPublicKey);
 
@@ -143,10 +137,28 @@ const init = async () => {
         web3.eth.sendTransaction(...payload.params, (err, result) => err ? rej(err) : res(result))
       );
 
+      // await until tx will be processed
+      await new Promise(res => {
+        let intervalPid = setInterval(async () => {
+
+          const tx = await new Promise((res, rej) =>
+            server.provider.manager.eth_getTransactionByHash(
+              hash,
+              (err, result) => err ? rej(err) : res(result)
+            )
+          );
+
+          if (tx) {
+            clearInterval(intervalPid);
+            res()
+          }
+
+        }, 200);
+      });
 
       const reply = {
-        jsonprc: payload.jsonrpc,
         id: payload.id,
+        jsonrpc: payload.jsonrpc,
         result: hash
       };
 
@@ -155,15 +167,7 @@ const init = async () => {
 
     return bound.call(server.provider, payload, cb)
   };
-
-
 };
-
-
-process.on('unhandledRejection', error => {
-  // Will print "unhandledRejection err is not defined"
-  console.log('unhandledRejection', error);
-});
 
 
 module.exports = init();
