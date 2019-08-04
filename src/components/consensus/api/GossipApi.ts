@@ -31,7 +31,6 @@ class GossipApi {
   public async firstResponse(packet: PacketModel): Promise<ReplyModel> {
 
     await this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
-
     const updates = await this.mokka.gossip.scuttle.fetchDeltas(packet.data.requestDigest);
 
     const data = {

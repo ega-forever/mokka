@@ -1,27 +1,23 @@
 import {EventEmitter} from 'events';
-import flattenDeep from 'lodash/flattenDeep';
-import take from 'lodash/take';
 import toPairs from 'lodash/toPairs';
-import uniqBy from 'lodash/uniqBy';
-import values from 'lodash/values';
 import {MessageApi} from '../consensus/api/MessageApi';
 import messageTypes from '../consensus/constants/MessageTypes';
 import {Mokka} from '../consensus/main';
-import Timer = NodeJS.Timer;
 import eventTypes from '../shared/constants/EventTypes';
-import {IIndexObject} from '../shared/types/IIndexObjectType';
 import {PeerModel} from './models/PeerModel';
 import {GossipScuttleService} from './services/GossipScuttleService';
+import Timer = NodeJS.Timer;
 
 class GossipController extends EventEmitter {
-  public ownState: PeerModel;
-  public scuttle: GossipScuttleService;
 
-  private peers: IIndexObject<PeerModel> = {};
-  private timers: IIndexObject<Timer> = {};
-  private timeout: number;
-  private messageApi: MessageApi;
-  private mokka: Mokka;
+  public readonly ownState: PeerModel;
+  public readonly scuttle: GossipScuttleService;
+
+  private peers: Map<string, PeerModel>;
+  private timers: Map<string, Timer>;
+  private readonly timeout: number;
+  private readonly messageApi: MessageApi;
+  private readonly mokka: Mokka;
 
   constructor(mokka: Mokka, timeout: number) {
     super();
@@ -29,7 +25,10 @@ class GossipController extends EventEmitter {
     this.ownState = new PeerModel(mokka.publicKey);
     this.timeout = timeout;
 
-    this.peers[mokka.publicKey] = this.ownState;
+    this.peers = new Map<string, PeerModel>();
+    this.timers = new Map<string, Timer>();
+
+    this.peers.set(mokka.publicKey, this.ownState);
     this.scuttle = new GossipScuttleService(this.peers);
     this.messageApi = new MessageApi(mokka);
     this.mokka = mokka;
@@ -37,24 +36,30 @@ class GossipController extends EventEmitter {
 
   public start(): void {
 
-    if (!this.timers.gossip)
-      this.timers.gossip = setInterval(() => {
-        this.ownState.beatHeart();
-        this.gossip();
-      }, this.timeout);
+    if (this.timers.has('gossip')) {
+      return;
+    }
+
+    const gossipTimer = setInterval(() => {
+      this.ownState.beatHeart();
+      this.gossip();
+    }, this.timeout);
+
+    this.timers.set('gossip', gossipTimer);
+
   }
 
   public stop(): void {
-    this.peers = {};
+    this.peers = new Map<string, PeerModel>();
 
-    if (!this.timers.gossip)
+    if (!this.timers.has('gossip'))
       return;
 
-    clearInterval(this.timers.gossip);
-    delete this.timers.gossip;
+    clearInterval(this.timers.get('gossip'));
+    this.timers.delete('gossip');
   }
 
-  public push(hash: string, record: {key: string, value: any, signature: string}) {
+  public push(hash: string, record: { key: string, value: any, signature: string }) {
     this.ownState.setLocalKey(hash, record, this.ownState.maxVersion + 1);
   }
 
@@ -73,7 +78,7 @@ class GossipController extends EventEmitter {
     }
 
     for (const pubKey of Object.keys(this.peers)) {
-      const peer = this.peers[pubKey];
+      const peer = this.peers.get(pubKey);
       if (peer !== this.ownState)
         peer.isSuspect();
     }
@@ -82,7 +87,7 @@ class GossipController extends EventEmitter {
   public chooseRandom(peersPublicKeys: string[]) {
     const i = Math.floor(Math.random() * 1000000) % peersPublicKeys.length;
     const publicKey = peersPublicKeys[i];
-    return this.peers[publicKey];
+    return this.peers.get(publicKey);
   }
 
   public async gossipToPeer(peer: PeerModel) {
@@ -108,9 +113,9 @@ class GossipController extends EventEmitter {
 
   public handleNewPeers(pubKeys: string[]) {
     for (const pubKey of pubKeys) {
-      this.peers[pubKey] = new PeerModel(pubKey);
+      const peer = new PeerModel(pubKey);
+      this.peers.set(pubKey, peer);
       this.emit(eventTypes.GOSSIP_NEW_PEER, pubKey);
-      const peer = this.peers[pubKey];
       this.listenToPeer(peer);
     }
   }
@@ -130,21 +135,36 @@ class GossipController extends EventEmitter {
 
   public getPendings(limit = 0): Array<{ hash: string, log: any }> {
 
-    let data: any = values(this.peers)
-      .map((peer: PeerModel) => peer.getPendingLogs());
+    const data: Map<string, any> = new Map<string, any>();
 
-    data = flattenDeep(data);
-    data = uniqBy(data, 'hash');
-    return take(data, limit);
+    for (const pubKey of this.peers.keys()) {
+      const peer = this.peers.get(pubKey);
+      const pendings = peer.getPendingLogs();
+
+      for (const pending of pendings) {
+        data.set(pending.hash, pending.log);
+      }
+    }
+
+    const uniqData: Array<{ hash: string, log: any }> = [];
+
+    for (const hash of data.keys()) {
+      uniqData.push({hash, log: data.get(hash)});
+      if (limit > 0 && uniqData.length === limit)
+        return uniqData;
+    }
+
+    return uniqData;
   }
 
   public pullPending(hash: string): void {
-    for (const peer of Object.values(this.peers))
+    for (const peer of this.peers.values()) {
       peer.pullPending(hash);
+    }
   }
 
   public getPending(hash: string): any {
-    for (const peer of Object.values(this.peers)) {
+    for (const peer of this.peers.values()) {
       const log = peer.getPending(hash);
       if (log)
         return log;

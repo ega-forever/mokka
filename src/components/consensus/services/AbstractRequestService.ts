@@ -1,7 +1,4 @@
-import has from 'lodash/has';
-import isArray from 'lodash/isArray';
-import {Semaphore} from 'semaphore';
-import semaphore from 'semaphore';
+import semaphore, {Semaphore} from 'semaphore';
 import {MessageApi} from '../api/MessageApi';
 import messageTypes from '../constants/MessageTypes';
 import {Mokka} from '../main';
@@ -33,10 +30,10 @@ class AbstractRequestService {
           });
         });
 
-    if (!has(data, 'who') && !has(data, '0.who'))
+    if (!data || (Array.isArray(data) && !data[0].who) || (!Array.isArray(data) && !data.who))
       return;
 
-    if (isArray(data)) {
+    if (Array.isArray(data)) {
       for (const item of data)
         await this.messageApi.message(item.who, item.reply);
 

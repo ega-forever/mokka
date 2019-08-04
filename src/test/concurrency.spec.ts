@@ -17,7 +17,10 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
       ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
 
     for (let index = 0; index < ctx.keys.length; index++) {
-      const instance = fork(path.join(__dirname, 'workers/MokkaWorker.js'), [], {stdio: 'inherit'});
+      const instance = fork(path.join(__dirname, 'workers/MokkaWorker.ts'), [], {
+        execArgv: ['-r', 'ts-node/register']
+      });
+
       mokkas.push(instance);
       instance.send({
         args: [

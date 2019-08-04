@@ -17,7 +17,10 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
       ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
 
     for (let index = 0; index < ctx.keys.length; index++) {
-      const instance = fork(path.join(__dirname, 'workers/MokkaWorker.js'));
+      const instance = fork(path.join(__dirname, 'workers/MokkaWorker.ts'), [], {
+        execArgv: ['-r', 'ts-node/register']
+      });
+
       mokkas.push(instance);
       instance.send({
         args: [
@@ -211,7 +214,10 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     ctx.mokkas[0].send({type: 'connect'});
     ctx.mokkas[1].kill();
 
-    ctx.mokkas[1] = fork(path.join(__dirname, 'workers/MokkaWorker.js'));
+    ctx.mokkas[1] = fork(path.join(__dirname, 'workers/MokkaWorker.ts'), [], {
+      execArgv: ['-r', 'ts-node/register']
+    });
+
 
     const fakeKeys = ctx.keys.slice(0);
     fakeKeys[1] = Buffer.from(nacl.sign.keyPair().secretKey).toString('hex');

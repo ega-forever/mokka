@@ -12,12 +12,12 @@ import {StateApi} from './StateApi';
 
 class LogApi {
 
-  private db: IStorageInterface;
+  private readonly db: IStorageInterface;
   private entryApi: EntryApi;
   private stateApi: StateApi;
   private semaphore: Semaphore;
 
-  constructor(db: any) {
+  constructor(db: IStorageInterface) {
     this.db = db;
     this.entryApi = new EntryApi(this.db);
     this.stateApi = new StateApi(this.db);

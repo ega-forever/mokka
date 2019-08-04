@@ -11,7 +11,7 @@ class StateApi {
   private db: IStorageInterface;
   private entryApi: EntryApi;
 
-  constructor(db: any) {
+  constructor(db: IStorageInterface) {
     this.db = db;
     this.sem = semaphore(1);
     this.entryApi = new EntryApi(db);

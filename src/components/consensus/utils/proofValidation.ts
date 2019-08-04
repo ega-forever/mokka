@@ -1,9 +1,6 @@
-import transform from 'lodash/transform';
-import values from 'lodash/values';
 // @ts-ignore
 import secrets from 'secrets.js-grempe';
 import nacl from 'tweetnacl';
-import {IIndexObject} from '../../shared/types/IIndexObjectType';
 
 const _extract = (proof: string):
   { term: number, time: number, items: Array<{ secret: string, signature: string }> } => {
@@ -39,23 +36,22 @@ const validate = (term: number, proof: string, currentProof: string, publicKeys:
 
   const extracted = _extract(proof);
 
-  const items = values(
-    transform(extracted.items, (result: IIndexObject<string>, item) => {
+  const data: {[key: string]: string} = {};
 
-      const pubKey = publicKeys.find((publicKey: string) =>
-        nacl.sign.detached.verify(
-          Buffer.from(item.secret),
-          Buffer.from(item.signature, 'hex'),
-          Buffer.from(publicKey, 'hex')
-        )
-      );
+  for (const item of extracted.items) {
 
-      result[pubKey] = item.secret;
-      return result;
-    }, {})
-  );
+    const pubKey = publicKeys.find((publicKey: string) =>
+      nacl.sign.detached.verify(
+        Buffer.from(item.secret),
+        Buffer.from(item.signature, 'hex'),
+        Buffer.from(publicKey, 'hex')
+      )
+    );
 
-  let comb = secrets.combine(items);
+    data[pubKey] = item.secret;
+  }
+
+  let comb = secrets.combine(Object.values(data));
   comb = secrets.hex2str(comb);
 
   return comb === `${term}x${extracted.time}`;

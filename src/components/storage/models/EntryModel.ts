@@ -8,7 +8,6 @@ class EntryModel {
     public signature: string;
     public log: any;
 
-    // @ts-ignore
     constructor({
                     index = 0,
                     hash = ''.padStart(32, '0'),

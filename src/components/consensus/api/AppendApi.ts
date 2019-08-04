@@ -1,7 +1,5 @@
 import {createHmac} from 'crypto';
-import cloneDeep from 'lodash/cloneDeep';
 import groupBy from 'lodash/groupBy';
-import isArray from 'lodash/isArray';
 import isEqual from 'lodash/isEqual';
 import sortBy from 'lodash/sortBy';
 import eventTypes from '../../shared/constants/EventTypes';
@@ -22,78 +20,77 @@ class AppendApi {
     this.messageApi = new MessageApi(mokka);
   }
 
-  public async append(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
+  public async append(packet: PacketModel): Promise<ReplyModel[]> {
 
     if (!packet.data)
-      return null;
+      return [];
 
-    if (isArray(packet.data)) {
-      const replies: ReplyModel[] = [];
+    const replies: ReplyModel[] = [];
 
-      for (const item of packet.data) {
-        const newPacket = cloneDeep(packet);
-        newPacket.data = item;
-        replies.push(await this.append(newPacket) as ReplyModel);
+    if (!Array.isArray(packet.data)) {
+      packet.data = [packet.data];
+    }
+
+    for (const data of packet.data) {
+      let reply = null;
+
+      const lastInfo = await this.mokka.getDb().getState().getInfo();
+
+      if (data.index > lastInfo.index + 1)
+        return replies;
+
+      if (lastInfo.index === data.index) {
+
+        const record = await this.mokka.getDb().getEntry().get(data.index);
+
+        if (record && record.hash === data.hash) {
+          reply = await this.messageApi.packet(messageTypes.APPEND_ACK, {
+            index: data.index,
+            term: data.term
+          });
+
+          replies.push(new ReplyModel(reply, packet.publicKey));
+          continue;
+        }
       }
 
-      return replies;
-    }
+      if (lastInfo.index >= data.index)
+        return null;
 
-    let reply = null;
+      try {
 
-    const lastInfo = await this.mokka.getDb().getState().getInfo();
+        if (!data.responses.includes(this.mokka.publicKey))
+          data.responses.push(this.mokka.publicKey);
 
-    if (packet.data.index > lastInfo.index + 1)
-      return null;
+        await this.mokka.getDb().getLog().save(
+          data.log,
+          data.term,
+          data.signature,
+          data.responses,
+          data.index,
+          data.hash
+        );
 
-    if (lastInfo.index === packet.data.index) {
+        const hash = createHmac('sha256', JSON.stringify(data.log)).digest('hex');
+        await this.mokka.gossip.pullPending(hash);
+        this.mokka.logger.info(`the ${data.index} has been saved`);
+        this.mokka.emit(eventTypes.LOG, data.index);
+      } catch (err) {
+        this.mokka.logger.error(`error during save log: ${JSON.stringify(err)}`);
 
-      const record = await this.mokka.getDb().getEntry().get(packet.data.index);
+        if (err.code === 2 || err.code === 3)
+          return;
 
-      if (record && record.hash === packet.data.hash) {
-        reply = await this.messageApi.packet(messageTypes.APPEND_ACK, {
-          index: packet.data.index,
-          term: packet.data.term
-        });
-
-        return new ReplyModel(reply, packet.publicKey);
+        reply = await this.messageApi.packet(messageTypes.APPEND_FAIL, {index: lastInfo.index});
+        replies.push(new ReplyModel(reply, states.LEADER));
+        return replies;
       }
+
+      reply = await this.messageApi.packet(messageTypes.APPEND_ACK);
+      replies.push(new ReplyModel(reply, packet.publicKey));
     }
 
-    if (lastInfo.index >= packet.data.index)
-      return null;
-
-    try {
-
-      if (!packet.data.responses.includes(this.mokka.publicKey))
-        packet.data.responses.push(this.mokka.publicKey);
-
-      await this.mokka.getDb().getLog().save(
-        packet.data.log,
-        packet.data.term,
-        packet.data.signature,
-        packet.data.responses,
-        packet.data.index,
-        packet.data.hash
-      );
-
-      const hash = createHmac('sha256', JSON.stringify(packet.data.log)).digest('hex');
-      await this.mokka.gossip.pullPending(hash);
-      this.mokka.logger.info(`the ${packet.data.index} has been saved`);
-      this.mokka.emit(eventTypes.LOG, packet.data.index);
-    } catch (err) {
-      this.mokka.logger.error(`error during save log: ${JSON.stringify(err)}`);
-
-      if (err.code === 2 || err.code === 3)
-        return;
-
-      reply = await this.messageApi.packet(messageTypes.APPEND_FAIL, {index: lastInfo.index});
-      return new ReplyModel(reply, states.LEADER);
-    }
-
-    reply = await this.messageApi.packet(messageTypes.APPEND_ACK);
-
-    return new ReplyModel(reply, packet.publicKey);
+    return replies;
   }
 
   public async appendAck(packet: PacketModel) {

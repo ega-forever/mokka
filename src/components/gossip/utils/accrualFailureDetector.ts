@@ -1,11 +1,9 @@
-import mean from 'lodash/mean';
-
 class AccrualFailureDetector {
 
   private intervals: number[] = [];
   private lastTime: number;
 
-  public add (arrivalTime: number) {
+  public add(arrivalTime: number) {
     const interval = this.lastTime ? arrivalTime - this.lastTime : 750;
     this.lastTime = arrivalTime;
     this.intervals.push(interval);
@@ -14,9 +12,10 @@ class AccrualFailureDetector {
 
   }
 
-  public phi (currentTime: number) {
+  public phi(currentTime: number) {
     const currentInterval = currentTime - this.lastTime;
-    const exp = -1 * currentInterval / mean(this.intervals);
+    const mean = this.intervals.reduce((a, b) => a + b) / this.intervals.length;
+    const exp = -1 * currentInterval / mean;
 
     const p = Math.pow(Math.E, exp);
     return -1 * (Math.log(p) / Math.log(10));
