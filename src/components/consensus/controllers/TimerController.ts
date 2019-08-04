@@ -1,4 +1,3 @@
-import random from 'lodash/random';
 import eventTypes from '../../shared/constants/EventTypes';
 import {MessageApi} from '../api/MessageApi';
 import {NodeApi} from '../api/NodeApi';
@@ -21,7 +20,11 @@ class TimerController {
     this.nodeApi = new NodeApi(mokka);
   }
 
-  public election(duration: number = random(this.mokka.election.min, this.mokka.election.max)) {
+  public election(
+    duration: number = Math.round(
+      this.mokka.election.min + (this.mokka.election.max - this.mokka.election.min) * Math.random()
+    )
+  ) {
     if (this.timers.has('election'))
       return;
 
@@ -108,7 +111,10 @@ class TimerController {
 
   public timeout() {
     // return _.random(this.beat, parseInt(this.beat * 1.5)); //todo use latency
-    return random(this.mokka.heartbeat, Math.round(this.mokka.heartbeat * 1.5)) + 200;
+
+    return Math.round(
+      this.mokka.heartbeat + (this.mokka.heartbeat * 1.5 - this.mokka.heartbeat) * Math.random()
+    ) + 200;
   }
 
 }

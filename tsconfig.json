@@ -3,7 +3,7 @@
         "rootDir": "./src",
         "module": "commonjs",
         "target": "es2018",
-        "noImplicitAny": true,
+        "noImplicitAny": false,
         "sourceMap": true,
         "outDir": "./dist",
         "noEmitOnError": true,

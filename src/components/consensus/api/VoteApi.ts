@@ -1,8 +1,5 @@
-import sortBy from 'lodash/sortBy';
-// @ts-ignore
-import secrets from 'secrets.js-grempe';
-// @ts-ignore
-import nacl from 'tweetnacl';
+import secrets = require('secrets.js-grempe');
+import nacl = require('tweetnacl');
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import voteTypes from '../constants/VoteTypes';
@@ -141,8 +138,8 @@ class VoteApi {
 
     const votedShares = this.mokka.vote.shares.filter((share) => share.voted);
 
-    let compacted = sortBy(votedShares, 'share')
-      .reverse()
+    let compacted = votedShares
+      .sort((share1, share2) => share1.share > share2.share ? -1 : 1)
       .reduce((result: string, item: { share: string, signature: string }) => {
         return `${result}${item.share}${item.signature}`;
       }, '');

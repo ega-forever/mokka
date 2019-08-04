@@ -1,7 +1,4 @@
-import isNumber from 'lodash/isNumber';
-import pick from 'lodash/pick';
-// @ts-ignore
-import MerkleTools from 'merkle-tools';
+import MerkleTools = require('merkle-tools');
 import semaphore from 'semaphore';
 import {Semaphore} from 'semaphore';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
@@ -33,18 +30,17 @@ class LogApi {
     hash: string = null
   ): Promise<EntryModel> {
 
-    // @ts-ignore
     return await new Promise((res, rej) => {
       this.semaphore.take(async () => {
 
         const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo();
 
-        if (isNumber(index) && index !== 0 && index <= lastIndex) {
+        if (Number.isInteger(index) && index !== 0 && index <= lastIndex) {
           this.semaphore.leave();
           return rej({code: 1, message: `can't rewrite chain (received ${index} while current is ${lastIndex})!`});
         }
 
-        if (isNumber(index) && index !== 0 && index !== lastIndex + 1) {
+        if (Number.isInteger(index) && index !== 0 && index !== lastIndex + 1) {
           this.semaphore.leave();
           return rej({
             code: 3,
@@ -52,7 +48,7 @@ class LogApi {
           });
         }
 
-        if (!isNumber(index))
+        if (!Number.isInteger(index))
           index = lastIndex + 1;
 
         const merkleTools = new MerkleTools();
@@ -85,9 +81,11 @@ class LogApi {
 
         if (entry.index > currentState.index) {
           const state: StateModel = {
-            // @ts-ignore
-            ...pick(entry, ['index', 'term', 'hash', 'createdAt']),
-            committedIndex: currentState.committedIndex
+            committedIndex: currentState.committedIndex,
+            createdAt: entry.createdAt,
+            hash: entry.hash,
+            index: entry.index,
+            term: entry.term
           };
           await this.stateApi.setState(state);
         }

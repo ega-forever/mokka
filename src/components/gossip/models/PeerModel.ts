@@ -1,6 +1,5 @@
 import {EventEmitter} from 'events';
-import sortBy from 'lodash/sortBy';
-import nacl from 'tweetnacl';
+import nacl = require('tweetnacl');
 import eventTypes from '../../shared/constants/EventTypes';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
 
@@ -75,7 +74,7 @@ class PeerModel extends EventEmitter {
       }
     }
 
-    return sortBy(data, (item) => item[2]);
+    return data.sort((item, item2) => item[2] > item2[2] ? 1 : -1);
   }
 
   public isSuspect(): boolean {

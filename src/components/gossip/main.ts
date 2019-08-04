@@ -1,5 +1,4 @@
 import {EventEmitter} from 'events';
-import toPairs from 'lodash/toPairs';
 import {MessageApi} from '../consensus/api/MessageApi';
 import messageTypes from '../consensus/constants/MessageTypes';
 import {Mokka} from '../consensus/main';
@@ -100,15 +99,29 @@ class GossipController extends EventEmitter {
   }
 
   public livePeersPublicKeys(): string[] {
-    return toPairs(this.peers)
-      .filter((pair) => pair[1].isAlive())
-      .map((pair) => pair[0]);
+
+    const pubKeys = [];
+
+    for (const pubKey of this.peers.keys()) {
+      if (this.peers.get(pubKey).isAlive()) {
+        pubKeys.push(pubKey);
+      }
+    }
+
+    return pubKeys;
   }
 
   public deadPeersPublicKeys(): string[] {
-    return toPairs(this.peers)
-      .filter((pair) => !pair[1].isAlive())
-      .map((pair) => pair[0]);
+
+    const pubKeys = [];
+
+    for (const pubKey of this.peers.keys()) {
+      if (!this.peers.get(pubKey).isAlive()) {
+        pubKeys.push(pubKey);
+      }
+    }
+
+    return pubKeys;
   }
 
   public handleNewPeers(pubKeys: string[]) {

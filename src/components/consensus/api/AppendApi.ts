@@ -1,8 +1,6 @@
 import {createHmac} from 'crypto';
-import groupBy from 'lodash/groupBy';
-import isEqual from 'lodash/isEqual';
-import sortBy from 'lodash/sortBy';
 import eventTypes from '../../shared/constants/EventTypes';
+import {EntryModel} from '../../storage/models/EntryModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -97,17 +95,18 @@ class AppendApi {
 
     let entry = await this.mokka.getDb().getEntry().get(packet.last.index);
 
-    const isEqualResponses = !entry ? false : isEqual(sortBy(packet.last.responses), sortBy(entry.responses));
-    const includesAllResponses = !entry ? false : packet.last.responses
-      .filter((item: string) => !entry.responses.includes(item))
-      .length === 0;
+    if (!entry)
+      return;
 
-    if (!entry || isEqualResponses || includesAllResponses)
+    const newResponses = packet.last.responses
+      .filter((item: string) => !entry.responses.includes(item));
+
+    if (!newResponses.length)
       return;
 
     entry = await this.mokka.getDb().getLog().ack(
       packet.last.index,
-      packet.last.responses
+      newResponses
     );
 
     this.mokka.logger.info(`append ack: ${packet.last.index} / ${entry.responses.length}`);
@@ -135,13 +134,21 @@ class AppendApi {
 
   public async obtain(packet: PacketModel, limit = 100): Promise<ReplyModel[]> {
 
-    let entries = await this.mokka.getDb().getEntry().getAfterList(packet.last.index, limit);
+    const entries = await this.mokka.getDb().getEntry().getAfterList(packet.last.index, limit);
 
-    // @ts-ignore
-    entries = groupBy(entries, 'term');
+    const groupedEntries: { [key: number]: EntryModel[] } = [];
+
+    for (const entry of entries) {
+      if (!groupedEntries[entry.term]) {
+        groupedEntries[entry.term] = [];
+      }
+
+      groupedEntries[entry.term].push(entry);
+    }
+
     const replies = [];
 
-    for (const term of Object.keys(entries)) {
+    for (const term of Object.keys(groupedEntries)) {
       const reply = await this.messageApi.packet(messageTypes.APPEND, entries[parseInt(term, 10)]);
       replies.push(new ReplyModel(reply, packet.publicKey));
     }

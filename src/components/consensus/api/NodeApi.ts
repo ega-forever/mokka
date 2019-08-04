@@ -1,11 +1,7 @@
-import findIndex from 'lodash/findIndex';
-import initial from 'lodash/initial';
-import sortBy from 'lodash/sortBy';
-// @ts-ignore
-import secrets from 'secrets.js-grempe';
+import secrets = require('secrets.js-grempe');
 import {Semaphore} from 'semaphore';
 import semaphore from 'semaphore';
-import nacl from 'tweetnacl';
+import nacl = require('tweetnacl');
 import eventTypes from '../../shared/constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
@@ -48,7 +44,7 @@ class NodeApi {
 
   public leave(publicKey: string): void {
 
-    const index = findIndex(this.mokka.nodes, (node: NodeModel) => node.publicKey === publicKey);
+    const index = this.mokka.nodes.findIndex((node) => node.publicKey === publicKey);
 
     if (index === -1)
       return;
@@ -69,7 +65,10 @@ class NodeApi {
         const token = `${this.mokka.term + 1}x${startTime}`;
         const secret = secrets.str2hex(token);
 
-        const shares = sortBy(secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority()))
+        const shares: string[] = secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority());
+
+        const voteData = shares
+          .sort()
           .map((share: string, index: number) => {
 
             if (index === this.mokka.nodes.length) {
@@ -96,12 +95,12 @@ class NodeApi {
           });
 
         this.mokka.setVote(
-          new VoteModel(this.mokka.publicKey, shares, secret, startTime)
+          new VoteModel(this.mokka.publicKey, voteData, secret, startTime)
         );
         this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
         const startVote = Date.now();
-        for (const share of initial(shares)) {
+        for (const share of voteData.slice(0, -1)) {
           const packet = await this.messageApi.packet(messageTypes.VOTE, {
             share: share.share
           });

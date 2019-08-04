@@ -1,4 +1,3 @@
-import random from 'lodash/random';
 import {GossipController} from '../gossip/main';
 import {MokkaStorage} from '../storage/main';
 import {LogApi} from './api/LogApi';
@@ -81,7 +80,7 @@ class Mokka extends NodeModel {
   public connect(): void {
     this.gossip.start();
     this.logApi.runLoop();
-    this.timer.heartbeat(random(0, this.election.max));
+    this.timer.heartbeat(Math.round(Math.random() *  this.election.max));
   }
 
   public async disconnect(): Promise<void> {
