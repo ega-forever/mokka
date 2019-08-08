@@ -30,71 +30,65 @@ class LogApi {
     hash: string = null
   ): Promise<EntryModel> {
 
-    return await new Promise((res, rej) => {
-      this.semaphore.take(async () => {
+    const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo();
 
-        const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo();
-
-        if (Number.isInteger(index) && index !== 0 && index <= lastIndex) {
-          this.semaphore.leave();
-          return rej({code: 1, message: `can't rewrite chain (received ${index} while current is ${lastIndex})!`});
-        }
-
-        if (Number.isInteger(index) && index !== 0 && index !== lastIndex + 1) {
-          this.semaphore.leave();
-          return rej({
-            code: 3,
-            message: `can't apply logs not in direct order (received ${index} while current is ${lastIndex})!`
-          });
-        }
-
-        if (!Number.isInteger(index))
-          index = lastIndex + 1;
-
-        const merkleTools = new MerkleTools();
-        merkleTools.addLeaf(lastHash);
-
-        merkleTools.addLeaf(JSON.stringify(log), true);
-        merkleTools.makeTree();
-
-        const generatedHash = merkleTools.getMerkleRoot().toString('hex');
-
-        if (hash && generatedHash !== hash) {
-          this.semaphore.leave();
-          return rej({code: 2, message: 'can\'t save wrong hash!'});
-        }
-
-        const entry = new EntryModel({
-          committed: false,
-          createdAt: Date.now(),
-          hash: generatedHash,
-          index,
-          log,
-          responses,
-          signature,
-          term
-        });
-
-        await this.entryApi.put(entry);
-
-        const currentState = await this.stateApi.getInfo();
-
-        if (entry.index > currentState.index) {
-          const state: StateModel = {
-            committedIndex: currentState.committedIndex,
-            createdAt: entry.createdAt,
-            hash: entry.hash,
-            index: entry.index,
-            term: entry.term
-          };
-          await this.stateApi.setState(state);
-        }
-
-        res(entry);
-        this.semaphore.leave();
-
+    if (Number.isInteger(index) && index !== 0 && index <= lastIndex) {
+      return Promise.reject({
+        code: 1,
+        message: `can't rewrite chain (received ${index} while current is ${lastIndex})!`
       });
+    }
+
+    if (Number.isInteger(index) && index !== 0 && index !== lastIndex + 1) {
+      return Promise.reject({
+        code: 3,
+        message: `can't apply logs not in direct order (received ${index} while current is ${lastIndex})!`
+      });
+    }
+
+    if (!Number.isInteger(index))
+      index = lastIndex + 1;
+
+    const merkleTools = new MerkleTools();
+    merkleTools.addLeaf(lastHash);
+
+    merkleTools.addLeaf(JSON.stringify(log), true);
+    merkleTools.makeTree();
+
+    const generatedHash = merkleTools.getMerkleRoot().toString('hex');
+
+    if (hash && generatedHash !== hash) {
+      return Promise.reject({code: 2, message: 'can\'t save wrong hash!'});
+    }
+
+    const entry = new EntryModel({
+      committed: false,
+      createdAt: Date.now(),
+      hash: generatedHash,
+      index,
+      log,
+      responses,
+      signature,
+      term
     });
+
+    await this.entryApi.put(entry);
+
+    const currentState = await this.stateApi.getInfo();
+
+    if (entry.index > currentState.index) {
+      const state: StateModel = {
+        committedIndex: currentState.committedIndex,
+        createdAt: entry.createdAt,
+        hash: entry.hash,
+        index: entry.index,
+        term: entry.term
+      };
+      await this.stateApi.setState(state);
+    }
+
+    return entry;
+
   }
 
   public async ack(index: number, publicKeys: string[]): Promise<EntryModel> {

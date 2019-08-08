@@ -1,6 +1,4 @@
 import secrets = require('secrets.js-grempe');
-import {Semaphore} from 'semaphore';
-import semaphore from 'semaphore';
 import nacl = require('tweetnacl');
 import eventTypes from '../../shared/constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
@@ -13,12 +11,10 @@ import {MessageApi} from './MessageApi';
 class NodeApi {
 
   private mokka: Mokka;
-  private semaphore: Semaphore;
   private messageApi: MessageApi;
 
   constructor(mokka: Mokka) {
     this.mokka = mokka;
-    this.semaphore = semaphore(1);
     this.messageApi = new MessageApi(mokka);
   }
 
@@ -55,70 +51,61 @@ class NodeApi {
     this.mokka.emit(eventTypes.NODE_LEAVE, node);
   }
 
-  public async promote() {
+  public async promote(): Promise<void> {
 
-    return await new Promise((res) => {
+    const startTime = Date.now();
+    const token = `${this.mokka.term + 1}x${startTime}`;
+    const secret = secrets.str2hex(token);
 
-      this.semaphore.take(async () => {
+    const shares: string[] = secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority());
 
-        const startTime = Date.now();
-        const token = `${this.mokka.term + 1}x${startTime}`;
-        const secret = secrets.str2hex(token);
+    const voteData = shares
+      .sort()
+      .map((share: string, index: number) => {
 
-        const shares: string[] = secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority());
-
-        const voteData = shares
-          .sort()
-          .map((share: string, index: number) => {
-
-            if (index === this.mokka.nodes.length) {
-              const signature = Buffer.from(
-                nacl.sign.detached(
-                  Buffer.from(share),
-                  Buffer.from(this.mokka.privateKey, 'hex')
-                )
-              ).toString('hex');
-              return {
-                publicKey: this.mokka.publicKey,
-                share,
-                signature,
-                voted: true
-              };
-            }
-
-            return {
-              publicKey: this.mokka.nodes[index].publicKey,
-              share,
-              signature: null,
-              voted: false
-            };
-          });
-
-        this.mokka.setVote(
-          new VoteModel(this.mokka.publicKey, voteData, secret, startTime)
-        );
-        this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
-
-        const startVote = Date.now();
-        for (const share of voteData.slice(0, -1)) {
-          const packet = await this.messageApi.packet(messageTypes.VOTE, {
-            share: share.share
-          });
-
-          await this.messageApi.message(share.publicKey, packet);
+        if (index === this.mokka.nodes.length) {
+          const signature = Buffer.from(
+            nacl.sign.detached(
+              Buffer.from(share),
+              Buffer.from(this.mokka.privateKey, 'hex')
+            )
+          ).toString('hex');
+          return {
+            publicKey: this.mokka.publicKey,
+            share,
+            signature,
+            voted: true
+          };
         }
 
-        const timeout = this.mokka.timer.timeout() - (Date.now() - startVote);
-
-        if (timeout > 0)
-          await new Promise((res) => setTimeout(res, timeout));
-
-        this.mokka.timer.setVoteTimeout();
-        this.semaphore.leave();
-        res();
+        return {
+          publicKey: this.mokka.nodes[index].publicKey,
+          share,
+          signature: null,
+          voted: false
+        };
       });
 
-    });
+    this.mokka.setVote(
+      new VoteModel(this.mokka.publicKey, voteData, secret, startTime)
+    );
+    this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
+
+    const startVote = Date.now();
+    for (const share of voteData.slice(0, -1)) {
+      const packet = await this.messageApi.packet(messageTypes.VOTE, share.publicKey, {
+        share: share.share
+      });
+
+      await this.messageApi.message(packet);
+    }
+
+    const timeout = this.mokka.timer.timeout() - (Date.now() - startVote);
+
+    if (timeout > 0)
+      await new Promise((res) => setTimeout(res, timeout));
+
+    this.mokka.timer.setVoteTimeout();
   }
 
 }

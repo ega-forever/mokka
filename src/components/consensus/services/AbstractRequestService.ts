@@ -19,31 +19,24 @@ class AbstractRequestService {
 
   public async process(packet: PacketModel) {
 
-    const data: ReplyModel[] | ReplyModel =
+    this.mokka.emit(`${packet.publicKey}:${packet.type}`, packet.data);
+
+    const data: PacketModel[] =
       packet.type === messageTypes.ACK ?
         await this._process(packet) :
         await new Promise((res) => {
           this.semaphore.take(async () => {
             const data = await this._process(packet);
-            res(data || null);
+            res(data);
             this.semaphore.leave();
           });
         });
 
-    if (!data || (Array.isArray(data) && !data[0].who) || (!Array.isArray(data) && !data.who))
-      return;
-
-    if (Array.isArray(data)) {
-      for (const item of data)
-        await this.messageApi.message(item.who, item.reply);
-
-      return;
-    }
-
-    await this.messageApi.message(data.who, data.reply);
+    for (const item of data)
+      await this.messageApi.message(item);
   }
 
-  protected async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
+  protected async _process(packet: PacketModel): Promise<PacketModel[]> {
     throw new Error('process should be implemented');
   }
 

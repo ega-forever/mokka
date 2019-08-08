@@ -19,39 +19,32 @@ class VoteApi {
     this.messageApi = new MessageApi(mokka);
   }
 
-  public async vote(packet: PacketModel): Promise<ReplyModel> {
+  public async vote(packet: PacketModel): Promise<PacketModel> {
 
     if (!packet.data.share) {
-      const reply = await this.messageApi.packet(messageTypes.VOTED, {
+      return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
         granted: false,
         reason: voteTypes.NO_SHARE,
         signature: null
       });
-
-      return new ReplyModel(reply, packet.publicKey);
     }
 
     const lastInfo = await this.mokka.getDb().getState().getInfo();
 
     if (lastInfo.term >= packet.term || lastInfo.index > packet.last.index) {
-
-      const reply = await this.messageApi.packet(messageTypes.VOTED, {
+      return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
         reason: lastInfo.term >= packet.term ?
           voteTypes.CANDIDATE_OUTDATED_BY_TERM : voteTypes.CANDIDATE_OUTDATED_BY_HISTORY,
         signature: null
       });
-
-      return new ReplyModel(reply, packet.publicKey);
     }
 
     if (lastInfo.index === packet.last.index && lastInfo.hash !== packet.last.hash) {
 
-      const reply = await this.messageApi.packet(messageTypes.VOTED, {
+      return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
         reason: voteTypes.CANDIDATE_HAS_WRONG_HISTORY,
         signature: null
       });
-
-      return new ReplyModel(reply, packet.publicKey);
     }
 
     const signature = Buffer.from(
@@ -75,30 +68,37 @@ class VoteApi {
 
     this.mokka.setVote(vote);
 
-    const reply = await this.messageApi.packet(messageTypes.VOTED, {
+    return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
       signature
     });
-
-    return new ReplyModel(reply, packet.publicKey);
   }
 
-  public async voted(packet: PacketModel): Promise<ReplyModel | null> {
+  public async voted(packet: PacketModel): Promise<PacketModel[]> {
 
     if (states.CANDIDATE !== this.mokka.state) {
-      const reply = await this.messageApi.packet(messageTypes.ERROR, 'No longer a candidate, ignoring vote');
-      return new ReplyModel(reply, packet.publicKey);
+      const reply = await this.messageApi.packet(
+        messageTypes.ERROR,
+        packet.publicKey,
+        'No longer a candidate, ignoring vote');
+      return [reply];
     }
 
     if (!packet.data.signature) {
-      const reply = await this.messageApi.packet(messageTypes.ERROR, 'the vote hasn\'t been singed, ignoring vote');
-      return new ReplyModel(reply, packet.publicKey);
+      const reply = await this.messageApi.packet(
+        messageTypes.ERROR,
+        packet.publicKey,
+        'the vote hasn\'t been singed, ignoring vote');
+      return [reply];
     }
 
     const localShare = this.mokka.vote.shares.find((share) => share.publicKey === packet.publicKey);
 
     if (!localShare) {
-      const reply = await this.messageApi.packet(messageTypes.ERROR, 'the share has not been found');
-      return new ReplyModel(reply, packet.publicKey);
+      const reply = await this.messageApi.packet(
+        messageTypes.ERROR,
+        packet.publicKey,
+        'the share has not been found');
+      return [reply];
     }
 
     const isSigned = nacl.sign.detached.verify(
@@ -108,13 +108,19 @@ class VoteApi {
     );
 
     if (!isSigned) {
-      const reply = await this.messageApi.packet(messageTypes.ERROR, 'wrong share for vote provided!');
-      return new ReplyModel(reply, packet.publicKey);
+      const reply = await this.messageApi.packet(
+        messageTypes.ERROR,
+        packet.publicKey,
+        'wrong share for vote provided!');
+      return [reply];
     }
 
     if (localShare.voted) {
-      const reply = await this.messageApi.packet(messageTypes.ERROR, 'already voted for this candidate!');
-      return new ReplyModel(reply, packet.publicKey);
+      const reply = await this.messageApi.packet(
+        messageTypes.ERROR,
+        packet.publicKey,
+        'already voted for this candidate!');
+      return [reply];
     }
 
     localShare.voted = true;
@@ -123,7 +129,7 @@ class VoteApi {
     const votedAmount = this.mokka.vote.shares.filter((share) => share.voted).length;
 
     if (!this.mokka.quorum(votedAmount))
-      return null;
+      return [];
 
     const validatedShares = this.mokka.vote.shares
       .filter((share) => share.voted)
@@ -133,7 +139,7 @@ class VoteApi {
 
     if (comb !== this.mokka.vote.secret) {
       this.mokka.vote = new VoteModel();
-      return null;
+      return [];
     }
 
     const votedShares = this.mokka.vote.shares.filter((share) => share.voted);
@@ -146,6 +152,7 @@ class VoteApi {
 
     compacted = `${votedShares.length.toString(16)}x${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted);
+    return [];
   }
 }
 

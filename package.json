@@ -5,7 +5,7 @@
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
-    "test": "mocha --timeout 120000 -r ts-node/register src/test/*.spec.ts",
+    "test": "mocha --timeout 120000 -r ts-node/register src/test/concurrency.spec.ts",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack",
     "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"
@@ -27,7 +27,6 @@
     "lodash": "^4.17.11",
     "memdown": "^3.0.0",
     "merkle-tools": "^1.4.0",
-    "rlp": "^2.2.3",
     "secrets.js-grempe": "^1.1.0",
     "semaphore": "^1.1.0",
     "tweetnacl": "^1.0.1"

@@ -10,7 +10,6 @@ import {NodeModel} from './models/NodeModel';
 import {VoteModel} from './models/VoteModel';
 import {GossipRequestProcessorService} from './services/GossipRequestProcessorService';
 import {RequestProcessorService} from './services/RequestProcessorService';
-import decodePacket from './utils/decodePacket';
 
 class Mokka extends NodeModel {
 
@@ -77,10 +76,16 @@ class Mokka extends NodeModel {
     this.vote = vote;
   }
 
-  public connect(): void {
+  public async connect(): Promise<void> { // todo set last log index for each peer
+    const {index} = await this.getDb().getState().getInfo();
+
+    if (index)
+      this.setLastLogIndex(index);
+
     this.gossip.start();
     this.logApi.runLoop();
-    this.timer.heartbeat(Math.round(Math.random() *  this.election.max));
+//    this.logApi.runAckLoop();
+    this.timer.heartbeat(Math.round(Math.random() * this.election.max));
   }
 
   public async disconnect(): Promise<void> {
@@ -94,7 +99,7 @@ class Mokka extends NodeModel {
   private _registerEvents() {
     this.on('data', async (packet) => {
 
-      packet = decodePacket(packet);
+      packet = JSON.parse(packet.toString());
 
       if ([
         messageTypes.GOSSIP_SECOND_RESPONSE,

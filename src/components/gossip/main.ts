@@ -84,8 +84,10 @@ class GossipController extends EventEmitter {
   }
 
   public chooseRandom(peersPublicKeys: string[]) {
-    const i = Math.floor(Math.random() * 1000000) % peersPublicKeys.length;
-    const publicKey = peersPublicKeys[i];
+    const remotePeers = peersPublicKeys.filter((peer) => peer !== this.mokka.publicKey);
+    const i = Math.floor(Math.random() * 1000000) % remotePeers.length;
+    const publicKey = remotePeers[i];
+
     return this.peers.get(publicKey);
   }
 
@@ -94,8 +96,8 @@ class GossipController extends EventEmitter {
       digest: this.scuttle.digest()
     };
 
-    const reply = await this.messageApi.packet(messageTypes.GOSSIP_REQUEST, data);
-    await this.messageApi.message(peer.publicKey, reply);
+    const reply = await this.messageApi.packet(messageTypes.GOSSIP_REQUEST, peer.publicKey, data);
+    await this.messageApi.message(reply);
   }
 
   public livePeersPublicKeys(): string[] {

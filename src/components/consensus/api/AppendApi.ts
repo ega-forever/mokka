@@ -1,11 +1,9 @@
 import {createHmac} from 'crypto';
 import eventTypes from '../../shared/constants/EventTypes';
-import {EntryModel} from '../../storage/models/EntryModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
-import {ReplyModel} from '../models/ReplyModel';
 import {MessageApi} from './MessageApi';
 
 class AppendApi {
@@ -18,12 +16,12 @@ class AppendApi {
     this.messageApi = new MessageApi(mokka);
   }
 
-  public async append(packet: PacketModel): Promise<ReplyModel[]> {
+  public async append(packet: PacketModel): Promise<PacketModel[]> {
 
     if (!packet.data)
       return [];
 
-    const replies: ReplyModel[] = [];
+    const replies: PacketModel[] = [];
 
     if (!Array.isArray(packet.data)) {
       packet.data = [packet.data];
@@ -42,12 +40,12 @@ class AppendApi {
         const record = await this.mokka.getDb().getEntry().get(data.index);
 
         if (record && record.hash === data.hash) {
-          reply = await this.messageApi.packet(messageTypes.APPEND_ACK, {
+          reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey, {
             index: data.index,
             term: data.term
           });
 
-          replies.push(new ReplyModel(reply, packet.publicKey));
+          replies.push(reply);
           continue;
         }
       }
@@ -60,7 +58,7 @@ class AppendApi {
         if (!data.responses.includes(this.mokka.publicKey))
           data.responses.push(this.mokka.publicKey);
 
-        await this.mokka.getDb().getLog().save(
+        await this.mokka.getDb().getLog().save( // todo cause issue because of concurrency (wrong order)
           data.log,
           data.term,
           data.signature,
@@ -68,6 +66,8 @@ class AppendApi {
           data.index,
           data.hash
         );
+
+        this.mokka.setLastLogIndex(data.index);
 
         const hash = createHmac('sha256', JSON.stringify(data.log)).digest('hex');
         await this.mokka.gossip.pullPending(hash);
@@ -79,30 +79,37 @@ class AppendApi {
         if (err.code === 2 || err.code === 3)
           return;
 
-        reply = await this.messageApi.packet(messageTypes.APPEND_FAIL, {index: lastInfo.index});
-        replies.push(new ReplyModel(reply, states.LEADER));
+        reply = await this.messageApi.packet(messageTypes.APPEND_FAIL, packet.publicKey, {index: lastInfo.index});
+        replies.push(reply);
         return replies;
       }
 
-      reply = await this.messageApi.packet(messageTypes.APPEND_ACK);
-      replies.push(new ReplyModel(reply, packet.publicKey));
+      reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey);
+      replies.push(reply);
     }
 
     return replies;
   }
 
-  public async appendAck(packet: PacketModel) {
+  public async appendAck(packet: PacketModel): Promise<PacketModel[]> {
 
     let entry = await this.mokka.getDb().getEntry().get(packet.last.index);
 
     if (!entry)
-      return;
+      return [];
+
+    const node = this.mokka.nodes.find((node) => node.publicKey === packet.publicKey);
+
+    if (!node)
+      return [];
+
+    node.setLastLogIndex(packet.last.index);
 
     const newResponses = packet.last.responses
       .filter((item: string) => !entry.responses.includes(item));
 
     if (!newResponses.length)
-      return;
+      return [];
 
     entry = await this.mokka.getDb().getLog().ack(
       packet.last.index,
@@ -126,48 +133,28 @@ class AppendApi {
     }
 
     if (this.mokka.state !== states.LEADER)
-      return;
+      return [];
 
-    const reply = await this.messageApi.packet(messageTypes.APPEND_ACK);
-    return new ReplyModel(reply, states.FOLLOWER);
-  }
+    const replies: PacketModel[] = [];
 
-  public async obtain(packet: PacketModel, limit = 100): Promise<ReplyModel[]> {
-
-    const entries = await this.mokka.getDb().getEntry().getAfterList(packet.last.index, limit);
-
-    const groupedEntries: { [key: number]: EntryModel[] } = [];
-
-    for (const entry of entries) {
-      if (!groupedEntries[entry.term]) {
-        groupedEntries[entry.term] = [];
-      }
-
-      groupedEntries[entry.term].push(entry);
-    }
-
-    const replies = [];
-
-    for (const term of Object.keys(groupedEntries)) {
-      const reply = await this.messageApi.packet(messageTypes.APPEND, entries[parseInt(term, 10)]);
-      replies.push(new ReplyModel(reply, packet.publicKey));
+    for (const node of this.mokka.nodes) {
+      const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, node.publicKey); // todo send to all followers
+      replies.push(reply);
     }
 
     return replies;
   }
 
-  public async appendFail(packet: PacketModel): Promise<ReplyModel> {
+  public async appendFail(packet: PacketModel): Promise<PacketModel[]> {
 
     const lastInfo = await this.mokka.getDb().getState().getInfo();
 
     if (packet.data.index > lastInfo.index) {
-      const reply = await this.messageApi.packet(messageTypes.ERROR, 'wrong index!');
-      return new ReplyModel(reply, packet.publicKey);
+      return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'wrong index!')];
     }
 
     const entity = await this.mokka.getDb().getEntry().get(packet.data.index);
-    const reply = await this.messageApi.packet(messageTypes.APPEND, entity);
-    return new ReplyModel(reply, packet.publicKey);
+    return [await this.messageApi.packet(messageTypes.APPEND, packet.publicKey, entity)];
   }
 
 }

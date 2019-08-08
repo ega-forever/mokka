@@ -49,9 +49,9 @@ class TCPMokka extends Mokka {
     }
   }
 
-  public connect(): void {
+  public async connect(): Promise<void> {
     this.initialize();
-    super.connect();
+    await super.connect();
   }
 
 }

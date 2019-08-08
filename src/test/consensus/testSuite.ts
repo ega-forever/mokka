@@ -68,7 +68,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
             clearInterval(intervalPid);
             res();
           });
-        }, 1000);
+        }, 1000); // todo replace with event
 
         ctx.mokkas[0].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
@@ -89,7 +89,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
             clearInterval(intervalPid);
             res();
           });
-        }, 1000);
+        }, 1000); // todo replace with event
 
         ctx.mokkas[1].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
@@ -130,7 +130,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
             clearInterval(intervalPid);
             res();
           });
-        }, 1000);
+        }, 1000); // todo replace with event
 
         let missed = 0;
         mokka.on('message', (msg: any) => {
@@ -152,7 +152,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
 
     const infoAwaitPromises = ctx.mokkas.map((mokka: any) =>
       new Promise((res) => {
-        const timeoutId = setInterval(() => {
+        const timeoutId = setInterval(() => { // todo replace with event
           mokka.send({type: 'info'});
         }, 1000);
 
@@ -191,7 +191,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
             clearInterval(intervalPid);
             res();
           });
-        }, 1000);
+        }, 1000); // todo replace with event
 
         ctx.mokkas[0].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
@@ -212,7 +212,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
             clearInterval(intervalPid);
             res();
           });
-        }, 1000);
+        }, 1000); // todo replace with event
 
         ctx.mokkas[1].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
@@ -270,7 +270,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
       new Promise((res) => {
         const timeoutId = setInterval(() => {
           mokka.send({type: 'info'});
-        }, 1000);
+        }, 1000); // todo replace with event
         mokka.on('message', (msg: any) => {
 
           if (msg.type !== 'info' || msg.args[0].index !== 2)

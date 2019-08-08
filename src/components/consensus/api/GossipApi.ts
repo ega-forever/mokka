@@ -14,7 +14,7 @@ class GossipApi {
     this.messageApi = new MessageApi(mokka);
   }
 
-  public async request(packet: PacketModel): Promise<ReplyModel> {
+  public async request(packet: PacketModel): Promise<PacketModel> {
 
     const sc = this.mokka.gossip.scuttle.scuttle(packet.data.digest);
     this.mokka.gossip.handleNewPeers(sc.newPeers);
@@ -24,11 +24,10 @@ class GossipApi {
       updates: sc.deltas
     };
 
-    const reply = await this.messageApi.packet(messageTypes.GOSSIP_FIRST_RESPONSE, data);
-    return new ReplyModel(reply, packet.publicKey);
+    return await this.messageApi.packet(messageTypes.GOSSIP_FIRST_RESPONSE, packet.publicKey, data);
   }
 
-  public async firstResponse(packet: PacketModel): Promise<ReplyModel> {
+  public async firstResponse(packet: PacketModel): Promise<PacketModel> {
 
     await this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
     const updates = await this.mokka.gossip.scuttle.fetchDeltas(packet.data.requestDigest);
@@ -37,13 +36,11 @@ class GossipApi {
       updates
     };
 
-    const reply = await this.messageApi.packet(messageTypes.GOSSIP_SECOND_RESPONSE, data);
-    return new ReplyModel(reply, packet.publicKey);
+    return await this.messageApi.packet(messageTypes.GOSSIP_SECOND_RESPONSE, packet.publicKey, data);
   }
 
-  public async secondResponse(packet: PacketModel): Promise<null> {
+  public async secondResponse(packet: PacketModel): Promise<void> {
     await this.mokka.gossip.scuttle.updateKnownState(packet.data.updates);
-    return null;
   }
 
 }

@@ -1,6 +1,5 @@
-// @ts-ignore
-import secrets from 'secrets.js-grempe';
-import nacl from 'tweetnacl';
+import secrets = require('secrets.js-grempe');
+import nacl = require('tweetnacl');
 
 const _extract = (proof: string):
   { term: number, time: number, items: Array<{ secret: string, signature: string }> } => {

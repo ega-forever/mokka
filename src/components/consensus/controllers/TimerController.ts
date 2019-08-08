@@ -28,12 +28,15 @@ class TimerController {
     if (this.timers.has('election'))
       return;
 
-    const electionFunc = () => {
-      this.timers.delete('election');
-      if (states.LEADER !== this.mokka.state) {
-        this.election(duration + this.mokka.election.max); // todo validate
-        return this.nodeApi.promote();
+    const electionFunc = async () => {
+      if (states.LEADER === this.mokka.state) {
+        return;
       }
+
+      await this.nodeApi.promote();
+      this.timers.delete('election');
+      this.election(duration + this.mokka.election.max); // todo validate
+
     };
 
     const electionTimeout = setTimeout(electionFunc, duration);
@@ -55,9 +58,11 @@ class TimerController {
         return this.election();
       }
 
-      const packet = await this.messageApi.packet(messageTypes.ACK);
+      for (const node of this.mokka.nodes) {
+        const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
+        await this.messageApi.message(packet);
+      }
 
-      await this.messageApi.message(states.FOLLOWER, packet);
       this.heartbeat(this.mokka.heartbeat);
       this.timers.delete('heartbeat');
     };

@@ -4,14 +4,15 @@ import NodeStates from '../constants/NodeStates';
 
 class NodeModel extends EventEmitter {
 
-  public privateKey: string;
-  public publicKey: string;
-  public nodes: NodeModel[] = [];
+  public readonly privateKey: string;
+  public readonly publicKey: string;
+  public readonly nodes: NodeModel[] = [];
   private _state: number;
   private _term: number = 0;
   private _proof: string;
   private _leaderPublicKey: string = '';
-  private nodeAddress: string;
+  private readonly nodeAddress: string;
+  private lastLogIndex: number = 0;
 
   constructor(
     privateKey: string,
@@ -57,6 +58,14 @@ class NodeModel extends EventEmitter {
 
   get proof(): string {
     return this._proof;
+  }
+
+  public setLastLogIndex(index: number): void {
+    this.lastLogIndex = index;
+  }
+
+  public getLastLogIndex(): number {
+    return this.lastLogIndex;
   }
 
 }
