@@ -51,7 +51,7 @@ class NodeApi {
     this.mokka.emit(eventTypes.NODE_LEAVE, node);
   }
 
-  public async promote(): Promise<void> {
+  public async promote(): Promise<void> { // todo resolve issue with election
 
     const startTime = Date.now();
     const token = `${this.mokka.term + 1}x${startTime}`;

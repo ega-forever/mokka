@@ -5,7 +5,6 @@ import states from '../constants/NodeStates';
 import voteTypes from '../constants/VoteTypes';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
-import {ReplyModel} from '../models/ReplyModel';
 import {VoteModel} from '../models/VoteModel';
 import {MessageApi} from './MessageApi';
 

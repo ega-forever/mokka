@@ -1,19 +1,14 @@
-import semaphore, {Semaphore} from 'semaphore';
 import {MessageApi} from '../api/MessageApi';
-import messageTypes from '../constants/MessageTypes';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
-import {ReplyModel} from '../models/ReplyModel';
 
 class AbstractRequestService {
 
   protected mokka: Mokka;
-  protected semaphore: Semaphore;
   protected messageApi: MessageApi;
 
   constructor(mokka: Mokka) {
     this.mokka = mokka;
-    this.semaphore = semaphore(1);
     this.messageApi = new MessageApi(mokka);
   }
 
@@ -21,16 +16,7 @@ class AbstractRequestService {
 
     this.mokka.emit(`${packet.publicKey}:${packet.type}`, packet.data);
 
-    const data: PacketModel[] =
-      packet.type === messageTypes.ACK ?
-        await this._process(packet) :
-        await new Promise((res) => {
-          this.semaphore.take(async () => {
-            const data = await this._process(packet);
-            res(data);
-            this.semaphore.leave();
-          });
-        });
+    const data: PacketModel[] = await this._process(packet);
 
     for (const item of data)
       await this.messageApi.message(item);

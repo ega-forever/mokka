@@ -51,7 +51,7 @@ class AppendApi {
       }
 
       if (lastInfo.index >= data.index)
-        return null;
+        return [];
 
       try {
 
@@ -64,7 +64,8 @@ class AppendApi {
           data.signature,
           data.responses,
           data.index,
-          data.hash
+          data.hash,
+          this.mokka.quorum(data.responses.length)
         );
 
         this.mokka.setLastLogIndex(data.index);
@@ -77,7 +78,7 @@ class AppendApi {
         this.mokka.logger.error(`error during save log: ${JSON.stringify(err)}`);
 
         if (err.code === 2 || err.code === 3)
-          return;
+          return [];
 
         reply = await this.messageApi.packet(messageTypes.APPEND_FAIL, packet.publicKey, {index: lastInfo.index});
         replies.push(reply);

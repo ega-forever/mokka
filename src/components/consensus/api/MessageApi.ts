@@ -1,6 +1,4 @@
-import states from '../constants/NodeStates';
 import {Mokka} from '../main';
-import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
 
 class MessageApi {

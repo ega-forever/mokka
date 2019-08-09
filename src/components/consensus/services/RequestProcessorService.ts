@@ -6,7 +6,6 @@ import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
-import {ReplyModel} from '../models/ReplyModel';
 import {validate} from '../utils/proofValidation';
 import {AbstractRequestService} from './AbstractRequestService';
 
@@ -46,8 +45,7 @@ class RequestProcessorService extends AbstractRequestService {
 
     if (packet.state !== states.LEADER && this.mokka.state === states.LEADER) {
       const node = this.mokka.nodes.find((node) => node.publicKey === packet.publicKey);
-      console.log('is dead', node.getLastLogIndex() === -1, packet.last.index);
-      if (node.getLastLogIndex() === -1) {
+      if (node.getLastLogIndex() !== packet.last.index) {
         node.setLastLogIndex(packet.last.index);
       }
     }
@@ -78,7 +76,6 @@ class RequestProcessorService extends AbstractRequestService {
 
     this.mokka.timer.heartbeat(states.LEADER === this.mokka.state ? this.mokka.heartbeat : this.mokka.timer.timeout());
 
-    // todo notify leader that i am aware about last log
     if (packet.state === states.LEADER &&
       packet.type === messageTypes.ACK &&
       this.mokka.getLastLogIndex() !== packet.peer.number

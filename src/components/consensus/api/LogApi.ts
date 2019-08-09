@@ -45,8 +45,8 @@ class LogApi {
   }
 
   private async broadcastInRange(node: NodeModel, lastIndex: number) {
-    for (let index = node.getLastLogIndex(); index <= lastIndex; index++) {
-      const entry = await this.mokka.getDb().getEntry().get(lastIndex);
+    for (let index = (node.getLastLogIndex() || 1); index <= lastIndex; index++) {
+      const entry = await this.mokka.getDb().getEntry().get(index);
       const appendPacket = await this.messageApi.packet(messageTypes.APPEND, node.publicKey, entry);
       await this.messageApi.message(appendPacket);
 
@@ -67,7 +67,6 @@ class LogApi {
       });
 
       if (!status) {
-        console.log('peer is dead(((');
         node.setLastLogIndex(-1); // todo set peer as dead
         return;
       }
@@ -95,8 +94,6 @@ class LogApi {
         const outdatedAliveNodes = this.mokka.nodes.filter((node) => node.getLastLogIndex() < lastIndex && node.getLastLogIndex() !== -1);
 
         for (const node of outdatedAliveNodes) {
-          console.log('outdated', outdatedAliveNodes.length);
-          console.log('going to broadcast');
           await this.broadcastInRange(node, lastIndex);
         }
       }

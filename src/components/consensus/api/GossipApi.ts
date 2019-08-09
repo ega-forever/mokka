@@ -1,7 +1,6 @@
 import messageTypes from '../constants/MessageTypes';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
-import {ReplyModel} from '../models/ReplyModel';
 import {MessageApi} from './MessageApi';
 
 class GossipApi {

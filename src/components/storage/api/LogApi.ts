@@ -1,6 +1,4 @@
 import MerkleTools = require('merkle-tools');
-import semaphore from 'semaphore';
-import {Semaphore} from 'semaphore';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {EntryModel} from '../models/EntryModel';
 import {StateModel} from '../models/StateModel';
@@ -12,13 +10,11 @@ class LogApi {
   private readonly db: IStorageInterface;
   private entryApi: EntryApi;
   private stateApi: StateApi;
-  private semaphore: Semaphore;
 
   constructor(db: IStorageInterface) {
     this.db = db;
     this.entryApi = new EntryApi(this.db);
     this.stateApi = new StateApi(this.db);
-    this.semaphore = semaphore(1);
   }
 
   public async save(
@@ -27,7 +23,8 @@ class LogApi {
     signature: string,
     responses: string[],
     index: number = null,
-    hash: string = null
+    hash: string = null,
+    isCommitted: boolean = false
   ): Promise<EntryModel> {
 
     const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo();
@@ -78,7 +75,7 @@ class LogApi {
 
     if (entry.index > currentState.index) {
       const state: StateModel = {
-        committedIndex: currentState.committedIndex,
+        committedIndex: isCommitted ? entry.index : currentState.committedIndex,
         createdAt: entry.createdAt,
         hash: entry.hash,
         index: entry.index,
@@ -108,17 +105,14 @@ class LogApi {
   }
 
   public async commit(index: number): Promise<void> {
-    this.semaphore.take(async () => {
 
-      const info = await this.stateApi.getInfo();
+    const info = await this.stateApi.getInfo();
 
-      if (info.committedIndex >= index)
-        return this.semaphore.leave();
+    if (info.committedIndex >= index)
+      return;
 
-      info.committedIndex = index;
-      await this.stateApi.setState(info);
-      this.semaphore.leave();
-    });
+    info.committedIndex = index;
+    await this.stateApi.setState(info);
   }
 }
 
