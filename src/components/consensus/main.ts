@@ -3,6 +3,7 @@ import {MokkaStorage} from '../storage/main';
 import {LogApi} from './api/LogApi';
 import {NodeApi} from './api/NodeApi';
 import messageTypes from './constants/MessageTypes';
+import NodeStates from './constants/NodeStates';
 import {TimerController} from './controllers/TimerController';
 import {ILoggerInterface} from './interfaces/ILoggerInterface';
 import {ISettingsInterface} from './interfaces/ISettingsInterface';
@@ -63,14 +64,14 @@ class Mokka extends NodeModel {
   }
 
   public quorum(responses: number) {
-    if (!this.nodes.length || !responses) return false;
+    if (!this.nodes.size || !responses) return false;
 
     return responses >= this.majority();
   }
 
   public committedIndex() {
 
-    const results = this.nodes.map((node) => node.getLastLogIndex());
+    const results = Array.from(this.nodes.values()).map((node) => node.getLastLogState().index);
 
     if (results.length < this.majority())
       return -1;
@@ -82,7 +83,7 @@ class Mokka extends NodeModel {
   }
 
   public majority() {
-    return Math.ceil(this.nodes.length / 2) + 1;
+    return Math.ceil(this.nodes.size / 2) + 1;
   }
 
   public setVote(vote: VoteModel): void {
@@ -90,10 +91,12 @@ class Mokka extends NodeModel {
   }
 
   public async connect(): Promise<void> { // todo set last log index for each peer
-    const {index} = await this.getDb().getState().getInfo(this.publicKey);
+    const info = await this.getDb().getState().getInfo(this.publicKey);
 
-    if (index)
-      this.setLastLogIndex(index);
+    if (info) {
+      this.setState(NodeStates.FOLLOWER, info.term, null);
+      this.setLastLogState(info);
+    }
 
     this.gossip.start();
     this.logApi.runLoop();

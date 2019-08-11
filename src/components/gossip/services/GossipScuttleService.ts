@@ -20,7 +20,7 @@ class GossipScuttleService {
 
   public scuttle(digest: { [key: string]: number }):
     {
-      deltas: Array<[string, string, any, number]>,
+      deltas: Array<[string, string, any, number]>, // todo add pagination
       newPeers: string[],
       requests: { [key: string]: number }
     } {
@@ -35,7 +35,7 @@ class GossipScuttleService {
         requests[pubKey] = 0;
         newPeers.push(pubKey);
       } else if (localVersion > digest[pubKey]) {
-        const deltas = localPeer.deltasAfterVersion(digest[pubKey]);
+        const deltas = localPeer.deltasAfterVersion(digest[pubKey], digest[pubKey] + 10);
         deltasWithPeer.push({peer: pubKey, deltas});
       } else if (localVersion < digest[pubKey])
         requests[pubKey] = localVersion;
@@ -75,7 +75,7 @@ class GossipScuttleService {
   public fetchDeltas(requests: { [key: string]: number }): Array<[string, string, any, number]> {
     const deltas: Array<[string, string, any, number]> = [];
     for (const pubKey of Object.keys(requests)) {
-      const peerDeltas = this.peers.get(pubKey).deltasAfterVersion(requests[pubKey]);
+      const peerDeltas = this.peers.get(pubKey).deltasAfterVersion(requests[pubKey], requests[pubKey] + 10);
       peerDeltas.sort((a, b) => a[2] - b[2]);
       for (const delta of peerDeltas) {
         deltas.push([pubKey, delta[0], delta[1], delta[2]]);

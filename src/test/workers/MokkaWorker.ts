@@ -13,9 +13,9 @@ const init = (params: any) => {
   mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].substring(64, 128)}`,
     electionMax: 300,
-    electionMin: 50,
+    electionMin: 100,
     gossipHeartbeat: 200,
-    heartbeat: 50,
+    heartbeat: 100,
     logger,
     privateKey: params.keys[params.index]
   });

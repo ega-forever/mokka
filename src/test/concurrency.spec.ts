@@ -56,7 +56,7 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
 
    // await new Promise(res => setTimeout(res, 1000));
 
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 100; i++) {
       ctx.mokkas[0].send({
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
           nonce: Date.now() + i + '1',
@@ -81,8 +81,11 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
 
         mokka.on('message', (msg: any) => {
 
-          if (msg.type !== 'info' || msg.args[0].index !== 2000)
+         // if (msg.type !== 'info' || msg.args[0].index !== 2000)
+          if (msg.type !== 'info' || msg.args[0].index !== 200)
             return;
+
+          console.log('super test', msg.args[0].index)
 
           clearInterval(timeoutId);
           res(msg.args[0]);

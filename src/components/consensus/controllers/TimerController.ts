@@ -58,7 +58,7 @@ class TimerController {
         return await this.nodeApi.promote();
       }
 
-      for (const node of this.mokka.nodes) {
+      for (const node of this.mokka.nodes.values()) {
         const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
         await this.messageApi.message(packet);
       }

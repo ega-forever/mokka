@@ -63,13 +63,13 @@ class PeerModel extends EventEmitter {
     this.heartBeatVersion += 1;
   }
 
-  public deltasAfterVersion(lowestVersion: number): Array<[string, any, number]> {
+  public deltasAfterVersion(lowestVersion: number, highestVersion: number): Array<[string, any, number]> {
 
     const data: Array<[string, any, number]> = [];
 
     for (const key of this.attrs.keys()) {
       const value = this.attrs.get(key);
-      if (value.number > lowestVersion) {
+      if (value.number > lowestVersion && value.number < highestVersion) {
         data.push([key, value.value, value.number]);
       }
     }

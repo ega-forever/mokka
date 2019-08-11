@@ -4,11 +4,11 @@ import {VoteApi} from '../api/VoteApi';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
-import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
 import {validate} from '../utils/proofValidation';
 import {AbstractRequestService} from './AbstractRequestService';
 import {StateModel} from '../../storage/models/StateModel';
+import {NodeModel} from '../models/NodeModel';
 
 class RequestProcessorService extends AbstractRequestService {
 
@@ -21,7 +21,7 @@ class RequestProcessorService extends AbstractRequestService {
     this.appendApi = new AppendApi(mokka);
   }
 
-  protected async _process(packet: PacketModel): Promise<PacketModel[]> {
+  protected async _process(packet: PacketModel, node: NodeModel): Promise<PacketModel[]> {
 
     let replies: PacketModel[] = [];
 
@@ -31,7 +31,7 @@ class RequestProcessorService extends AbstractRequestService {
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
 
-      const pubKeys = this.mokka.nodes.map((node: NodeModel) => node.publicKey);
+      const pubKeys = Array.from(this.mokka.nodes.keys());
       pubKeys.push(this.mokka.publicKey);
       const validated = validate(packet.term, packet.proof, this.mokka.proof, pubKeys);
 
@@ -47,15 +47,12 @@ class RequestProcessorService extends AbstractRequestService {
           packet.last.hash,
           packet.last.term,
           packet.last.createdAt
-          )
+        )
       );
     }
 
-    if (packet.state !== states.LEADER && this.mokka.state === states.LEADER) {
-      const node = this.mokka.nodes.find((node) => node.publicKey === packet.publicKey);
-      if (node.getLastLogIndex() !== packet.last.index) {
-        node.setLastLogIndex(packet.last.index);
-      }
+    if (packet.type === messageTypes.APPEND_ACK || node.getLastLogState().index !== packet.last.index) {
+      await this.appendApi.appendAck(packet); // todo duplicate
     }
 
     if (packet.type === messageTypes.VOTE)
@@ -70,10 +67,6 @@ class RequestProcessorService extends AbstractRequestService {
     if (packet.type === messageTypes.APPEND)
       replies = await this.appendApi.append(packet);
 
-    if (packet.type === messageTypes.APPEND_ACK) {
-      replies = await this.appendApi.appendAck(packet);
-    }
-
     if (packet.type === messageTypes.APPEND_FAIL)
       replies = await this.appendApi.appendFail(packet);
 
@@ -85,8 +78,8 @@ class RequestProcessorService extends AbstractRequestService {
 
     if (packet.state === states.LEADER &&
       packet.type === messageTypes.ACK &&
-      this.mokka.getLastLogIndex() !== packet.peer.number) {
-      console.log(`asking to reappend ${this.mokka.getLastLogIndex()} vs ${packet.peer.number}`)
+      this.mokka.getLastLogState().index !== packet.peer.number) {
+      console.log(`asking to reappend ${this.mokka.getLastLogState().index} vs ${packet.peer.number}`);
       replies = [await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey)];
     }
 

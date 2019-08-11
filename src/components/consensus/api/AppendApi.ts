@@ -48,7 +48,7 @@ class AppendApi {
 
     try {
 
-      await this.mokka.getDb().getLog().save( // todo cause issue because of concurrency (wrong order)
+      const entry = await this.mokka.getDb().getLog().save( // todo cause issue because of concurrency (wrong order)
         this.mokka.publicKey,
         packet.data.log,
         packet.data.term,
@@ -57,14 +57,18 @@ class AppendApi {
         packet.data.hash
       );
 
-      this.mokka.setLastLogIndex(packet.data.index);
+      this.mokka.setLastLogState({
+        createdAt: entry.createdAt,
+        hash: entry.hash,
+        index: entry.index,
+        term: entry.term
+      });
 
       const hash = createHmac('sha256', JSON.stringify(packet.data.log)).digest('hex');
       await this.mokka.gossip.pullPending(hash);
       this.mokka.logger.info(`the ${packet.data.index} has been saved`);
       this.mokka.emit(eventTypes.LOG, packet.data.index);
     } catch (err) {
-      console.log(err);
       this.mokka.logger.error(`error during save log: ${JSON.stringify(err)}`);
 
       if (err.code === 2 || err.code === 3)
@@ -81,34 +85,37 @@ class AppendApi {
     return replies;
   }
 
-  public async appendAck(packet: PacketModel): Promise<PacketModel[]> {
+  public async appendAck(packet: PacketModel): Promise<void> {
 
-    const node = this.mokka.nodes.find((node) => node.publicKey === packet.publicKey);
+    const node = this.mokka.nodes.get(packet.publicKey);
 
     if (!node)
-      return [];
+      return;
 
     if (packet.last.index > 0) {
       const entry = await this.mokka.getDb().getEntry().get(packet.last.index);
 
       if (!entry)
-        return [];
+        return;
     }
 
-    await this.mokka.getDb().getState().setState(
-      packet.publicKey,
-      new StateModel(
-        packet.last.index,
-        packet.last.hash,
-        packet.last.term,
-        packet.last.createdAt
-      )
+    const committedIndex = this.mokka.committedIndex();
+
+    const state = new StateModel(
+      packet.last.index,
+      packet.last.hash,
+      packet.last.term,
+      packet.last.createdAt
     );
-    node.setLastLogIndex(packet.last.index);
+
+    await this.mokka.getDb().getState().setState(packet.publicKey, state);
+    node.setLastLogState(state);
 
     this.mokka.logger.info(`append ack: ${packet.last.index} from ${packet.publicKey}`);
+    // todo send event
+    if (committedIndex !== this.mokka.committedIndex())
+      this.mokka.emit(eventTypes.COMMITTED);
 
-    return [];
   }
 
   public async appendFail(packet: PacketModel): Promise<PacketModel[]> {

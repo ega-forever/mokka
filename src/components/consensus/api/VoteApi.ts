@@ -28,7 +28,8 @@ class VoteApi {
       });
     }
 
-    const lastInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+   //  const lastInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+    const lastInfo = this.mokka.getLastLogState();
 
     if (lastInfo.term >= packet.term || lastInfo.index > packet.last.index) {
       return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
@@ -154,7 +155,7 @@ class VoteApi {
 
     this.mokka.timer.heartbeat(this.mokka.heartbeat);
     // todo send immediate heartbeat
-    for (const node of this.mokka.nodes) {
+    for (const node of this.mokka.nodes.values()) {
       const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
       await this.messageApi.message(packet);
     }

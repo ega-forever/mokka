@@ -30,7 +30,7 @@ class NodeApi {
     node.write = this.mokka.write.bind(this.mokka);
     node.once('end', () => this.leave(node.publicKey));
 
-    this.mokka.nodes.push(node);
+    this.mokka.nodes.set(publicKey, node);
     this.mokka.emit(eventTypes.NODE_JOIN, node);
 
     this.mokka.gossip.handleNewPeers([publicKey]);
@@ -40,22 +40,13 @@ class NodeApi {
 
   public leave(publicKey: string): void {
 
-    const index = this.mokka.nodes.findIndex((node) => node.publicKey === publicKey);
+    const node = this.mokka.nodes.get(publicKey);
+    this.mokka.nodes.delete(publicKey);
 
-    if (index === -1)
-      return;
-
-    this.mokka.nodes.splice(index, 1);
-
-    const node = this.mokka.nodes[index];
     this.mokka.emit(eventTypes.NODE_LEAVE, node);
   }
 
-  public async promote(): Promise<void> { // todo resolve issue with election
-
-    console.log('going to promote')
-
-    // todo why promote happens once we are follower?
+  public async promote(): Promise<void> {
 
     if (this.mokka.state === states.CANDIDATE) {
       return;
@@ -65,13 +56,14 @@ class NodeApi {
     const token = `${this.mokka.term + 1}x${startTime}`;
     const secret = secrets.str2hex(token);
 
-    const shares: string[] = secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority());
+    const shares: string[] = secrets.share(secret, this.mokka.nodes.size + 1, this.mokka.majority());
+    const peerPubKeys = Array.from(this.mokka.nodes.keys());
 
     const voteData = shares
       .sort()
       .map((share: string, index: number) => {
 
-        if (index === this.mokka.nodes.length) {
+        if (index === this.mokka.nodes.size) {
           const signature = Buffer.from(
             nacl.sign.detached(
               Buffer.from(share),
@@ -87,7 +79,7 @@ class NodeApi {
         }
 
         return {
-          publicKey: this.mokka.nodes[index].publicKey,
+          publicKey: peerPubKeys[index],
           share,
           signature: null,
           voted: false

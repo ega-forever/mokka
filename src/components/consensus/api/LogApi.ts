@@ -1,6 +1,5 @@
 import {createHmac} from 'crypto';
-import {Semaphore} from 'semaphore';
-import semaphore from 'semaphore';
+import semaphore, {Semaphore} from 'semaphore';
 import nacl = require('tweetnacl');
 import voteTypes from '../../shared/constants/EventTypes';
 import {EntryModel} from '../../storage/models/EntryModel';
@@ -56,7 +55,8 @@ class LogApi {
         continue;
       }
 
-      const aliveNodes = this.mokka.nodes.filter((node) => node.getLastLogIndex() !== -1);
+      const aliveNodes = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
+
       const leaderInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
 
       for (const node of aliveNodes) {
@@ -70,7 +70,7 @@ class LogApi {
       }
 
       if (this.mokka.committedIndex() !== leaderInfo.index) { // todo this may slow down system
-        await new Promise((res) => setTimeout(res, 100));
+        await new Promise((res) => setTimeout(res, this.mokka.heartbeat));
         continue;
       }
 
@@ -92,7 +92,7 @@ class LogApi {
   }
 
   private async broadcastInRange(node: NodeModel, lastIndex: number) {
-    for (let index = (node.getLastLogIndex() || 1); index <= lastIndex; index++) {
+    for (let index = (node.getLastLogState().index || 1); index <= lastIndex; index++) {
       const entry = await this.mokka.getDb().getEntry().get(index);
       const appendPacket = await this.messageApi.packet(messageTypes.APPEND, node.publicKey, entry);
       await this.messageApi.message(appendPacket);
@@ -114,7 +114,7 @@ class LogApi {
       });
 
       if (!status) {
-        node.setLastLogIndex(-1); // todo set peer as dead
+        node.setLastLogState({index: -1, hash: null, term: 0, createdAt: Date.now()}); // todo set peer as dead
         return;
       }
     }
@@ -132,13 +132,11 @@ class LogApi {
           this.semaphore.leave();
           return res();
         }
-        const start = Date.now();
 
         const entry = await this._save(log);
         this.mokka.gossip.pullPending(hash);
         await this._broadcast(entry.index, entry.hash);
 
-        console.log(`broadcasted (${entry.index}) in ${Date.now() - start}`);
         this.mokka.logger.info(`command has been broadcasted ${JSON.stringify(log)}`);
         this.semaphore.leave();
         res();
@@ -160,7 +158,13 @@ class LogApi {
       this.mokka.term,
       signature);
 
-    this.mokka.setLastLogIndex(entry.index);
+    this.mokka.setLastLogState({
+      createdAt: entry.createdAt,
+      hash: entry.hash,
+      index: entry.index,
+      term: entry.term
+    });
+
     this.mokka.emit(voteTypes.LOG, entry.index);
     this.mokka.emit(voteTypes.LOG_ACK, entry.index);
     return entry;
@@ -180,7 +184,7 @@ class LogApi {
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return;
 
-    const followers = this.mokka.nodes.filter((node) => node.getLastLogIndex() !== -1);
+    const followers = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
 
     if (followers.length === 0)
       return;
