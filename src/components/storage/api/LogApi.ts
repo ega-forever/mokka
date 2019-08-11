@@ -18,16 +18,15 @@ class LogApi {
   }
 
   public async save(
+    publicKey: string,
     log: any,
     term: number,
     signature: string,
-    responses: string[],
     index: number = null,
-    hash: string = null,
-    isCommitted: boolean = false
+    hash: string = null
   ): Promise<EntryModel> {
 
-    const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo();
+    const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo(publicKey);
 
     if (Number.isInteger(index) && index !== 0 && index <= lastIndex) {
       return Promise.reject({
@@ -59,60 +58,25 @@ class LogApi {
     }
 
     const entry = new EntryModel({
-      committed: false,
       createdAt: Date.now(),
       hash: generatedHash,
       index,
       log,
-      responses,
       signature,
       term
     });
 
     await this.entryApi.put(entry);
 
-    const currentState = await this.stateApi.getInfo();
-
-    if (entry.index > currentState.index) {
-      const state: StateModel = {
-        committedIndex: isCommitted ? entry.index : currentState.committedIndex,
-        createdAt: entry.createdAt,
-        hash: entry.hash,
-        index: entry.index,
-        term: entry.term
-      };
-      await this.stateApi.setState(state);
-    }
+    const state: StateModel = {
+      createdAt: Date.now(),
+      hash: entry.hash,
+      index: entry.index,
+      term: entry.term
+    };
+    await this.stateApi.setState(publicKey, state);
 
     return entry;
-
-  }
-
-  public async ack(index: number, publicKeys: string[]): Promise<EntryModel> {
-    const entry = await this.entryApi.get(index);
-
-    if (!entry)
-      return new EntryModel({});
-
-    for (const publicKey of publicKeys) {
-      const entryIndex = entry.responses.indexOf(publicKey);
-      if (entryIndex === -1)
-        entry.responses.push(publicKey);
-    }
-
-    await this.entryApi.put(entry);
-    return entry;
-  }
-
-  public async commit(index: number): Promise<void> {
-
-    const info = await this.stateApi.getInfo();
-
-    if (info.committedIndex >= index)
-      return;
-
-    info.committedIndex = index;
-    await this.stateApi.setState(info);
   }
 }
 

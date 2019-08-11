@@ -13,15 +13,15 @@ class StateApi {
     this.entryApi = new EntryApi(db);
   }
 
-  public async setState(state: StateModel): Promise<void> {
-    await this.db.put(prefixes.states.toString(), state);
+  public async setState(publicKey: string, state: StateModel): Promise<void> {
+    await this.db.put(`${prefixes.states}:${publicKey}`, state);
   }
 
-  public async getInfo(): Promise<StateModel> {
+  public async getInfo(publicKey: string): Promise<StateModel> {
     try {
-      return await this.db.get(prefixes.states.toString());
+      return await this.db.get(`${prefixes.states}:${publicKey}`);
     } catch (e) {
-      return new StateModel({});
+      return new StateModel();
     }
   }
 

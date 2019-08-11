@@ -28,7 +28,7 @@ class VoteApi {
       });
     }
 
-    const lastInfo = await this.mokka.getDb().getState().getInfo();
+    const lastInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
 
     if (lastInfo.term >= packet.term || lastInfo.index > packet.last.index) {
       return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
@@ -151,6 +151,14 @@ class VoteApi {
 
     compacted = `${votedShares.length.toString(16)}x${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted);
+
+    this.mokka.timer.heartbeat(this.mokka.heartbeat);
+    // todo send immediate heartbeat
+    for (const node of this.mokka.nodes) {
+      const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
+      await this.messageApi.message(packet);
+    }
+
     return [];
   }
 }

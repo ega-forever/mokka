@@ -81,7 +81,6 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
 
         mokka.on('message', (msg: any) => {
 
-          console.log(msg)
           if (msg.type !== 'info' || msg.args[0].index !== 2000)
             return;
 

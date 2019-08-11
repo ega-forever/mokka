@@ -53,6 +53,14 @@ class NodeApi {
 
   public async promote(): Promise<void> { // todo resolve issue with election
 
+    console.log('going to promote')
+
+    // todo why promote happens once we are follower?
+
+    if (this.mokka.state === states.CANDIDATE) {
+      return;
+    }
+
     const startTime = Date.now();
     const token = `${this.mokka.term + 1}x${startTime}`;
     const secret = secrets.str2hex(token);
@@ -91,7 +99,7 @@ class NodeApi {
     );
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
-    const startVote = Date.now();
+    // const startVote = Date.now();
     for (const share of voteData.slice(0, -1)) {
       const packet = await this.messageApi.packet(messageTypes.VOTE, share.publicKey, {
         share: share.share
@@ -100,12 +108,15 @@ class NodeApi {
       await this.messageApi.message(packet);
     }
 
-    const timeout = this.mokka.timer.timeout() - (Date.now() - startVote);
+    // this.mokka.timer.setVoteTimeout();
 
-    if (timeout > 0)
-      await new Promise((res) => setTimeout(res, timeout));
+    await new Promise((res) => setTimeout(res, this.mokka.election.max));
 
-    this.mokka.timer.setVoteTimeout();
+    if (this.mokka.state === states.CANDIDATE) {
+      this.mokka.logger.info('rollback!!');
+      this.mokka.setState(states.FOLLOWER, this.mokka.term - 1, '');
+    }
+
   }
 
 }

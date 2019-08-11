@@ -8,14 +8,14 @@ let mokka: TCPMokka = null;
 
 const init = (params: any) => {
 
-  const logger = bunyan.createLogger({name: 'mokka.logger', level: 50});
+  const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
 
   mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].substring(64, 128)}`,
     electionMax: 300,
-    electionMin: 150,
+    electionMin: 50,
     gossipHeartbeat: 200,
-    heartbeat: 100,
+    heartbeat: 50,
     logger,
     privateKey: params.keys[params.index]
   });
@@ -46,7 +46,7 @@ const push = (address: string, data: any) => {
 };
 
 const info = async () => {
-  const info = await mokka.getDb().getState().getInfo();
+  const info = await mokka.getDb().getState().getInfo(mokka.publicKey);
   process.send({type: 'info', args: [info]});
 };
 

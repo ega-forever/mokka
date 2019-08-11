@@ -1,19 +1,19 @@
-class StateModel {
+export class StateModel {
 
-    public index: number;
-    public hash: string;
-    public term: number;
-    public createdAt: number;
-    public committedIndex: number;
+  public index: number;
+  public hash: string;
+  public term: number;
+  public createdAt: number;
 
-    constructor({index = 0, hash = ''.padStart(32, '0'), term = 0, createdAt = Date.now(), committedIndex = 0}) {
-        this.index = index;
-        this.hash = hash;
-        this.term = term;
-        this.createdAt = createdAt;
-        this.committedIndex = committedIndex;
+  constructor(
+    index: number = 0,
+    hash: string = ''.padStart(32, '0'),
+    term: number = 0,
+    createdAt: number = Date.now()) {
+    this.index = index;
+    this.hash = hash;
+    this.term = term;
+    this.createdAt = createdAt;
 
-    }
+  }
 }
-
-export {StateModel};

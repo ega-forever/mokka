@@ -44,6 +44,53 @@ class LogApi {
     this.run = false;
   }
 
+  public async runLoop() { // loop for checking new packets
+
+    if (!this.run)
+      this.run = true;
+
+    while (this.run) {
+
+      if (this.mokka.state !== states.LEADER) {
+        await new Promise((res) => setTimeout(res, 100));
+        continue;
+      }
+
+      const aliveNodes = this.mokka.nodes.filter((node) => node.getLastLogIndex() !== -1);
+      const leaderInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+
+      for (const node of aliveNodes) {
+        const info = await this.mokka.getDb().getState().getInfo(node.publicKey);
+
+        // todo use latency
+        if (leaderInfo.index === info.index || info.createdAt < Date.now() - this.mokka.election.max)
+          continue;
+
+        await this.broadcastInRange(node, leaderInfo.index);
+      }
+
+      if (this.mokka.committedIndex() !== leaderInfo.index) { // todo this may slow down system
+        await new Promise((res) => setTimeout(res, 100));
+        continue;
+      }
+
+      const pendings = this.mokka.gossip.getPendings(1); // todo replace with generators + async
+
+      if (!pendings.length) {
+        await new Promise((res) => setTimeout(res, this.mokka.timer.timeout()));
+        continue;
+      }
+
+      const pending = pendings[0];
+
+      if (!pending.log.signature) {
+        return this.mokka.gossip.pullPending(pending.hash);
+      }
+
+      await this._commit({key: pending.log.key, value: pending.log.value}, pending.hash);
+    }
+  }
+
   private async broadcastInRange(node: NodeModel, lastIndex: number) {
     for (let index = (node.getLastLogIndex() || 1); index <= lastIndex; index++) {
       const entry = await this.mokka.getDb().getEntry().get(index);
@@ -74,53 +121,6 @@ class LogApi {
 
   }
 
-  public async runLoop() { // loop for checking new packets
-
-    if (!this.run)
-      this.run = true;
-
-    while (this.run) {
-
-      if (this.mokka.state !== states.LEADER) {
-        await new Promise((res) => setTimeout(res, 100));
-        continue;
-      }
-
-
-      const info = await this.mokka.getDb().getState().getInfo();
-      const lastIndex = info.createdAt > Date.now() - this.mokka.election.max ? info.index - 1 : info.index;
-
-      if (lastIndex > 0) {
-        const outdatedAliveNodes = this.mokka.nodes.filter((node) => node.getLastLogIndex() < lastIndex && node.getLastLogIndex() !== -1);
-
-        for (const node of outdatedAliveNodes) {
-          await this.broadcastInRange(node, lastIndex);
-        }
-      }
-
-
-      if (info.committedIndex !== info.index) {
-        await new Promise((res) => setTimeout(res, 100));
-        continue;
-      }
-
-      const pendings = this.mokka.gossip.getPendings(1);
-
-      if (!pendings.length) {
-        await new Promise((res) => setTimeout(res, this.mokka.timer.timeout()));
-        continue;
-      }
-
-      const pending = pendings[0];
-
-      if (!pending.log.signature) {
-        return this.mokka.gossip.pullPending(pending.hash);
-      }
-
-      await this._commit({key: pending.log.key, value: pending.log.value}, pending.hash);
-    }
-  }
-
   private async _commit(log: { key: string, value: any }, hash: string): Promise<void> {
 
     return await new Promise((res) =>
@@ -132,11 +132,13 @@ class LogApi {
           this.semaphore.leave();
           return res();
         }
+        const start = Date.now();
 
         const entry = await this._save(log);
         this.mokka.gossip.pullPending(hash);
         await this._broadcast(entry.index, entry.hash);
 
+        console.log(`broadcasted (${entry.index}) in ${Date.now() - start}`);
         this.mokka.logger.info(`command has been broadcasted ${JSON.stringify(log)}`);
         this.semaphore.leave();
         res();
@@ -152,7 +154,12 @@ class LogApi {
       )
     ).toString('hex');
 
-    const entry = await this.mokka.getDb().getLog().save(log, this.mokka.term, signature, [this.mokka.publicKey]);
+    const entry = await this.mokka.getDb().getLog().save(
+      this.mokka.publicKey,
+      log,
+      this.mokka.term,
+      signature);
+
     this.mokka.setLastLogIndex(entry.index);
     this.mokka.emit(voteTypes.LOG, entry.index);
     this.mokka.emit(voteTypes.LOG_ACK, entry.index);
@@ -173,21 +180,13 @@ class LogApi {
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return;
 
-    const followers = this.mokka.nodes.filter((node) =>
-      !entry.responses.includes(node.publicKey)
-    );
+    const followers = this.mokka.nodes.filter((node) => node.getLastLogIndex() !== -1);
 
     if (followers.length === 0)
       return;
 
-    const pubKeys = followers.map((node: NodeModel) => node.publicKey);
-    const notAckedPubKeys = pubKeys.filter((pubKey) => !entry.responses.includes(pubKey));
-
-    if (!notAckedPubKeys.length)
-      return;
-
-    for (const pubKey of notAckedPubKeys) {
-      const appendPacket = await this.messageApi.packet(messageTypes.APPEND, pubKey, entry);
+    for (const follower of followers) {
+      const appendPacket = await this.messageApi.packet(messageTypes.APPEND, follower.publicKey, entry);
       await this.messageApi.message(appendPacket);
     }
   }

@@ -13,8 +13,7 @@ class PacketModel {
     index: number,
     hash: string,
     term: number,
-    createdAt: number,
-    responses: string[]
+    createdAt: number
   };
   public proof: string;
 
@@ -27,8 +26,7 @@ class PacketModel {
       index: number,
       hash: string,
       term: number,
-      createdAt: number,
-      responses: string[]
+      createdAt: number
     },
     proof: string,
     peer: {

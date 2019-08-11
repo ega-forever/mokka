@@ -143,11 +143,9 @@ describe('storage tests', (ctx = {}) => {
       const start = Date.now();
       const randomIndex = _.random(3000 * num, 6000 * num);
 
-      const state = new StateModel({
-        committedIndex: randomIndex - 10,
-        hash: createHmac('sha256', 'data' + 99999).digest('hex'),
-        index: 99999
-      });
+      const state = new StateModel(9999,
+        createHmac('sha256', 'data' + 99999).digest('hex')
+      );
 
       await ctx.mokka.getDb().getState().setState(state);
 

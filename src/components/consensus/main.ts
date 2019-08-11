@@ -68,6 +68,19 @@ class Mokka extends NodeModel {
     return responses >= this.majority();
   }
 
+  public committedIndex() {
+
+    const results = this.nodes.map((node) => node.getLastLogIndex());
+
+    if (results.length < this.majority())
+      return -1;
+
+    return results.sort()[0];
+
+    // {12: 2, 14: 1, 10: 1}
+
+  }
+
   public majority() {
     return Math.ceil(this.nodes.length / 2) + 1;
   }
@@ -77,7 +90,7 @@ class Mokka extends NodeModel {
   }
 
   public async connect(): Promise<void> { // todo set last log index for each peer
-    const {index} = await this.getDb().getState().getInfo();
+    const {index} = await this.getDb().getState().getInfo(this.publicKey);
 
     if (index)
       this.setLastLogIndex(index);
@@ -89,7 +102,6 @@ class Mokka extends NodeModel {
   }
 
   public async disconnect(): Promise<void> {
-    this.timer.clearVoteTimeout();
     this.timer.clearHeartbeatTimeout();
     this.gossip.stop();
     this.logApi.stop();

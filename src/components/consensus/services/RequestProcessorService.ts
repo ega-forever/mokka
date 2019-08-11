@@ -8,6 +8,7 @@ import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
 import {validate} from '../utils/proofValidation';
 import {AbstractRequestService} from './AbstractRequestService';
+import {StateModel} from '../../storage/models/StateModel';
 
 class RequestProcessorService extends AbstractRequestService {
 
@@ -22,12 +23,11 @@ class RequestProcessorService extends AbstractRequestService {
 
   protected async _process(packet: PacketModel): Promise<PacketModel[]> {
 
-    if (packet == null)
-      return null;
-
     let replies: PacketModel[] = [];
 
-    this.mokka.timer.heartbeat(states.LEADER === this.mokka.state ? this.mokka.heartbeat : this.mokka.timer.timeout());
+    if (states.LEADER !== this.mokka.state && packet.state === states.LEADER) {
+      this.mokka.timer.clearHeartbeatTimeout();
+    }
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
 
@@ -40,7 +40,15 @@ class RequestProcessorService extends AbstractRequestService {
       }
 
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
-      this.mokka.timer.clearElectionTimeout();
+      await this.mokka.getDb().getState().setState(
+        packet.publicKey,
+        new StateModel(
+          packet.last.index,
+          packet.last.hash,
+          packet.last.term,
+          packet.last.createdAt
+          )
+      );
     }
 
     if (packet.state !== states.LEADER && this.mokka.state === states.LEADER) {
@@ -62,8 +70,9 @@ class RequestProcessorService extends AbstractRequestService {
     if (packet.type === messageTypes.APPEND)
       replies = await this.appendApi.append(packet);
 
-    if (packet.type === messageTypes.APPEND_ACK)
+    if (packet.type === messageTypes.APPEND_ACK) {
       replies = await this.appendApi.appendAck(packet);
+    }
 
     if (packet.type === messageTypes.APPEND_FAIL)
       replies = await this.appendApi.appendFail(packet);
@@ -74,13 +83,15 @@ class RequestProcessorService extends AbstractRequestService {
       ];
     }
 
-    this.mokka.timer.heartbeat(states.LEADER === this.mokka.state ? this.mokka.heartbeat : this.mokka.timer.timeout());
-
     if (packet.state === states.LEADER &&
       packet.type === messageTypes.ACK &&
-      this.mokka.getLastLogIndex() !== packet.peer.number
-    ) {
+      this.mokka.getLastLogIndex() !== packet.peer.number) {
+      console.log(`asking to reappend ${this.mokka.getLastLogIndex()} vs ${packet.peer.number}`)
       replies = [await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey)];
+    }
+
+    if (this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
+      this.mokka.timer.heartbeat(this.mokka.timer.timeout());
     }
 
     return replies;
