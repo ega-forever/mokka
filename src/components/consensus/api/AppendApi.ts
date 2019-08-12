@@ -48,7 +48,7 @@ class AppendApi {
 
     try {
 
-      const entry = await this.mokka.getDb().getLog().save( // todo cause issue because of concurrency (wrong order)
+      const entry = await this.mokka.getDb().getLog().save(
         this.mokka.publicKey,
         packet.data.log,
         packet.data.term,
@@ -112,7 +112,6 @@ class AppendApi {
     node.setLastLogState(state);
 
     this.mokka.logger.info(`append ack: ${packet.last.index} from ${packet.publicKey}`);
-    // todo send event
     if (committedIndex !== this.mokka.committedIndex())
       this.mokka.emit(eventTypes.COMMITTED);
 

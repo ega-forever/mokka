@@ -14,12 +14,7 @@ class NodeModel extends EventEmitter {
   private _leaderPublicKey: string = '';
   private readonly nodeAddress: string;
   // private lastLogIndex: number = 0;
-  private lastLog: StateModel = {
-    createdAt: Date.now(),
-    hash: '',
-    index: 0,
-    term: 0
-  };
+  private lastLog: StateModel = new StateModel();
 
   constructor(
     privateKey: string,
@@ -47,11 +42,11 @@ class NodeModel extends EventEmitter {
     this.emit(eventTypes.STATE);
   }
 
-  public setLastLogState(log: StateModel) {
+  public setLastLogState(log: StateModel): void {
     this.lastLog = log;
   }
 
-  public getLastLogState() {
+  public getLastLogState(): StateModel {
     return this.lastLog;
   }
 

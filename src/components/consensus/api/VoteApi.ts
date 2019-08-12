@@ -28,8 +28,8 @@ class VoteApi {
       });
     }
 
-   //  const lastInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
-    const lastInfo = this.mokka.getLastLogState();
+    const lastInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+    //const lastInfo = this.mokka.getLastLogState(); // todo
 
     if (lastInfo.term >= packet.term || lastInfo.index > packet.last.index) {
       return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {

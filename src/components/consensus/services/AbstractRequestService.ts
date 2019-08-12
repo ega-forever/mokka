@@ -31,11 +31,11 @@ class AbstractRequestService {
     const end = Date.now();
 
 
-    if (end - start > 100) {
+/*    if (end - start > 100) {
       console.log(`processed in ${end - start}`);
       console.log(packet);
       process.exit(0);
-    }
+    }*/
 
   }
 

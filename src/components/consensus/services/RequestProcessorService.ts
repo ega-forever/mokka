@@ -39,16 +39,15 @@ class RequestProcessorService extends AbstractRequestService {
         return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'validation failed')];
       }
 
-      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
-      await this.mokka.getDb().getState().setState(
-        packet.publicKey,
-        new StateModel(
-          packet.last.index,
-          packet.last.hash,
-          packet.last.term,
-          packet.last.createdAt
-        )
+      const state = new StateModel(
+        packet.last.index,
+        packet.last.hash,
+        packet.last.term,
+        packet.last.createdAt
       );
+
+      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
+      await this.mokka.getDb().getState().setState(packet.publicKey, state);
     }
 
     if (packet.type === messageTypes.APPEND_ACK || node.getLastLogState().index !== packet.last.index) {
@@ -78,7 +77,7 @@ class RequestProcessorService extends AbstractRequestService {
 
     if (packet.state === states.LEADER &&
       packet.type === messageTypes.ACK &&
-      this.mokka.getLastLogState().index !== packet.peer.number) {
+      this.mokka.getLastLogState().index !== packet.peer.number) { // we should compare
       console.log(`asking to reappend ${this.mokka.getLastLogState().index} vs ${packet.peer.number}`);
       replies = [await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey)];
     }
