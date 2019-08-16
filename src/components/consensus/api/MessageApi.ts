@@ -37,7 +37,7 @@ class MessageApi {
     }*/
 
   public async packet(type: number, publicKey: string, data: any = null): Promise<PacketModel> { // todo encrypt message with public key of follower
-    const last = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+    const last = this.mokka.getLastLogState();
     const peerNode = this.mokka.nodes.get(publicKey);
 
     return new PacketModel(

@@ -26,7 +26,7 @@ class LogApi {
     hash: string = null
   ): Promise<EntryModel> {
 
-    const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo(publicKey);
+    const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo();
 
     if (Number.isInteger(index) && index !== 0 && index <= lastIndex) {
       return Promise.reject({
@@ -74,7 +74,7 @@ class LogApi {
       index: entry.index,
       term: entry.term
     };
-    await this.stateApi.setState(publicKey, state);
+    await this.stateApi.setState(state);
 
     return entry;
   }

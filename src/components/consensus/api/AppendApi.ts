@@ -23,7 +23,7 @@ class AppendApi {
 
     const replies: PacketModel[] = [];
 
-    const lastInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+    const lastInfo = await this.mokka.getLastLogState();
 
     if (packet.data.index > lastInfo.index + 1)
       return replies;
@@ -108,7 +108,7 @@ class AppendApi {
       packet.last.createdAt
     );
 
-    await this.mokka.getDb().getState().setState(packet.publicKey, state);
+    await this.mokka.getDb().getState().setState(state);
     node.setLastLogState(state);
 
     this.mokka.logger.info(`append ack: ${packet.last.index} from ${packet.publicKey}`);
@@ -119,7 +119,7 @@ class AppendApi {
 
   public async appendFail(packet: PacketModel): Promise<PacketModel[]> {
 
-    const lastInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+    const lastInfo = await this.mokka.nodes.get(this.mokka.publicKey).getLastLogState();
 
     if (packet.data.index > lastInfo.index) {
       return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'wrong index!')];

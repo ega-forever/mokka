@@ -44,7 +44,7 @@ class TCPMokka extends Mokka {
 
   public async disconnect(): Promise<void> {
     await super.disconnect();
-    for (const socket of Object.values(this.sockets)) {
+    for (const socket of this.sockets.values()) {
       socket.close();
     }
   }

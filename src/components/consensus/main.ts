@@ -91,7 +91,7 @@ class Mokka extends NodeModel {
   }
 
   public async connect(): Promise<void> { // todo set last log index for each peer
-    const info = await this.getDb().getState().getInfo(this.publicKey);
+    const info = await this.getDb().getState().getInfo();
 
     if (info) {
       this.setState(NodeStates.FOLLOWER, info.term, null);

@@ -1,8 +1,8 @@
 import * as bunyan from 'bunyan';
 import * as _ from 'lodash';
-import states from '../../components/consensus/constants/NodeStates';
-import eventTypes from '../../components/shared/constants/EventTypes';
-import TCPMokka from '../../implementation/TCP';
+import states from '../../../components/consensus/constants/NodeStates';
+import eventTypes from '../../../components/shared/constants/EventTypes';
+import TCPMokka from '../../../implementation/TCP';
 
 let mokka: TCPMokka = null;
 
@@ -46,7 +46,7 @@ const push = (address: string, data: any) => {
 };
 
 const info = async () => {
-  const info = await mokka.getDb().getState().getInfo(mokka.publicKey);
+  const info = await mokka.getDb().getState().getInfo();
   process.send({type: 'info', args: [info]});
 };
 

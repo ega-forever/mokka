@@ -5,7 +5,8 @@
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
-    "test": "mocha --timeout 190000 -r ts-node/register src/test/unit/components/AppendApi.spec.ts",
+    "test_unit": "mocha --timeout 190000 -r ts-node/register src/test/unit/components/LogApi.spec.ts",
+    "test": "mocha --timeout 190000 -r ts-node/register src/test/integration/concurrency.spec.ts",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack",
     "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"

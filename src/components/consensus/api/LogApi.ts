@@ -1,5 +1,4 @@
 import {createHmac} from 'crypto';
-import semaphore, {Semaphore} from 'semaphore';
 import nacl = require('tweetnacl');
 import voteTypes from '../../shared/constants/EventTypes';
 import {EntryModel} from '../../storage/models/EntryModel';
@@ -13,13 +12,11 @@ import {NodeApi} from './NodeApi';
 class LogApi {
 
   private mokka: Mokka;
-  private semaphore: Semaphore;
   private run: boolean;
   private nodeApi: NodeApi;
   private messageApi: MessageApi;
 
   constructor(mokka: Mokka) {
-    this.semaphore = semaphore(1);
     this.mokka = mokka;
     this.run = true;
     this.nodeApi = new NodeApi(mokka);
@@ -57,10 +54,10 @@ class LogApi {
 
       const aliveNodes = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
 
-      const leaderInfo = await this.mokka.getDb().getState().getInfo(this.mokka.publicKey);
+      const leaderInfo = await this.mokka.getLastLogState();
 
       for (const node of aliveNodes) {
-        const info = await this.mokka.getDb().getState().getInfo(node.publicKey);
+        const info = node.getLastLogState();
 
         // todo use latency
         if (leaderInfo.index === info.index || info.createdAt < Date.now() - this.mokka.election.max)
@@ -123,25 +120,18 @@ class LogApi {
 
   private async _commit(log: { key: string, value: any }, hash: string): Promise<void> {
 
-    return await new Promise((res) =>
-      this.semaphore.take(async () => {
+    const checkPending = this.mokka.gossip.getPending(hash);
 
-        const checkPending = this.mokka.gossip.getPending(hash);
+    if (!checkPending) {
+      return;
+    }
 
-        if (!checkPending) {
-          this.semaphore.leave();
-          return res();
-        }
+    const entry = await this._save(log);
+    this.mokka.gossip.pullPending(hash);
+    await this._broadcast(entry.index, entry.hash);
 
-        const entry = await this._save(log);
-        this.mokka.gossip.pullPending(hash);
-        await this._broadcast(entry.index, entry.hash);
+    this.mokka.logger.info(`command has been broadcasted ${JSON.stringify(log)}`);
 
-        this.mokka.logger.info(`command has been broadcasted ${JSON.stringify(log)}`);
-        this.semaphore.leave();
-        res();
-      })
-    );
   }
 
   private async _save(log: { key: string, value: any }): Promise<EntryModel> {

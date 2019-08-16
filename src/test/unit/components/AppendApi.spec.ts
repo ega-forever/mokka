@@ -269,12 +269,13 @@ describe('AppendApi tests', (ctx = {}) => {
     await appendApiLeader.appendAck(replyAppend[0]);
 
     const memoryState = ctx.nodes[0].nodes.get(ctx.nodes[1].publicKey).getLastLogState();
-    const dbState = await ctx.nodes[0].getDb().getState().getInfo(ctx.nodes[1].publicKey);
 
-    expect(dbState.index === memoryState.index);
-    expect(dbState.hash === memoryState.hash);
-    expect(dbState.term === memoryState.term);
-    expect(dbState.createdAt === memoryState.createdAt);
+    expect(memoryState.index === 1);
+
+    /*    expect(dbState.index === memoryState.index);
+        expect(dbState.hash === memoryState.hash);
+        expect(dbState.term === memoryState.term);
+        expect(dbState.createdAt === memoryState.createdAt);*/
 
   });
 

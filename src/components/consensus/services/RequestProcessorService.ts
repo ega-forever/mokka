@@ -47,7 +47,7 @@ class RequestProcessorService extends AbstractRequestService {
       );
 
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
-      await this.mokka.getDb().getState().setState(packet.publicKey, state);
+      await this.mokka.getDb().getState().setState(state);
     }
 
     if (packet.type === messageTypes.APPEND_ACK || node.getLastLogState().index !== packet.last.index) {
