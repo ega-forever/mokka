@@ -119,7 +119,7 @@ class AppendApi {
 
   public async appendFail(packet: PacketModel): Promise<PacketModel[]> {
 
-    const lastInfo = await this.mokka.nodes.get(this.mokka.publicKey).getLastLogState();
+    const lastInfo = await this.mokka.getLastLogState();
 
     if (packet.data.index > lastInfo.index) {
       return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'wrong index!')];

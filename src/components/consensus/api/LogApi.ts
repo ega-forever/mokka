@@ -174,12 +174,12 @@ class LogApi {
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return;
 
-    const followers = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
+    /*const followers = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
 
     if (followers.length === 0)
-      return;
+      return;*/
 
-    for (const follower of followers) {
+    for (const follower of this.mokka.nodes.values()) {
       const appendPacket = await this.messageApi.packet(messageTypes.APPEND, follower.publicKey, entry);
       await this.messageApi.message(appendPacket);
     }

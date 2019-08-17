@@ -28,7 +28,7 @@ class VoteApi {
       });
     }
 
-    const lastInfo = await this.mokka.getLastLogState();
+    const lastInfo = this.mokka.getLastLogState();
 
     if (lastInfo.term >= packet.term || lastInfo.index > packet.last.index) {
       return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {

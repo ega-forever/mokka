@@ -59,14 +59,14 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
     for (let i = 0; i < 100; i++) {
       ctx.mokkas[0].send({
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
-          nonce: Date.now() + i + '1',
+          nonce: Date.now() + (i * Math.random() * 100) + '1',
           value: (Date.now() + i).toString()
         }],
         type: 'push'
       });
       ctx.mokkas[1].send({
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
-          nonce: Date.now() + i + '2',
+          nonce: Date.now() + (i * Math.random() * 100) + '2',
           value: (Date.now() + i).toString()
         }],
         type: 'push'

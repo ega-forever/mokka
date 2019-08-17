@@ -53,9 +53,9 @@ describe('LogApi tests', (ctx = {}) => {
     logApi.push(key, value);
 
     const pendings = (ctx.nodes[0] as Mokka).gossip.ownState.getPendingLogs();
-    expect(pendings.length === 1);
-    expect(pendings[0].log.key === key);
-    expect(pendings[0].log.value === value);
+    expect(pendings.length).to.be.eq(1);
+    expect(pendings[0].log.key).to.be.eq(key);
+    expect(pendings[0].log.value).to.be.eq(value);
     (ctx.nodes[0] as Mokka).disconnect();
   });
 
@@ -121,13 +121,11 @@ describe('LogApi tests', (ctx = {}) => {
       (logApi as any).broadcastInRange = (node, index) => res({node, index});
     });
 
-    await Promise.delay(1000);
-
     logApi.stop();
     await (ctx.nodes[0] as Mokka).disconnect();
 
-    expect(data.index === 10);
-    expect(data.node.publicKey === followerNode.publicKey);
+    expect(data.index).to.be.eq(10);
+    expect(data.node.publicKey).to.be.eq(followerNode.publicKey);
 
     const followerState2 = new StateModel(0, '123', 1);
     followerNode.setLastLogState(followerState2);
@@ -138,13 +136,11 @@ describe('LogApi tests', (ctx = {}) => {
       (logApi as any).broadcastInRange = (node, index) => res({node, index});
     });
 
-    await Promise.delay(1000);
-
     logApi.stop();
     await (ctx.nodes[0] as Mokka).disconnect();
 
-    expect(data2.index === 10);
-    expect(data2.node.publicKey === followerNode.publicKey);
+    expect(data2.index).to.be.eq(10);
+    expect(data2.node.publicKey).to.be.eq(followerNode.publicKey);
 
 
   });
@@ -168,7 +164,7 @@ describe('LogApi tests', (ctx = {}) => {
     logApi.stop();
     await leaderNode.disconnect();
 
-    expect(hash === key);
+    expect(hash).to.be.eq(key);
   });
 
   // todo speed test on append new logs (check timers)

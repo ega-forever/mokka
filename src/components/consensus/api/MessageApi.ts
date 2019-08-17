@@ -13,8 +13,8 @@ class MessageApi {
 
     const node = this.mokka.nodes.get(packet.peer.publicKey);
 
-    if (node.getLastLogState().index !== -1)
-      await node.write(node.address, Buffer.from(JSON.stringify(packet)));
+    //if (node.getLastLogState().index !== -1)
+    await node.write(node.address, Buffer.from(JSON.stringify(packet)));
 
   }
 
