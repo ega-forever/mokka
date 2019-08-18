@@ -1,5 +1,5 @@
+import * as crypto from 'crypto';
 import {createHmac} from 'crypto';
-import nacl = require('tweetnacl');
 import voteTypes from '../../shared/constants/EventTypes';
 import {EntryModel} from '../../storage/models/EntryModel';
 import messageTypes from '../constants/MessageTypes';
@@ -27,12 +27,13 @@ class LogApi {
   public push(key: string, value: any): void {
     const hash = createHmac('sha256', JSON.stringify({key, value})).digest('hex');
     this.mokka.logger.info(`pushed unconfirmed ${hash} : ${JSON.stringify(value)}`);
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(this.mokka.privateKey, 'hex')
-      )
-    ).toString('hex');
+    const start = Date.now();
+
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
+
+    const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
+    console.log(`signed in ${Date.now() - start}`);
     this.mokka.gossip.push(hash, {key, value, signature});
   }
 
@@ -135,12 +136,11 @@ class LogApi {
   }
 
   private async _save(log: { key: string, value: any }): Promise<EntryModel> {
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(JSON.stringify(log)),
-        Buffer.from(this.mokka.privateKey, 'hex')
-      )
-    ).toString('hex');
+
+    const sign = crypto.createSign('sha256');
+    sign.update(JSON.stringify(log)); // todo consider using hash
+
+    const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
 
     const entry = await this.mokka.getDb().getLog().save(
       this.mokka.publicKey,

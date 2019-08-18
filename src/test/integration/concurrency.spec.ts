@@ -1,10 +1,9 @@
 import Promise from 'bluebird';
-import {Buffer} from 'buffer';
 import {expect} from 'chai';
 import {fork} from 'child_process';
 import * as _ from 'lodash';
 import * as path from 'path';
-import * as nacl from 'tweetnacl';
+import * as crypto from 'crypto';
 
 describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
   beforeEach(async () => {
@@ -13,8 +12,14 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
 
     ctx.keys = [];
 
-    for (let i = 0; i < nodesCount; i++)
-      ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
+    for (let i = 0; i < nodesCount; i++) {
+      const node = crypto.createECDH('secp256k1');
+      node.generateKeys();
+      ctx.keys.push({
+        privateKey: node.getPrivateKey().toString('hex'),
+        publicKey: node.getPublicKey().toString('hex')
+      });
+    }
 
     for (let index = 0; index < ctx.keys.length; index++) {
       const instance = fork(path.join(__dirname, 'workers/MokkaWorker.ts'), [], {

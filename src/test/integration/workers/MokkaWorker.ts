@@ -11,18 +11,18 @@ const init = (params: any) => {
   const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
 
   mokka = new TCPMokka({
-    address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].substring(64, 128)}`,
+    address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].publicKey}`,
     electionMax: 300,
     electionMin: 100,
     gossipHeartbeat: 200,
     heartbeat: 100,
     logger,
-    privateKey: params.keys[params.index]
+    privateKey: params.keys[params.index].privateKey
   });
 
   for (let i = 0; i < params.keys.length; i++)
     if (i !== params.index)
-      mokka.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${params.keys[i].substring(64, 128)}`);
+      mokka.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${params.keys[i].publicKey}`);
 
   mokka.on(eventTypes.ERROR, (err) => {
     logger.error(`index #${params.index} ${err}`);

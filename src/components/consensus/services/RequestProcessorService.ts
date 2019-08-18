@@ -31,11 +31,11 @@ class RequestProcessorService extends AbstractRequestService {
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
 
-      const pubKeys = Array.from(this.mokka.nodes.keys());
-      pubKeys.push(this.mokka.publicKey);
+      const rawPubKeys = Array.from(this.mokka.nodes.values()).map((node) => node.rawPublicKey);
+      rawPubKeys.push(this.mokka.rawPublicKey);
       const start = Date.now();
-      const validated = validate(packet.term, packet.proof, this.mokka.proof, pubKeys);
-      console.log(`super validated in ${Date.now() - start}`)
+      const validated = validate(packet.term, packet.proof, this.mokka.proof, rawPubKeys);
+      console.log(`super validated in ${Date.now() - start}`);
 
       if (!validated) {
         return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'validation failed')];
@@ -84,7 +84,7 @@ class RequestProcessorService extends AbstractRequestService {
     }
 
     if (this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
-      console.log(`(${this.mokka.publicKey.slice(0, 5)}) getting heartbeat ${Date.now()}`)
+      console.log(`(${this.mokka.publicKey.slice(0, 5)}) getting heartbeat ${Date.now()}`);
       this.mokka.timer.heartbeat(this.mokka.timer.timeout());
     }
 

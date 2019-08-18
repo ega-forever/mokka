@@ -1,19 +1,42 @@
+import crypto from 'crypto';
 import {EventEmitter} from 'events';
 import eventTypes from '../../shared/constants/EventTypes';
 import {StateModel} from '../../storage/models/StateModel';
 import NodeStates from '../constants/NodeStates';
+import {convertKeyPairToRawSecp256k1, convertPublicKeyToRawSecp256k1} from '../utils/keyPair';
 
 class NodeModel extends EventEmitter {
+
+  get state(): number {
+    return this._state;
+  }
+
+  get term(): number {
+    return this._term;
+  }
+
+  get leaderPublicKey(): string {
+    return this._leaderPublicKey;
+  }
+
+  get address(): string {
+    return this.nodeAddress;
+  }
+
+  get proof(): string {
+    return this._proof;
+  }
 
   public readonly privateKey: string;
   public readonly publicKey: string;
   public readonly nodes: Map<string, NodeModel> = new Map<string, NodeModel>();
+  public readonly rawPublicKey: string;
+  public readonly rawPrivateKey: string;
   private _state: number;
   private _term: number = 0;
   private _proof: string;
   private _leaderPublicKey: string = '';
   private readonly nodeAddress: string;
-  // private lastLogIndex: number = 0;
   private lastLog: StateModel = new StateModel();
 
   constructor(
@@ -24,7 +47,21 @@ class NodeModel extends EventEmitter {
     super();
 
     this.privateKey = privateKey;
+
+    if (this.privateKey) {
+      const keyPair = crypto.createECDH('secp256k1');
+      keyPair.setPrivateKey(Buffer.from(privateKey, 'hex'));
+      const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+      console.log(rawKeyPair)
+      this.rawPrivateKey = rawKeyPair.privateKey;
+      this.rawPublicKey = rawKeyPair.publicKey;
+    }
+
     this.publicKey = multiaddr.match(/\w+$/).toString();
+    if (!this.privateKey) {
+      this.rawPublicKey = convertPublicKeyToRawSecp256k1(this.publicKey);
+    }
+
     this._state = state;
 
     this.nodeAddress = multiaddr.split(/\w+$/)[0].replace(/\/$/, '');
@@ -48,26 +85,6 @@ class NodeModel extends EventEmitter {
 
   public getLastLogState(): StateModel {
     return this.lastLog;
-  }
-
-  get state(): number {
-    return this._state;
-  }
-
-  get term(): number {
-    return this._term;
-  }
-
-  get leaderPublicKey(): string {
-    return this._leaderPublicKey;
-  }
-
-  get address(): string {
-    return this.nodeAddress;
-  }
-
-  get proof(): string {
-    return this._proof;
   }
 
 }

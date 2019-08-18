@@ -1,5 +1,5 @@
+import * as crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
-import nacl = require('tweetnacl');
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import voteTypes from '../constants/VoteTypes';
@@ -46,12 +46,10 @@ class VoteApi {
       });
     }
 
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(packet.data.share),
-        Buffer.from(this.mokka.privateKey, 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(Buffer.from(packet.data.share));
+
+    const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
 
     const vote = new VoteModel(
       packet.publicKey,
@@ -100,11 +98,10 @@ class VoteApi {
       return [reply];
     }
 
-    const isSigned = nacl.sign.detached.verify(
-      Buffer.from(localShare.share),
-      Buffer.from(packet.data.signature, 'hex'),
-      Buffer.from(packet.publicKey, 'hex')
-    );
+    const verify = crypto.createVerify('sha256');
+    verify.update(Buffer.from(localShare.share));
+    const rawPublicKey = this.mokka.nodes.get(packet.publicKey).rawPublicKey;
+    const isSigned = verify.verify(rawPublicKey, Buffer.from(packet.data.signature, 'hex'));
 
     if (!isSigned) {
       const reply = await this.messageApi.packet(
@@ -146,10 +143,10 @@ class VoteApi {
     let compacted = votedShares
       .sort((share1, share2) => share1.share > share2.share ? -1 : 1)
       .reduce((result: string, item: { share: string, signature: string }) => {
-        return `${result}${item.share}${item.signature}`;
+        return `${result}y${item.share}g${item.signature}`;
       }, '');
 
-    compacted = `${votedShares.length.toString(16)}x${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
+    compacted = `${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted);
 
     this.mokka.timer.heartbeat(this.mokka.heartbeat);

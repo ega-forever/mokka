@@ -1,5 +1,4 @@
 import secrets = require('secrets.js-grempe');
-import nacl = require('tweetnacl');
 import eventTypes from '../../shared/constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
@@ -7,6 +6,7 @@ import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
 import {MessageApi} from './MessageApi';
+import * as crypto from 'crypto';
 
 class NodeApi {
 
@@ -64,12 +64,11 @@ class NodeApi {
       .map((share: string, index: number) => {
 
         if (index === this.mokka.nodes.size) {
-          const signature = Buffer.from(
-            nacl.sign.detached(
-              Buffer.from(share),
-              Buffer.from(this.mokka.privateKey, 'hex')
-            )
-          ).toString('hex');
+
+          const sign = crypto.createSign('sha256');
+          sign.update(Buffer.from(share));
+
+          const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
           return {
             publicKey: this.mokka.publicKey,
             share,
