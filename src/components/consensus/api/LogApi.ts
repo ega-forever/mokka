@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import {createHmac} from 'crypto';
 import voteTypes from '../../shared/constants/EventTypes';
+import EventTypes from '../../shared/constants/EventTypes';
 import {EntryModel} from '../../storage/models/EntryModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
@@ -27,13 +28,11 @@ class LogApi {
   public push(key: string, value: any): void {
     const hash = createHmac('sha256', JSON.stringify({key, value})).digest('hex');
     this.mokka.logger.info(`pushed unconfirmed ${hash} : ${JSON.stringify(value)}`);
-    const start = Date.now();
 
     const sign = crypto.createSign('sha256');
     sign.update(hash);
 
     const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
-    console.log(`signed in ${Date.now() - start}`);
     this.mokka.gossip.push(hash, {key, value, signature});
   }
 
@@ -55,13 +54,13 @@ class LogApi {
 
       const aliveNodes = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
 
-      const leaderInfo = await this.mokka.getLastLogState();
+      const leaderInfo = this.mokka.getLastLogState();
 
       for (const node of aliveNodes) {
         const info = node.getLastLogState();
 
         // todo use latency
-        if (leaderInfo.index === info.index || info.createdAt < Date.now() - this.mokka.election.max)
+        if (leaderInfo.index === info.index || info.createdAt > Date.now() - this.mokka.election.max)
           continue;
 
         await this.broadcastInRange(node, leaderInfo.index);
@@ -69,7 +68,22 @@ class LogApi {
 
       if (this.mokka.committedIndex() !== leaderInfo.index) { // todo this may slow down system
         await new Promise((res) => setTimeout(res, this.mokka.heartbeat));
-        continue;
+
+        const status = await new Promise((res) => {
+          const timeoutId = setTimeout(() => {
+            this.mokka.removeListener(EventTypes.COMMITTED, callback);
+            res(0);
+          }, this.mokka.heartbeat);
+
+          const callback = () => {
+            clearTimeout(timeoutId);
+            res(1);
+          };
+          this.mokka.once(EventTypes.COMMITTED, callback);
+        });
+
+        if (status === 0)
+          continue;
       }
 
       const pendings = this.mokka.gossip.getPendings(1); // todo replace with generators + async
@@ -129,7 +143,7 @@ class LogApi {
 
     const entry = await this._save(log);
     this.mokka.gossip.pullPending(hash);
-    await this._broadcast(entry.index, entry.hash);
+    await this._broadcast(entry.index);
 
     this.mokka.logger.info(`command has been broadcasted ${JSON.stringify(log)}`);
 
@@ -138,7 +152,7 @@ class LogApi {
   private async _save(log: { key: string, value: any }): Promise<EntryModel> {
 
     const sign = crypto.createSign('sha256');
-    sign.update(JSON.stringify(log)); // todo consider using hash
+    sign.update(JSON.stringify(log));
 
     const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
 
@@ -160,24 +174,14 @@ class LogApi {
     return entry;
   }
 
-  private async _broadcast(index: number, hash: string): Promise<void> {
+  private async _broadcast(index: number): Promise<void> {
 
     const entry = await this.mokka.getDb().getEntry().get(index);
-
-    if (!entry || entry.hash !== hash) {
-      this.mokka.logger.trace(`can't broadcast entry at index ${index}`);
-      return;
-    }
 
     this.mokka.logger.info(`broadcasting command ${JSON.stringify(entry.log)} at index ${index}`);
 
     if (entry.term !== this.mokka.term || this.mokka.state !== states.LEADER)
       return;
-
-    /*const followers = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
-
-    if (followers.length === 0)
-      return;*/
 
     for (const follower of this.mokka.nodes.values()) {
       const appendPacket = await this.messageApi.packet(messageTypes.APPEND, follower.publicKey, entry);

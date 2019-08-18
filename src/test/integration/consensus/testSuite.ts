@@ -1,10 +1,9 @@
 import Promise from 'bluebird';
-import {Buffer} from 'buffer';
 import {expect} from 'chai';
 import {fork} from 'child_process';
+import * as crypto from 'crypto';
 import * as _ from 'lodash';
 import * as path from 'path';
-import * as nacl from 'tweetnacl';
 
 export function testSuite(ctx: any = {}, nodesCount: number = 0) {
 
@@ -14,8 +13,14 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
 
     ctx.keys = [];
 
-    for (let i = 0; i < nodesCount; i++)
-      ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
+    for (let i = 0; i < nodesCount; i++) {
+      const node = crypto.createECDH('secp256k1');
+      node.generateKeys();
+      ctx.keys.push({
+        privateKey: node.getPrivateKey().toString('hex'),
+        publicKey: node.getPublicKey().toString('hex')
+      });
+    }
 
     for (let index = 0; index < ctx.keys.length; index++) {
       const instance = fork(path.join(__dirname, '../workers/MokkaWorker.ts'), [], {
@@ -73,7 +78,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
         ctx.mokkas[0].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[1].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[1].publicKey);
           clearInterval(intervalPid);
           res();
         });
@@ -94,7 +99,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
         ctx.mokkas[1].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[0].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
           clearInterval(intervalPid);
           res();
         });
@@ -137,7 +142,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
           if (msg.type !== 'gossip_update')
             return;
 
-          expect(msg.args[0]).to.be.oneOf([ctx.keys[0].substring(64, 128), ctx.keys[1].substring(64, 128)]);
+          expect(msg.args[0]).to.be.oneOf([ctx.keys[0].publicKey, ctx.keys[1].publicKey]);
 
           missed++;
           if (missed === 2) {
@@ -168,8 +173,6 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
 
     const infos = await Promise.all(infoAwaitPromises);
     expect(_.chain(infos).map((infos: any) => infos.hash).uniq().size().value()).to.eq(1);
-    /*    expect(_.chain(infos).map((infos: any) => infos.committedIndex).uniq().size().value()).to.eq(1);
-        expect(_.chain(infos).map((infos: any) => infos.committedIndex).head().value()).to.eq(2);*/
   });
 
   it(`should be able to reach the consensus with 51% of nodes (${nodesCount} nodes)`, async () => {
@@ -196,7 +199,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
         ctx.mokkas[0].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[1].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[1].publicKey);
           clearInterval(intervalPid);
           res();
         });
@@ -217,7 +220,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
         ctx.mokkas[1].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[0].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
           clearInterval(intervalPid);
           res();
         });
@@ -231,7 +234,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
       }),
       ctx.mokkas[1].send({
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
-          nonce: Date.now() + 1,
+          nonce: Date.now() + 1 + 'b',
           value: (Date.now() + 1).toString()
         }],
         type: 'push'
@@ -239,27 +242,27 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
     ]);
 
     const pendingState: any = await new Promise((res) => {
-      ctx.mokkas[0].send({type: 'pendings'});
+      ctx.mokkas[0].send({type: 'pendings_all'});
 
       ctx.mokkas[0].on('message', (msg: any) => {
-        if (msg.type !== 'pendings')
+        if (msg.type !== 'pendings_all')
           return;
         res(msg.args[0]);
       });
     });
 
     const pendingState2: any = await new Promise((res) => {
-      ctx.mokkas[1].send({type: 'pendings'});
+      ctx.mokkas[1].send({type: 'pendings_all'});
 
       ctx.mokkas[1].on('message', (msg: any) => {
-        if (msg.type !== 'pendings')
+        if (msg.type !== 'pendings_all')
           return;
         res(msg.args[0]);
       });
     });
 
-    expect(pendingState.length).to.eq(1);
-    expect(pendingState2.length).to.eq(1);
+    expect(pendingState.length).to.eq(2);
+    expect(pendingState2.length).to.eq(2);
 
     ctx.mokkas[1].kill();
 
@@ -292,7 +295,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
     for (const mokka of ctx.mokkas)
       mokka.send({type: 'connect'});
 
-    const recordsCount = _.random(100, 500);
+    const recordsCount = _.random(20, 50);
 
     for (let i = 0; i < recordsCount; i++)
       ctx.mokkas[0].send({
@@ -303,7 +306,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
         type: 'push'
       });
 
-    const recordsCount2 = _.random(100, 500);
+    const recordsCount2 = _.random(20, 50);
 
     for (let i = 0; i < recordsCount2; i++)
       ctx.mokkas[1].send({
@@ -349,12 +352,13 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
     expect(_.chain(states).uniqBy(_.isEqual).size().value()).to.eq(1);
   });
 
+
   it(`should replicate the queued logs and append them (${nodesCount} nodes)`, async () => {
 
     for (const mokka of ctx.mokkas)
       mokka.send({type: 'connect'});
 
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 100; i++) {
       ctx.mokkas[0].send({
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
           nonce: Date.now() + i,
@@ -372,7 +376,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
 
         mokka.on('message', (msg: any) => {
 
-          if (msg.type !== 'info' || msg.args[0].index !== 1000)
+          if (msg.type !== 'info' || msg.args[0].index !== 100)
             return;
 
           clearInterval(timeoutId);

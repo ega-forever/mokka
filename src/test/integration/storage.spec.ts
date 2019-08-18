@@ -8,9 +8,9 @@ import leveldown from 'leveldown';
 // @ts-ignore
 import * as _ from 'lodash';
 import * as path from 'path';
-import {EntryModel} from '../components/storage/models/EntryModel';
-import {StateModel} from '../components/storage/models/StateModel';
-import TCPMokka from '../implementation/TCP';
+import {EntryModel} from '../../components/storage/models/EntryModel';
+import {StateModel} from '../../components/storage/models/StateModel';
+import TCPMokka from '../../implementation/TCP';
 
 describe('storage tests', (ctx = {}) => {
 

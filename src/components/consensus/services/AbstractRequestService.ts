@@ -27,7 +27,7 @@ class AbstractRequestService {
 
     const end = Date.now();
 
-    if (end - start > 30 && packet.type !== 21) {
+    if (end - start > 20) {
       console.log(`processed in ${end - start}`);
       console.log(packet);
       process.exit(0);
@@ -35,15 +35,6 @@ class AbstractRequestService {
 
     for (const item of data)
       await this.messageApi.message(item);
-
-/*    const end = Date.now();
-
-    if (end - start > 30 && packet.type !== 21) {
-      console.log(`processed in ${end - start}`);
-      console.log(packet);
-      process.exit(0);
-    }*/
-
   }
 
   protected async _process(packet: PacketModel, node: NodeModel): Promise<PacketModel[]> {

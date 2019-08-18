@@ -89,7 +89,7 @@ class AppendApi {
 
     const node = this.mokka.nodes.get(packet.publicKey);
 
-    if (!node)
+    if (!node || node.getLastLogState().index === packet.last.index)
       return;
 
     if (packet.last.index > 0) {

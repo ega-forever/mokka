@@ -2,10 +2,12 @@ import {EventEmitter} from 'events';
 // import nacl = require('tweetnacl');
 import eventTypes from '../../shared/constants/EventTypes';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
+import * as crypto from 'crypto';
 
 class PeerModel extends EventEmitter {
 
   private readonly pubKey: string;
+  private readonly rawPubKey: string;
   private readonly attrs: Map<string, { value: any, number: number }>; // local storage
   private detector: AccrualFailureDetector;
   private alive: boolean = true;
@@ -13,9 +15,10 @@ class PeerModel extends EventEmitter {
   private maxVersionSeen: number = 0;
   private PHI: number = 8;
 
-  constructor(pubKey: string) {
+  constructor(pubKey: string, rawPubKey: string) {
     super();
     this.pubKey = pubKey;
+    this.rawPubKey = rawPubKey;
     this.attrs = new Map<string, { value: any, number: number }>();
     this.detector = new AccrualFailureDetector();
   }
@@ -43,11 +46,9 @@ class PeerModel extends EventEmitter {
     if (!v.signature)
       return;
 
-    const isSigned = true; /*nacl.sign.detached.verify( // todo
-      Buffer.from(k),
-      Buffer.from(v.signature, 'hex'),
-      Buffer.from(this.pubKey, 'hex')
-    );*/
+    const verify = crypto.createVerify('sha256');
+    verify.update(Buffer.from(k));
+    const isSigned = verify.verify(this.rawPubKey, Buffer.from(v.signature, 'hex'));
 
     if (!isSigned)
       return;

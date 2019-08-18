@@ -25,16 +25,17 @@ class TimerController {
       clearTimeout(this.timers.get('heartbeat'));
     }
 
-    const heartbeatFunc = async (durationPassed, started) => {
+    const heartbeatFunc = async () => {
 
       if (states.LEADER !== this.mokka.state) {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
-        console.log(`(${this.mokka.publicKey.slice(0, 5)}) haven't recieved any acks for ${durationPassed} (${Date.now()})`);
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
-        return await this.nodeApi.promote();
+        await this.nodeApi.promote();
+
+        if (this.mokka.state !== states.LEADER)
+          return this.heartbeat(this.timeout());
       }
 
-      console.log(`(${this.mokka.publicKey.slice(0, 5)}) sending heartbeat ${Date.now()} with duration ${durationPassed} vs ${Date.now() - started}`);
       for (const node of this.mokka.nodes.values()) {
         const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
         await this.messageApi.message(packet); // todo this cause delay in heartbeat
@@ -44,7 +45,7 @@ class TimerController {
       this.heartbeat(this.mokka.heartbeat);
     };
 
-    const heartbeatTimeout = setTimeout(heartbeatFunc.bind(this, duration, Date.now()), duration);
+    const heartbeatTimeout = setTimeout(heartbeatFunc, duration);
 
     this.timers.set('heartbeat', heartbeatTimeout);
   }

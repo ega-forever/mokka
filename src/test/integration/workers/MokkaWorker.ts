@@ -55,6 +55,11 @@ const getPending = () => {
   process.send({type: 'pendings', args: [pendings]});
 };
 
+const getAllPendings = () => {
+  const pendings = mokka.gossip.getPendings();
+  process.send({type: 'pendings_all', args: [pendings]});
+};
+
 process.on('message', (m) => {
   if (m.type === 'init')
     init(m.args[0]);
@@ -70,5 +75,8 @@ process.on('message', (m) => {
 
   if (m.type === 'pendings')
     getPending();
+
+  if (m.type === 'pendings_all')
+    getAllPendings();
 
 });

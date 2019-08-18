@@ -1,9 +1,9 @@
 import Promise from 'bluebird';
 import {expect} from 'chai';
 import {fork} from 'child_process';
+import * as crypto from 'crypto';
 import * as _ from 'lodash';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
   beforeEach(async () => {
@@ -89,8 +89,6 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
          // if (msg.type !== 'info' || msg.args[0].index !== 2000)
           if (msg.type !== 'info' || msg.args[0].index !== 200)
             return;
-
-          console.log('super test', msg.args[0].index)
 
           clearInterval(timeoutId);
           res(msg.args[0]);

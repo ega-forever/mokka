@@ -1,9 +1,8 @@
 import Promise from 'bluebird';
-import {Buffer} from 'buffer';
 import {expect} from 'chai';
 import {fork} from 'child_process';
+import * as crypto from 'crypto';
 import * as path from 'path';
-import * as nacl from 'tweetnacl';
 
 describe('gossip tests', (ctx = {mokkas: []}) => {
 
@@ -13,9 +12,14 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
 
     ctx.keys = [];
 
-    for (let i = 0; i < 5; i++)
-      ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
-
+    for (let i = 0; i < 5; i++) {
+      const node = crypto.createECDH('secp256k1');
+      node.generateKeys();
+      ctx.keys.push({
+        privateKey: node.getPrivateKey().toString('hex'),
+        publicKey: node.getPublicKey().toString('hex')
+      });
+    }
     for (let index = 0; index < ctx.keys.length; index++) {
       const instance = fork(path.join(__dirname, 'workers/MokkaWorker.ts'), [], {
         execArgv: ['-r', 'ts-node/register']
@@ -54,7 +58,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         ctx.mokkas[0].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[1].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[1].publicKey);
           res();
         });
       }),
@@ -62,7 +66,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         ctx.mokkas[1].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[0].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
           res();
         });
       }),
@@ -132,7 +136,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         ctx.mokkas[0].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[1].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[1].publicKey);
           res();
         });
       }),
@@ -140,7 +144,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         ctx.mokkas[1].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[0].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
           res();
         });
       }),
@@ -218,16 +222,20 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
       execArgv: ['-r', 'ts-node/register']
     });
 
-
     const fakeKeys = ctx.keys.slice(0);
-    fakeKeys[1] = Buffer.from(nacl.sign.keyPair().secretKey).toString('hex');
+    const node = crypto.createECDH('secp256k1');
+    node.generateKeys();
+    fakeKeys[1] = {
+      privateKey: node.getPrivateKey().toString('hex'),
+      publicKey: node.getPublicKey().toString('hex')
+    };
 
     ctx.mokkas[1].send({
       args: [
         {
           index: 1,
           keys: fakeKeys,
-          publicKey: ctx.keys[1].substring(64, 128)
+          publicKey: ctx.keys[1].publicKey
         }
       ],
       type: 'init'
@@ -241,7 +249,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         ctx.mokkas[1].on('message', (msg: any) => {
           if (msg.type !== 'gossip_update')
             return;
-          expect(msg.args[0]).to.eq(ctx.keys[0].substring(64, 128));
+          expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
           res();
         });
       }),
@@ -263,10 +271,10 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
 
     const pendingStatePromises: Array<Promise<[]>> = ctx.mokkas.slice(0, 2).map((mokka: any) =>
       new Promise((res) => {
-        mokka.send({type: 'pendings'});
+        mokka.send({type: 'pendings_all'});
 
         mokka.on('message', (msg: any) => {
-          if (msg.type !== 'pendings')
+          if (msg.type !== 'pendings_all')
             return;
           res(msg.args[0]);
         });
@@ -275,8 +283,10 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
 
     const pendingStates = await Promise.all(pendingStatePromises);
 
+    await Promise.delay(3000);
+
     expect(pendingStates[0].length).to.eq(1);
-    expect(pendingStates[1].length).to.eq(0);
+    expect(pendingStates[1].length).to.eq(2);
 
     for (const mokka of ctx.mokkas.slice(2))
       mokka.send({type: 'connect'});
@@ -296,10 +306,10 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     });
 
     const newPendingState: any = await new Promise((res) => {
-      ctx.mokkas[0].send({type: 'pendings'});
+      ctx.mokkas[0].send({type: 'pendings_all'});
 
       ctx.mokkas[0].on('message', (msg: any) => {
-        if (msg.type !== 'pendings')
+        if (msg.type !== 'pendings_all')
           return;
         res(msg.args[0]);
       });

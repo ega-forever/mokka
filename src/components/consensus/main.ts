@@ -71,15 +71,14 @@ class Mokka extends NodeModel {
 
   public committedIndex() {
 
-    const results = Array.from(this.nodes.values()).map((node) => node.getLastLogState().index);
+    const results = Array.from(this.nodes.values())
+      .map((node) => node.getLastLogState().index)
+      .filter((index) => index !== -1);
 
-    if (results.length < this.majority())
+    if (results.length + 1 < this.majority())
       return -1;
 
     return results.sort()[0];
-
-    // {12: 2, 14: 1, 10: 1}
-
   }
 
   public majority() {

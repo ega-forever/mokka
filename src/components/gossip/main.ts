@@ -21,7 +21,7 @@ class GossipController extends EventEmitter {
   constructor(mokka: Mokka, timeout: number) {
     super();
 
-    this.ownState = new PeerModel(mokka.publicKey);
+    this.ownState = new PeerModel(mokka.publicKey, mokka.rawPublicKey);
     this.timeout = timeout;
 
     this.peers = new Map<string, PeerModel>();
@@ -128,7 +128,11 @@ class GossipController extends EventEmitter {
 
   public handleNewPeers(pubKeys: string[]) {
     for (const pubKey of pubKeys) {
-      const peer = new PeerModel(pubKey);
+      const node = this.mokka.nodes.get(pubKey);
+      if (!node)
+        return;
+
+      const peer = new PeerModel(pubKey, node.rawPublicKey);
       this.peers.set(pubKey, peer);
       this.emit(eventTypes.GOSSIP_NEW_PEER, pubKey);
       this.listenToPeer(peer);

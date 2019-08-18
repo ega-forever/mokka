@@ -52,7 +52,6 @@ class NodeModel extends EventEmitter {
       const keyPair = crypto.createECDH('secp256k1');
       keyPair.setPrivateKey(Buffer.from(privateKey, 'hex'));
       const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
-      console.log(rawKeyPair)
       this.rawPrivateKey = rawKeyPair.privateKey;
       this.rawPublicKey = rawKeyPair.publicKey;
     }
