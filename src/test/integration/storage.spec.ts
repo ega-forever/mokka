@@ -20,7 +20,7 @@ describe('storage tests', (ctx = {}) => {
     const node = crypto.createECDH('secp256k1');
     node.generateKeys();
 
-    const dbPath = path.join('./', 'dump', 'test.db');
+    const dbPath = path.join(__dirname, '../../../', 'dump', 'test.db');
 
     fs.removeSync(dbPath);
 
@@ -32,7 +32,7 @@ describe('storage tests', (ctx = {}) => {
       heartbeat: 200,
       logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
       privateKey: node.getPrivateKey().toString('hex'),
-      storage: leveldown(`${path.join(__dirname, '../..', 'dump', 'test.db')}_db`)
+      storage: leveldown(`${dbPath}_db`)
     });
 
     await Promise.delay(500);
