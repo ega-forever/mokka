@@ -2,14 +2,15 @@ import Promise from 'bluebird';
 import {Buffer} from 'buffer';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
+import * as crypto from 'crypto';
 import {createHmac} from 'crypto';
-import * as nacl from 'tweetnacl';
 import {AppendApi} from '../../../components/consensus/api/AppendApi';
 import {MessageApi} from '../../../components/consensus/api/MessageApi';
 import messageTypes from '../../../components/consensus/constants/MessageTypes';
 import NodeStates from '../../../components/consensus/constants/NodeStates';
 import {StateModel} from '../../../components/storage/models/StateModel';
 import TCPMokka from '../../../implementation/TCP';
+import {convertKeyPairToRawSecp256k1} from '../../../components/consensus/utils/keyPair';
 
 describe('AppendApi tests', (ctx = {}) => {
 
@@ -19,33 +20,33 @@ describe('AppendApi tests', (ctx = {}) => {
 
     ctx.nodes = [];
 
-    for (let index = 0; index < 3; index++) {
-      ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
+    for (let i = 0; i < 3; i++) {
+      const node = crypto.createECDH('secp256k1');
+      node.generateKeys();
+      ctx.keys.push({
+        privateKey: node.getPrivateKey().toString('hex'),
+        publicKey: node.getPublicKey().toString('hex')
+      });
     }
 
     for (let index = 0; index < 3; index++) {
       const instance = new TCPMokka({
-        address: `tcp://127.0.0.1:2000/${ctx.keys[index].substring(64, 128)}`,
+        address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
         electionMax: 1000,
         electionMin: 300,
         gossipHeartbeat: 200,
         heartbeat: 200,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index]
+        privateKey: ctx.keys[index].privateKey
       });
 
       for (let i = 0; i < 3; i++)
         if (i !== index)
-          instance.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${ctx.keys[i].substring(64, 128)}`);
+          instance.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${ctx.keys[i].publicKey}`);
 
       ctx.nodes.push(instance);
     }
-
-
-    // todo mock fake peers
-
   });
-
 
   it('should append 1000 records for linear time', async () => {
 
@@ -54,12 +55,15 @@ describe('AppendApi tests', (ctx = {}) => {
 
     for (let i = 1; i <= 1000; i++) {
       const hash = createHmac('sha256', 'data' + i).digest('hex');
-      const signature = Buffer.from(
-        nacl.sign.detached(
-          Buffer.from(hash),
-          Buffer.from(ctx.keys[1], 'hex')
-        )
-      ).toString('hex');
+
+      const sign = crypto.createSign('sha256');
+      sign.update(hash);
+
+      const keyPair = crypto.createECDH('secp256k1');
+      keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+      const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+      const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
       const entry = await ctx.nodes[1].getDb().getLog().save(
         ctx.nodes[1].publicKey,
@@ -79,18 +83,21 @@ describe('AppendApi tests', (ctx = {}) => {
     }
   });
 
+
   it('should ignore append, once we receive wrong index', async () => {
 
     const appendApi = new AppendApi(ctx.nodes[0]);
     const messageApi = new MessageApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(ctx.keys[1], 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
+
+    const keyPair = crypto.createECDH('secp256k1');
+    keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+    const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+    const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
     const entry = await ctx.nodes[1].getDb().getLog().save(
       ctx.nodes[1].publicKey,
@@ -107,7 +114,6 @@ describe('AppendApi tests', (ctx = {}) => {
     const reply = await appendApi.append(appendPacket);
     expect(reply.length === 0);
 
-
   });
 
   it('should send append_ack for the known entry', async () => {
@@ -116,12 +122,14 @@ describe('AppendApi tests', (ctx = {}) => {
     const messageApi = new MessageApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(ctx.keys[1], 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
+
+    const keyPair = crypto.createECDH('secp256k1');
+    keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+    const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+    const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
     const entry = await ctx.nodes[1].getDb().getLog().save(
       ctx.nodes[1].publicKey,
@@ -148,12 +156,14 @@ describe('AppendApi tests', (ctx = {}) => {
     const messageApi = new MessageApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(ctx.keys[1], 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
+
+    const keyPair = crypto.createECDH('secp256k1');
+    keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+    const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+    const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
     const entry = await ctx.nodes[1].getDb().getLog().save(
       ctx.nodes[1].publicKey,
@@ -182,12 +192,14 @@ describe('AppendApi tests', (ctx = {}) => {
     const messageApi = new MessageApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(ctx.keys[1], 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
+
+    const keyPair = crypto.createECDH('secp256k1');
+    keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+    const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+    const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
     const entry = await ctx.nodes[1].getDb().getLog().save(
       ctx.nodes[1].publicKey,
@@ -213,8 +225,9 @@ describe('AppendApi tests', (ctx = {}) => {
 
     const hash = createHmac('sha256', 'data').digest('hex');
 
-
-    const fakePubKey = Buffer.from(nacl.sign.keyPair().secretKey).toString('hex').substr(64, 128);
+    const node = crypto.createECDH('secp256k1');
+    node.generateKeys();
+    const fakePubKey = node.getPublicKey().toString('hex');
     const appendPacket = await messageApi.packet(messageTypes.APPEND_ACK, ctx.nodes[0].publicKey);
     appendPacket.last = new StateModel(1, hash, 1);
     appendPacket.publicKey = fakePubKey;
@@ -229,7 +242,6 @@ describe('AppendApi tests', (ctx = {}) => {
     const messageApi = new MessageApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-
 
     const appendPacket = await messageApi.packet(messageTypes.APPEND_ACK, ctx.nodes[0].publicKey);
     appendPacket.last = new StateModel(1, hash, 1);
@@ -246,12 +258,14 @@ describe('AppendApi tests', (ctx = {}) => {
     const appendApiFollower = new AppendApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(ctx.keys[1], 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
+
+    const keyPair = crypto.createECDH('secp256k1');
+    keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+    const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+    const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
     const entry = await ctx.nodes[0].getDb().getLog().save(
       ctx.nodes[0].publicKey,
@@ -271,12 +285,6 @@ describe('AppendApi tests', (ctx = {}) => {
     const memoryState = ctx.nodes[0].nodes.get(ctx.nodes[1].publicKey).getLastLogState();
 
     expect(memoryState.index === 1);
-
-    /*    expect(dbState.index === memoryState.index);
-        expect(dbState.hash === memoryState.hash);
-        expect(dbState.term === memoryState.term);
-        expect(dbState.createdAt === memoryState.createdAt);*/
-
   });
 
   it('should send back error, in case height is out of bounds', async () => {
@@ -286,12 +294,14 @@ describe('AppendApi tests', (ctx = {}) => {
     const messageApiFollower = new MessageApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(ctx.keys[1], 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
+
+    const keyPair = crypto.createECDH('secp256k1');
+    keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+    const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+    const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
     const entry = await ctx.nodes[0].getDb().getLog().save(
       ctx.nodes[0].publicKey,
@@ -299,7 +309,11 @@ describe('AppendApi tests', (ctx = {}) => {
       1,
       signature);
 
-    const failPacket = await messageApiFollower.packet(messageTypes.APPEND_FAIL, ctx.nodes[0].publicKey, {index: entry.index + 1});
+    const failPacket = await messageApiFollower.packet(
+      messageTypes.APPEND_FAIL,
+      ctx.nodes[0].publicKey,
+      {index: entry.index + 1}
+    );
     failPacket.state = NodeStates.FOLLOWER;
     failPacket.last = new StateModel(entry.index, entry.hash, entry.term, entry.createdAt);
 
@@ -315,20 +329,25 @@ describe('AppendApi tests', (ctx = {}) => {
     const messageApiFollower = new MessageApi(ctx.nodes[1]);
 
     const hash = createHmac('sha256', 'data').digest('hex');
-    const signature = Buffer.from(
-      nacl.sign.detached(
-        Buffer.from(hash),
-        Buffer.from(ctx.keys[1], 'hex')
-      )
-    ).toString('hex');
+    const sign = crypto.createSign('sha256');
+    sign.update(hash);
 
+    const keyPair = crypto.createECDH('secp256k1');
+    keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+    const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+    const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
     const entry = await ctx.nodes[0].getDb().getLog().save(
       ctx.nodes[0].publicKey,
       hash,
       1,
       signature);
 
-    const failPacket = await messageApiFollower.packet(messageTypes.APPEND_FAIL, ctx.nodes[0].publicKey, {index: entry.index});
+    const failPacket = await messageApiFollower.packet(
+      messageTypes.APPEND_FAIL,
+      ctx.nodes[0].publicKey,
+      {index: entry.index}
+    );
     failPacket.state = NodeStates.FOLLOWER;
     failPacket.last = new StateModel(entry.index, entry.hash, entry.term, entry.createdAt);
 

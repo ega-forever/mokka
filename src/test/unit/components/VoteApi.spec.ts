@@ -1,18 +1,13 @@
 import Promise from 'bluebird';
-import {Buffer} from 'buffer';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
-import * as nacl from 'tweetnacl';
-import TCPMokka from '../../../implementation/TCP';
-import {LogApi} from '../../../components/consensus/api/LogApi';
-import {Mokka} from '../../../components/consensus/main';
-import NodeStates from '../../../components/consensus/constants/NodeStates';
-import {StateModel} from '../../../components/storage/models/StateModel';
-import {createHmac} from 'crypto';
-import messageTypes from '../../../components/consensus/constants/MessageTypes';
+import * as crypto from 'crypto';
 import {MessageApi} from '../../../components/consensus/api/MessageApi';
-import MessageTypes from '../../../components/consensus/constants/MessageTypes';
 import {VoteApi} from '../../../components/consensus/api/VoteApi';
+import MessageTypes from '../../../components/consensus/constants/MessageTypes';
+import NodeStates from '../../../components/consensus/constants/NodeStates';
+import {Mokka} from '../../../components/consensus/main';
+import TCPMokka from '../../../implementation/TCP';
 
 describe('VoteApi tests', (ctx = {}) => {
 
@@ -22,24 +17,29 @@ describe('VoteApi tests', (ctx = {}) => {
 
     ctx.nodes = [];
 
-    for (let index = 0; index < 3; index++) {
-      ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
+    for (let i = 0; i < 3; i++) {
+      const node = crypto.createECDH('secp256k1');
+      node.generateKeys();
+      ctx.keys.push({
+        privateKey: node.getPrivateKey().toString('hex'),
+        publicKey: node.getPublicKey().toString('hex')
+      });
     }
 
     for (let index = 0; index < 3; index++) {
       const instance = new TCPMokka({
-        address: `tcp://127.0.0.1:2000/${ctx.keys[index].substring(64, 128)}`,
-        electionMax: 1000,
-        electionMin: 300,
-        gossipHeartbeat: 200,
-        heartbeat: 200,
+        address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
+        electionMax: 300,
+        electionMin: 100,
+        gossipHeartbeat: 100,
+        heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index]
+        privateKey: ctx.keys[index].privateKey
       });
 
       for (let i = 0; i < 3; i++)
         if (i !== index)
-          instance.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${ctx.keys[i].substring(64, 128)}`);
+          instance.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${ctx.keys[i].publicKey}`);
 
       ctx.nodes.push(instance);
     }

@@ -1,6 +1,7 @@
 import Promise from 'bluebird';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
+import * as crypto from 'crypto';
 import {createHmac} from 'crypto';
 import fs from 'fs-extra';
 // @ts-ignore
@@ -16,20 +17,21 @@ describe('storage tests', (ctx = {}) => {
 
   beforeEach(async () => {
 
-    // tslint:disable-next-line
-    const key = 'f7954a52cb4e6cb8a83ed0d6150a3dd1e4ae2c150054660b14abbdc23e16262b7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15';
+    const node = crypto.createECDH('secp256k1');
+    node.generateKeys();
+
     const dbPath = path.join('./', 'dump', 'test.db');
 
     fs.removeSync(dbPath);
 
     ctx.mokka = new TCPMokka({
-      address: `tcp://127.0.0.1:2000/${key.substring(64, 128)}`,
+      address: `tcp://127.0.0.1:2000/${node.getPublicKey().toString('hex')}`,
       electionMax: 1000,
       electionMin: 300,
       gossipHeartbeat: 200,
       heartbeat: 200,
       logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-      privateKey: key,
+      privateKey: node.getPrivateKey().toString('hex'),
       storage: leveldown(`${path.join(__dirname, '../..', 'dump', 'test.db')}_db`)
     });
 

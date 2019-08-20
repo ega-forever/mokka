@@ -1,4 +1,4 @@
-import MerkleTools = require('merkle-tools');
+import * as crypto from 'crypto';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {EntryModel} from '../models/EntryModel';
 import {StateModel} from '../models/StateModel';
@@ -45,13 +45,9 @@ class LogApi {
     if (!Number.isInteger(index))
       index = lastIndex + 1;
 
-    const merkleTools = new MerkleTools();
-    merkleTools.addLeaf(lastHash);
-
-    merkleTools.addLeaf(JSON.stringify(log), true);
-    merkleTools.makeTree();
-
-    const generatedHash = merkleTools.getMerkleRoot().toString('hex');
+    const generatedHash = crypto.createHmac('sha256', lastHash)
+      .update(JSON.stringify(log))
+      .digest('hex');
 
     if (hash && generatedHash !== hash) {
       return Promise.reject({code: 2, message: 'can\'t save wrong hash!'});

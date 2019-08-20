@@ -22,16 +22,7 @@ class AbstractRequestService {
 
     this.mokka.emit(`${packet.publicKey}:${packet.type}`, packet.data);
 
-    const start = Date.now();
     const data: PacketModel[] = await this._process(packet, node);
-
-    const end = Date.now();
-
-    if (end - start > 20) {
-      console.log(`processed in ${end - start}`);
-      console.log(packet);
-      process.exit(0);
-    }
 
     for (const item of data)
       await this.messageApi.message(item);

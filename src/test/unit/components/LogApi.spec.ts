@@ -2,14 +2,14 @@ import Promise from 'bluebird';
 import {Buffer} from 'buffer';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
-import * as nacl from 'tweetnacl';
-import TCPMokka from '../../../implementation/TCP';
-import {LogApi} from '../../../components/consensus/api/LogApi';
-import {Mokka} from '../../../components/consensus/main';
-import NodeStates from '../../../components/consensus/constants/NodeStates';
-import {StateModel} from '../../../components/storage/models/StateModel';
 import {createHmac} from 'crypto';
-import messageTypes from '../../../components/consensus/constants/MessageTypes';
+import * as crypto from 'crypto';
+import {LogApi} from '../../../components/consensus/api/LogApi';
+import NodeStates from '../../../components/consensus/constants/NodeStates';
+import {Mokka} from '../../../components/consensus/main';
+import {convertKeyPairToRawSecp256k1} from '../../../components/consensus/utils/keyPair';
+import {StateModel} from '../../../components/storage/models/StateModel';
+import TCPMokka from '../../../implementation/TCP';
 
 describe('LogApi tests', (ctx = {}) => {
 
@@ -19,24 +19,29 @@ describe('LogApi tests', (ctx = {}) => {
 
     ctx.nodes = [];
 
-    for (let index = 0; index < 3; index++) {
-      ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
+    for (let i = 0; i < 3; i++) {
+      const node = crypto.createECDH('secp256k1');
+      node.generateKeys();
+      ctx.keys.push({
+        privateKey: node.getPrivateKey().toString('hex'),
+        publicKey: node.getPublicKey().toString('hex')
+      });
     }
 
     for (let index = 0; index < 3; index++) {
       const instance = new TCPMokka({
-        address: `tcp://127.0.0.1:2000/${ctx.keys[index].substring(64, 128)}`,
-        electionMax: 1000,
-        electionMin: 300,
-        gossipHeartbeat: 200,
-        heartbeat: 200,
+        address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
+        electionMax: 300,
+        electionMin: 100,
+        gossipHeartbeat: 100,
+        heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index]
+        privateKey: ctx.keys[index].privateKey
       });
 
       for (let i = 0; i < 3; i++)
         if (i !== index)
-          instance.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${ctx.keys[i].substring(64, 128)}`);
+          instance.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${ctx.keys[i].publicKey}`);
 
       ctx.nodes.push(instance);
     }
@@ -98,15 +103,16 @@ describe('LogApi tests', (ctx = {}) => {
     const followerState = new StateModel(9, '234', 1);
     followerNode.setLastLogState(followerState);
 
-
     for (let i = 1; i <= 10; i++) {
       const hash = createHmac('sha256', 'data' + i).digest('hex');
-      const signature = Buffer.from(
-        nacl.sign.detached(
-          Buffer.from(hash),
-          Buffer.from(ctx.keys[1], 'hex')
-        )
-      ).toString('hex');
+      const sign = crypto.createSign('sha256');
+      sign.update(hash);
+
+      const keyPair = crypto.createECDH('secp256k1');
+      keyPair.setPrivateKey(Buffer.from(ctx.keys[1].privateKey, 'hex'));
+      const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
+
+      const signature = sign.sign(rawKeyPair.privateKey).toString('hex');
 
       await leaderNode.getDb().getLog().save(
         leaderNode.publicKey,
@@ -117,62 +123,43 @@ describe('LogApi tests', (ctx = {}) => {
 
     logApi.runLoop();
 
-    const data: { node: Mokka, index: number } = await new Promise((res) => {
-      (logApi as any).broadcastInRange = (node, index) => res({node, index});
+    const data: Map<string, { node: Mokka, index: number }> = await new Promise((res) => {
+      const nodes = new Map<string, { node: Mokka, index: number }>();
+      (logApi as any).broadcastInRange = (node, index) => {
+        nodes.set(node.publicKey, {node, index});
+        if (nodes.size === 2)
+          res(nodes);
+      };
     });
 
     logApi.stop();
     await (ctx.nodes[0] as Mokka).disconnect();
 
-    expect(data.index).to.be.eq(10);
-    expect(data.node.publicKey).to.be.eq(followerNode.publicKey);
+    expect(data.get(followerNode.publicKey).index).to.be.eq(10);
 
     const followerState2 = new StateModel(0, '123', 1);
     followerNode.setLastLogState(followerState2);
 
     logApi.runLoop();
 
-    const data2: { node: Mokka, index: number } = await new Promise((res) => {
-      (logApi as any).broadcastInRange = (node, index) => res({node, index});
+    const data2: Map<string, { node: Mokka, index: number }> = await new Promise((res) => {
+      const nodes = new Map<string, { node: Mokka, index: number }>();
+      (logApi as any).broadcastInRange = (node, index) => {
+        nodes.set(node.publicKey, {node, index});
+        if (nodes.size === 2)
+          res(nodes);
+      };
     });
-
     logApi.stop();
+
     await (ctx.nodes[0] as Mokka).disconnect();
-
-    expect(data2.index).to.be.eq(10);
-    expect(data2.node.publicKey).to.be.eq(followerNode.publicKey);
-
-
-  });
-
-  it('should pull bad record', async () => {
-
-    const leaderNode = ctx.nodes[0] as Mokka;
-    leaderNode.setState(NodeStates.LEADER, 1, null);
-
-    const logApi = new LogApi(leaderNode);
-
-    const key = `123_${Date.now()}`;
-    (leaderNode.gossip.ownState as any).attrs.set(key, {value: 'custom', number: 1});
-
-    logApi.runLoop();
-
-    const hash = await new Promise((res) => {
-      leaderNode.gossip.pullPending = res;
-    });
-
-    logApi.stop();
-    await leaderNode.disconnect();
-
-    expect(hash).to.be.eq(key);
+    expect(data2.get(followerNode.publicKey).index).to.be.eq(10);
   });
 
   // todo speed test on append new logs (check timers)
 
-
-
   afterEach(async () => {
-    await Promise.delay(1000);
+    await Promise.delay(100);
   });
 
 });
