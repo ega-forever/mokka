@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
 import eventTypes from '../../shared/constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
@@ -6,11 +7,10 @@ import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
 import {MessageApi} from './MessageApi';
-import * as crypto from 'crypto';
 
 class NodeApi {
 
-  private mokka: Mokka;
+  private readonly mokka: Mokka;
   private messageApi: MessageApi;
 
   constructor(mokka: Mokka) {
@@ -22,7 +22,13 @@ class NodeApi {
 
     const publicKey = multiaddr.match(/\w+$/).toString();
 
-    if (this.mokka.publicKey === publicKey)
+    const shortPubKey = publicKey.length === 66 ? publicKey : crypto.ECDH.convertKey(publicKey,
+      'secp256k1',
+      'hex',
+      'hex',
+      'compressed').toString('hex');
+
+    if (this.mokka.publicKey === shortPubKey)
       return;
 
     const node = new NodeModel(null, multiaddr, states.CHILD);
@@ -30,10 +36,10 @@ class NodeApi {
     node.write = this.mokka.write.bind(this.mokka);
     node.once('end', () => this.leave(node.publicKey));
 
-    this.mokka.nodes.set(publicKey, node);
+    this.mokka.nodes.set(shortPubKey, node);
     this.mokka.emit(eventTypes.NODE_JOIN, node);
 
-    this.mokka.gossip.handleNewPeers([publicKey]);
+    this.mokka.gossip.handleNewPeers([shortPubKey]);
 
     return node;
   }
@@ -104,7 +110,7 @@ class NodeApi {
     await new Promise((res) => setTimeout(res, this.mokka.election.max));
 
     if (this.mokka.state === states.CANDIDATE) {
-      this.mokka.logger.info('rollback!!');
+      this.mokka.logger.info('change state back to FOLLOWER');
       this.mokka.setState(states.FOLLOWER, this.mokka.term - 1, '');
     }
 

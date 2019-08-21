@@ -1,7 +1,7 @@
 import Promise from 'bluebird';
 import {expect} from 'chai';
 import {fork} from 'child_process';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import * as _ from 'lodash';
 import * as path from 'path';
 
@@ -17,7 +17,7 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
       node.generateKeys();
       ctx.keys.push({
         privateKey: node.getPrivateKey().toString('hex'),
-        publicKey: node.getPublicKey().toString('hex')
+        publicKey: node.getPublicKey('hex', 'compressed')
       });
     }
 

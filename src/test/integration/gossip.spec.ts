@@ -1,7 +1,7 @@
 import Promise from 'bluebird';
 import {expect} from 'chai';
 import {fork} from 'child_process';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import * as path from 'path';
 
 describe('gossip tests', (ctx = {mokkas: []}) => {
@@ -16,8 +16,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
       const node = crypto.createECDH('secp256k1');
       node.generateKeys();
       ctx.keys.push({
-        privateKey: node.getPrivateKey().toString('hex'),
-        publicKey: node.getPublicKey().toString('hex')
+        privateKey: node.getPrivateKey('hex'),
+        publicKey: node.getPublicKey('hex', 'compressed')
       });
     }
     for (let index = 0; index < ctx.keys.length; index++) {
@@ -226,8 +226,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     const node = crypto.createECDH('secp256k1');
     node.generateKeys();
     fakeKeys[1] = {
-      privateKey: node.getPrivateKey().toString('hex'),
-      publicKey: node.getPublicKey().toString('hex')
+      privateKey: node.getPrivateKey('hex'),
+      publicKey: node.getPublicKey('hex')
     };
 
     ctx.mokkas[1].send({

@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';

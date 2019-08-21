@@ -14,7 +14,7 @@ $ npm install mokka ganache-core tweetnacl bunyan web3 --save
 ## Prepare keys
 As mokka use asymmetric cryptography, we have to create the key pairs for each member of cluster.
 
-``src/gen_keys.js``
+``src/gen_keys.ts``
 ```javascript
 const nacl = require('tweetnacl');
 
@@ -24,7 +24,7 @@ for (let i = 0; i < 3; i++) {
   console.log(`pair[${i + 1}] {publicKey: ${Buffer.from(key.publicKey).toString('hex')}, secretKey: ${Buffer.from(key.secretKey).toString('hex')}`)
 }
 ```
-Now let's call the gen_keys: ```bash $ node src/gen_keys.js```
+Now let's call the gen_keys: ```bash $ node src/gen_keys.ts```
 The output should be similar to this one:
 ```
 pair[1] {publicKey: d6c922bc69a0cc059565a80996188d11d29e78ded4115b1d24039ba25e655afb, secretKey: 4ca246e3ab29c0085b5cbb797f86e6deea778c6e6584a45764ec10f9e0cebd7fd6c922bc69a0cc059565a80996188d11d29e78ded4115b1d24039ba25e655afb

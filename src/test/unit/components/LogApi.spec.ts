@@ -3,7 +3,7 @@ import {Buffer} from 'buffer';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
 import {createHmac} from 'crypto';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import {LogApi} from '../../../components/consensus/api/LogApi';
 import NodeStates from '../../../components/consensus/constants/NodeStates';
 import {Mokka} from '../../../components/consensus/main';

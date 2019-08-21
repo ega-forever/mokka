@@ -1,7 +1,7 @@
 import Promise from 'bluebird';
 import {expect} from 'chai';
 import {fork} from 'child_process';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import * as _ from 'lodash';
 import * as path from 'path';
 
@@ -17,8 +17,8 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
       const node = crypto.createECDH('secp256k1');
       node.generateKeys();
       ctx.keys.push({
-        privateKey: node.getPrivateKey().toString('hex'),
-        publicKey: node.getPublicKey().toString('hex')
+        privateKey: node.getPrivateKey('hex'),
+        publicKey: node.getPublicKey('hex', 'compressed')
       });
     }
 

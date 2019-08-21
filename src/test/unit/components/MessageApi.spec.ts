@@ -1,6 +1,6 @@
 import {Buffer} from 'buffer';
 import bunyan from 'bunyan';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import {MessageApi} from '../../../components/consensus/api/MessageApi';
 import TCPMokka from '../../../implementation/TCP';
 

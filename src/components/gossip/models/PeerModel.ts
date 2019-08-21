@@ -1,8 +1,7 @@
 import {EventEmitter} from 'events';
-// import nacl = require('tweetnacl');
 import eventTypes from '../../shared/constants/EventTypes';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 
 class PeerModel extends EventEmitter {
 

@@ -2,7 +2,7 @@ import Promise from 'bluebird';
 import {Buffer} from 'buffer';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import {createHmac} from 'crypto';
 import {AppendApi} from '../../../components/consensus/api/AppendApi';
 import {MessageApi} from '../../../components/consensus/api/MessageApi';

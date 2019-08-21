@@ -57,6 +57,15 @@ class NodeModel extends EventEmitter {
     }
 
     this.publicKey = multiaddr.match(/\w+$/).toString();
+
+    if (this.publicKey.length !== 66) {
+      this.publicKey = crypto.ECDH.convertKey(this.publicKey,
+        'secp256k1',
+        'hex',
+        'hex',
+        'compressed').toString('hex');
+    }
+
     if (!this.privateKey) {
       this.rawPublicKey = convertPublicKeyToRawSecp256k1(this.publicKey);
     }

@@ -1,4 +1,4 @@
-import {ECDH} from 'crypto';
+import crypto, {ECDH} from 'crypto';
 
 export function convertKeyPairToRawSecp256k1(keyPair: ECDH) {
 
@@ -21,6 +21,15 @@ ${Buffer.from(`3056301006072a8648ce3d020106052b8104000a034200${keyPair.getPublic
 }
 
 export function convertPublicKeyToRawSecp256k1(publicKey: string) {
+
+  if (publicKey.length !== 130) {
+    publicKey = crypto.ECDH.convertKey(publicKey,
+      'secp256k1',
+      'hex',
+      'hex',
+      'uncompressed').toString('hex');
+  }
+
   return `-----BEGIN PUBLIC KEY-----
 ${Buffer.from(`3056301006072a8648ce3d020106052b8104000a034200${publicKey}`, 'hex').toString('base64')}
 -----END PUBLIC KEY-----`;

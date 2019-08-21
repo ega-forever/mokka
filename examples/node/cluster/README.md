@@ -1,3 +1,4 @@
+
 # Running cluster
 
 In this tutorial we are going to create a simple cluster with 3 members.
@@ -13,101 +14,30 @@ $ npm install mokka --save
 ## Prepare keys
 As mokka use asymmetric cryptography, we have to create the key pairs for each member of cluster.
 
-``src/gen_keys.js``
+``src/gen_keys.ts``
 ```javascript
-const nacl = require('tweetnacl');
-
+import crypto from 'crypto';
 
 for (let i = 0; i < 3; i++) {
-  const key = nacl.sign.keyPair();
-  console.log(`pair[${i + 1}] {publicKey: ${Buffer.from(key.publicKey).toString('hex')}, secretKey: ${Buffer.from(key.secretKey).toString('hex')}`)
+  const node = crypto.createECDH('secp256k1');
+  node.generateKeys('hex');
+  console.log(`pair[${i + 1}] {publicKey: ${node.getPublicKey('hex')}, secretKey: ${node.getPrivateKey('hex')}`);
 }
 ```
-Now let's call the gen_keys: ```bash $ node gen_keys.js```
+Now let's call the gen_keys: ```bash $ node gen_keys.ts```
 The output should be similar to this one:
 ```
-pair[1] {publicKey: d6c922bc69a0cc059565a80996188d11d29e78ded4115b1d24039ba25e655afb, secretKey: 4ca246e3ab29c0085b5cbb797f86e6deea778c6e6584a45764ec10f9e0cebd7fd6c922bc69a0cc059565a80996188d11d29e78ded4115b1d24039ba25e655afb
-pair[2] {publicKey: a757d4dbbeb8564e1a3575ba89a12fccaacf2940d86c453da8b3f881d1fcfdba, secretKey: 931f1c648e1f87b56cd22e8de7ed235b9bd4ade9696c9d8c75f212a1fa401d5da757d4dbbeb8564e1a3575ba89a12fccaacf2940d86c453da8b3f881d1fcfdba
-pair[3] {publicKey: 009d53a3733c81375c2b5dfd4e7c51c14be84919d6e118198d35afd80965a52c, secretKey: 7144046b5c55f38cf9b3b7ec53e3263ebb01ed7caf46fe8758d6337c87686077009d53a3733c81375c2b5dfd4e7c51c14be84919d6e118198d35afd80965a52c
+pair[1] {publicKey: 04c966d69cad83cba9290b4fb2cfd79aaef114215fa0ec3b361154d0cf6d54f2e34034c5628dfef87316b6dd07e6ac15f671debdaaa3d19e9d0353d212b2c0db43, secretKey: fe15d6a3e13b8c3d56fd529a6e2b315a0a8634c5519100b35c3078a847871b58
+pair[2] {publicKey: 044b2879f5f8360e060e5ed5bb8e954808dd81b57bcedf290611e98b8a78e39a163a11b9bc722a39554f4d761ca96e1ea280e0a628ab2aff64bae5ed0592133786, secretKey: 905bf7936ed38eb6dd975685716eed401aa988b760a75f5367321c20e5ade917
+pair[3] {publicKey: 04609211f57ff99d6039b1a2d7aa7c2ffdb72d06911b2fd82386b0b880e8514a72a00952be54ec337daf1d11853e7b66b3bbab9428cbae1bfc99c1c9b9bcf6c4b4, secretKey: 46d6e16dbaed771eb899aa8c845578ed354a01cef1928a7f2feccfe04c5b22a0
 ```
 
 ## Mokka implementation
 
-As mokka is agnostic to protocol, we have to implement it (in our case we will use TCP).
-First, install the a socket lib for messages exchange: 
+As mokka is agnostic to protocol, we have to implement it, or take exciting one from implementations (in our case we will take TCP).
+Also we will need to install the a socket lib for messages exchange (used by TCP implementation): 
 ```bash
 $ npm install axon --save
-```
-Then create ``src/TCPMokka.js`` and place this:
-```javascript
-
-const Mokka = require('mokka');
-const msg = require('axon');
-
-class TCPMokka extends Mokka.Mokka {
-
-  constructor (settings){
-    super(settings);
-    this.sockets = {};
-  }
-
-  /**
-   * the init function (fires during mokka's init process
-   */
-  initialize () {
-    this.logger.info(`initializing reply socket on port  ${this.address}`);
-
-    this.sockets[this.address] = msg.socket('rep');
-
-    this.sockets[this.address].bind(this.address);
-
-    // here we bind sockets between peers and start listening to new packets
-    this.sockets[this.address].on('message', (data) => {
-      this.emit('data', data);
-    });
-
-    this.sockets[this.address].on('error', () => {
-      this.logger.error(`failed to initialize on port: ${this.address}`);
-    });
-  }
-
-  /**
-   * The message to write.
-   *
-   * @param address the address, to which write msg
-   * @param packet the packet to write
-   */
-  async write (address, packet) {
-
-    if (!this.sockets[address]) {
-      this.sockets[address] = msg.socket('req');
-
-      this.sockets[address].connect(address);
-      this.sockets[address].on('error', () => {
-        this.logger.error(`failed to write to: ${this.address}`);
-      });
-    }
-
-    this.sockets[address].send(packet);
-  }
-
-  async disconnect () {
-    await super.disconnect();
-    for (const socket of Object.values(this.sockets)) {
-      socket.close();
-    }
-  }
-
-  connect () {
-    this.initialize();
-    super.connect();
-  }
-
-}
-
-module.exports = TCPMokka;
-
-
 ```
 
 ## Cluster implementation
@@ -119,27 +49,27 @@ Todo that, type:
 ```bash
 $ npm install readline bunyan --save
 ```
-Now we need to write the cluster implementation ``src/cluster_node.js``
+Now we need to write the cluster implementation ``src/cluster.ts``
 
 ```javascript
-const TCPMokka = require('./TCPMokka'),
-  MokkaEvents = require('mokka/dist/components/shared/constants/EventTypes'),
-  bunyan = require('bunyan'),
-  readline = require('readline');
+import bunyan = require('bunyan');
+import MokkaEvents from 'mokka/dist/components/shared/constants/EventTypes';
+import TCPMokka from 'mokka/dist/implementation/TCP';
+import * as readline from 'readline';
 
 // our generated key pairs
 const keys = [
   {
-    publicKey: 'd6c922bc69a0cc059565a80996188d11d29e78ded4115b1d24039ba25e655afb',
-    secretKey: '4ca246e3ab29c0085b5cbb797f86e6deea778c6e6584a45764ec10f9e0cebd7fd6c922bc69a0cc059565a80996188d11d29e78ded4115b1d24039ba25e655afb'
+    publicKey: '04753d8ac376feba54fabbd7b4cdc512a4350d15e566b4e7398682d13b7a4cf08714182ba08e3b0f7ee61ee857e96dc1799b8f58c61b26ad25b1aa762a9964377a',
+    secretKey: 'e3b1e663155437f1810a8c474ddda497bf4a030060374d78dac7cea4dee4e774'
   },
   {
-    publicKey: 'a757d4dbbeb8564e1a3575ba89a12fccaacf2940d86c453da8b3f881d1fcfdba',
-    secretKey: '931f1c648e1f87b56cd22e8de7ed235b9bd4ade9696c9d8c75f212a1fa401d5da757d4dbbeb8564e1a3575ba89a12fccaacf2940d86c453da8b3f881d1fcfdba'
+    publicKey: '04b5ef92009db5362540b9416a3bfd4733597b132660e6e50b9b80b4779dae3834eb5c27fdc8767208edafc3b083d353228cb9531ca6e7dda2e9e8990dc1673b1f',
+    secretKey: '3cceb8344ddab063cb1c99bf33985bc123a1b85a180baedfd22681471b2541e8'
   },
   {
-    publicKey: '009d53a3733c81375c2b5dfd4e7c51c14be84919d6e118198d35afd80965a52c',
-    secretKey: '7144046b5c55f38cf9b3b7ec53e3263ebb01ed7caf46fe8758d6337c87686077009d53a3733c81375c2b5dfd4e7c51c14be84919d6e118198d35afd80965a52c'
+    publicKey: '04d0c169903b05cd1444f33e14b6feeed8215b232b7be2922e65f3f4d9865cf2148861cd2b3580689fb50ce840c04def59740490230dab76f6645ab159bd6b95c3',
+    secretKey: 'fc5c3b5c2366df10b78579751faac46a4507deb205266335c7d9968a0976750b'
   }
 ];
 
@@ -157,24 +87,23 @@ const initMokka = async () => {
 
   const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
 
-
   const mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${startPort + index}/${keys[index].publicKey}`,
-    electionMin: 300,
-    electionMax: 1000,
-    heartbeat: 200,
+    electionMax: 300,
+    electionMin: 100,
     gossipHeartbeat: 200,
+    heartbeat: 100,
     logger,
     privateKey: keys[index].secretKey
   });
   mokka.connect();
-  mokka.on(MokkaEvents.default.STATE, () => {
+  mokka.on(MokkaEvents.STATE, () => {
     logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
   });
   for (const peer of uris)
     mokka.nodeApi.join(peer);
-  mokka.on(MokkaEvents.default.ERROR, (err) => {
-    logger.error(err);
+  mokka.on(MokkaEvents.ERROR, (err) => {
+     logger.error(err);
   });
   const rl = readline.createInterface({
     input: process.stdin,
@@ -184,7 +113,6 @@ const initMokka = async () => {
   askCommand(rl, mokka);
 };
 
-
 // listens to user's input via console
 const askCommand = (rl, mokka) => {
   rl.question('enter command > ', async (command) => {
@@ -193,6 +121,10 @@ const askCommand = (rl, mokka) => {
 
     if (args[0] === 'add_log') {
       await addLog(mokka, args[1], args[2]);
+    }
+
+    if (args[0] === 'add_logs') {
+      await addManyLogs(mokka, args[1]);
     }
 
     if (args[0] === 'get_log') {
@@ -210,9 +142,14 @@ const addLog = async (mokka, key, value) => {
   await mokka.logApi.push(key, {value, nonce: Date.now()});
 };
 
+const addManyLogs = async (mokka, count) => {
+  for (let i = 0; i < count; i++)
+    await mokka.logApi.push('123', {value: Date.now(), nonce: Date.now()});
+};
+
 // get log by index
 const getLog = async (mokka, index) => {
-  const entry = await mokka.getDb().getEntry().get(parseInt(index));
+  const entry = await mokka.getDb().getEntry().get(parseInt(index, 10));
   mokka.logger.info(entry);
 };
 
@@ -220,9 +157,17 @@ const getLog = async (mokka, index) => {
 const getInfo = async (mokka) => {
   const info = await mokka.getDb().getState().getInfo();
   mokka.logger.info(info);
+
+  for (const node of mokka.nodes) { // todo
+    const info = await mokka.getDb().getState().getInfo();
+    mokka.logger.info(info);
+  }
+
+
 };
 
-module.exports = initMokka();
+initMokka();
+
 ```
 
 Each instance should have its own index, specified in env.

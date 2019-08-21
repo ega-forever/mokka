@@ -1,6 +1,6 @@
 import Promise from 'bluebird';
 import bunyan from 'bunyan';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import {validate} from '../../../components/consensus/utils/proofValidation';
 import TCPMokka from '../../../implementation/TCP';
 

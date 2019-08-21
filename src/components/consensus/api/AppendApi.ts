@@ -23,28 +23,20 @@ class AppendApi {
 
     const replies: PacketModel[] = [];
 
-    const lastInfo = await this.mokka.getLastLogState();
+    const lastInfo = this.mokka.getLastLogState();
 
     if (packet.data.index > lastInfo.index + 1)
       return replies;
 
-    if (lastInfo.index === packet.data.index) {
+    if (lastInfo.index >= packet.data.index) {
+      const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey, {
+        index: packet.data.index,
+        term: packet.data.term
+      });
 
-      const record = await this.mokka.getDb().getEntry().get(packet.data.index);
-
-      if (record && record.hash === packet.data.hash) {
-        const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey, {
-          index: packet.data.index,
-          term: packet.data.term
-        });
-
-        replies.push(reply);
-        return replies;
-      }
+      replies.push(reply);
+      return replies;
     }
-
-    if (lastInfo.index >= packet.data.index)
-      return [];
 
     try {
 
@@ -89,15 +81,10 @@ class AppendApi {
 
     const node = this.mokka.nodes.get(packet.publicKey);
 
-    if (!node || node.getLastLogState().index === packet.last.index)
+    if (
+      !node || node.getLastLogState().index === packet.last.index ||
+      packet.last.index > this.mokka.getLastLogState().index)
       return;
-
-    if (packet.last.index > 0) {
-      const entry = await this.mokka.getDb().getEntry().get(packet.last.index);
-
-      if (!entry)
-        return;
-    }
 
     const committedIndex = this.mokka.committedIndex();
 
@@ -108,7 +95,6 @@ class AppendApi {
       packet.last.createdAt
     );
 
-    await this.mokka.getDb().getState().setState(state);
     node.setLastLogState(state);
 
     this.mokka.logger.info(`append ack: ${packet.last.index} from ${packet.publicKey}`);

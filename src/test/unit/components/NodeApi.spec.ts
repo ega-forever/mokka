@@ -1,7 +1,7 @@
 import Promise from 'bluebird';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import NodeStates from '../../../components/consensus/constants/NodeStates';
 import {Mokka} from '../../../components/consensus/main';
 import TCPMokka from '../../../implementation/TCP';

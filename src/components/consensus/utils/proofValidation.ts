@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
 
 const _extract = (proof: string):

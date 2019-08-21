@@ -1,7 +1,7 @@
 import Promise from 'bluebird';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import {createHmac} from 'crypto';
 import fs from 'fs-extra';
 // @ts-ignore
@@ -25,13 +25,13 @@ describe('storage tests', (ctx = {}) => {
     fs.removeSync(dbPath);
 
     ctx.mokka = new TCPMokka({
-      address: `tcp://127.0.0.1:2000/${node.getPublicKey().toString('hex')}`,
+      address: `tcp://127.0.0.1:2000/${node.getPublicKey('hex', 'compressed')}`,
       electionMax: 1000,
       electionMin: 300,
       gossipHeartbeat: 200,
       heartbeat: 200,
       logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-      privateKey: node.getPrivateKey().toString('hex'),
+      privateKey: node.getPrivateKey('hex'),
       storage: leveldown(`${dbPath}_db`)
     });
 

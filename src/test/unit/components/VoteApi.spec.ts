@@ -1,7 +1,7 @@
 import Promise from 'bluebird';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import {MessageApi} from '../../../components/consensus/api/MessageApi';
 import {VoteApi} from '../../../components/consensus/api/VoteApi';
 import MessageTypes from '../../../components/consensus/constants/MessageTypes';

@@ -1,10 +1,8 @@
 import eventTypes from '../../shared/constants/EventTypes';
-import {StateModel} from '../../storage/models/StateModel';
 import {AppendApi} from '../api/AppendApi';
 import {VoteApi} from '../api/VoteApi';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
-import NodeStates from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
@@ -40,22 +38,12 @@ class RequestProcessorService extends AbstractRequestService {
         return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'validation failed')];
       }
 
-      const state = new StateModel(
-        packet.last.index,
-        packet.last.hash,
-        packet.last.term,
-        packet.last.createdAt
-      );
-
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
-      await this.mokka.getDb().getState().setState(state);
     }
 
-    if (
-      packet.type === messageTypes.APPEND_ACK ||
-      (node.getLastLogState().index !== packet.last.index && packet.state === NodeStates.LEADER)
-    )
-      await this.appendApi.appendAck(packet); // todo duplicate
+    if (packet.type === messageTypes.APPEND_ACK) {
+      await this.appendApi.appendAck(packet);
+    }
 
     if (packet.type === messageTypes.VOTE)
       replies = [await this.voteApi.vote(packet)];
@@ -67,7 +55,9 @@ class RequestProcessorService extends AbstractRequestService {
       this.mokka.emit(eventTypes.ERROR, new Error(packet.data));
 
     if (packet.type === messageTypes.APPEND) {
+      console.log('got packet')
       replies = await this.appendApi.append(packet);
+      console.log(replies);
     }
 
     if (packet.type === messageTypes.APPEND_FAIL)
@@ -78,12 +68,6 @@ class RequestProcessorService extends AbstractRequestService {
         await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'Unknown message type: ' + packet.type)
       ];
     }
-
-/*    if (packet.state === states.LEADER &&
-      packet.type === messageTypes.ACK &&
-      this.mokka.getLastLogState().index !== packet.peer.number) { // we should compare
-      replies = [await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey)];
-    }*/
 
     if (this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
       this.mokka.timer.heartbeat(this.mokka.timer.timeout());

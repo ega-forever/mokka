@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 import {createHmac} from 'crypto';
 import voteTypes from '../../shared/constants/EventTypes';
 import EventTypes from '../../shared/constants/EventTypes';
