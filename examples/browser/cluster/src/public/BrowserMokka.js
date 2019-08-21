@@ -11,7 +11,8 @@ class BrowserMokka extends Mokka.Mokka {
 
     this.socket.emit('pub_key', this.publicKey);
     this.socket.on('data', data => {
-      window.mokka.emit('data', new Uint8Array(data.data));
+      const packet = new TextDecoder("utf-8").decode(new Uint8Array(data.data));
+      window.mokka.emit('data', packet);
     });
 
     this.socket.on('connect_error', console.log);
@@ -19,7 +20,7 @@ class BrowserMokka extends Mokka.Mokka {
   }
 
   async write (address, packet) {
-    const node = this.nodes.find(node => node.address === address);
+    const node = Array.from(this.nodes.values()).find(node => node.address === address);
     this.socket.emit('data', [node.publicKey, packet]);
   }
 

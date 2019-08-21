@@ -3,7 +3,11 @@ import {EventEmitter} from 'events';
 import eventTypes from '../../shared/constants/EventTypes';
 import {StateModel} from '../../storage/models/StateModel';
 import NodeStates from '../constants/NodeStates';
-import {convertKeyPairToRawSecp256k1, convertPublicKeyToRawSecp256k1} from '../utils/keyPair';
+import {
+  compressPublicKeySecp256k1,
+  convertKeyPairToRawSecp256k1,
+  convertPublicKeyToRawSecp256k1
+} from '../utils/keyPair';
 
 class NodeModel extends EventEmitter {
 
@@ -59,11 +63,7 @@ class NodeModel extends EventEmitter {
     this.publicKey = multiaddr.match(/\w+$/).toString();
 
     if (this.publicKey.length !== 66) {
-      this.publicKey = crypto.ECDH.convertKey(this.publicKey,
-        'secp256k1',
-        'hex',
-        'hex',
-        'compressed').toString('hex');
+      this.publicKey = compressPublicKeySecp256k1(this.publicKey);
     }
 
     if (!this.privateKey) {

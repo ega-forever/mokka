@@ -7,6 +7,7 @@ import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
 import {MessageApi} from './MessageApi';
+import {compressPublicKeySecp256k1} from '../utils/keyPair';
 
 class NodeApi {
 
@@ -22,11 +23,7 @@ class NodeApi {
 
     const publicKey = multiaddr.match(/\w+$/).toString();
 
-    const shortPubKey = publicKey.length === 66 ? publicKey : crypto.ECDH.convertKey(publicKey,
-      'secp256k1',
-      'hex',
-      'hex',
-      'compressed').toString('hex');
+    const shortPubKey = publicKey.length === 66 ? publicKey : compressPublicKeySecp256k1(publicKey);
 
     if (this.mokka.publicKey === shortPubKey)
       return;
