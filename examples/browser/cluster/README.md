@@ -15,7 +15,7 @@ First of all, let's install mokka, express and socket.io (via npm):
 $ npm install express socket.io mokka --save
 ```
 
-Then let's create the ``src/server.js`` and place the following:
+Then let's create the ``src/server.ts`` and place the following:
 
 ```javascript
 const express = require('express'),
@@ -197,7 +197,7 @@ The final point, will be our index.html file ``src/public/index.html``:
 
 Now it's time to run our app: 
 ```bash
-$ node src/server.js
+$ node src/server.ts
 ```
 
 Then open browser and open 3 tabs (with console):

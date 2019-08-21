@@ -1,5 +1,7 @@
 import bunyan = require('bunyan');
+import {Mokka} from 'mokka/dist/components/consensus/main';
 import MokkaEvents from 'mokka/dist/components/shared/constants/EventTypes';
+import {StateModel} from 'mokka/dist/components/storage/models/StateModel';
 import TCPMokka from 'mokka/dist/implementation/TCP';
 import * as readline from 'readline';
 
@@ -44,12 +46,12 @@ const initMokka = async () => {
   });
   mokka.connect();
   mokka.on(MokkaEvents.STATE, () => {
-    logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
+    // logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
   });
   for (const peer of uris)
     mokka.nodeApi.join(peer);
   mokka.on(MokkaEvents.ERROR, (err) => {
-     logger.error(err);
+    logger.error(err);
   });
   const rl = readline.createInterface({
     input: process.stdin,
@@ -79,6 +81,15 @@ const askCommand = (rl, mokka) => {
 
     if (args[0] === 'info')
       await getInfo(mokka);
+
+    if (args[0] === 'get_nodes') {
+      await getNodes(mokka);
+    }
+
+    if (args[0] === 'reset_node') {
+      await resetNode(mokka, args[1]);
+    }
+
     askCommand(rl, mokka);
   });
 };
@@ -103,13 +114,20 @@ const getLog = async (mokka, index) => {
 const getInfo = async (mokka) => {
   const info = await mokka.getDb().getState().getInfo();
   mokka.logger.info(info);
+  const info2 = mokka.getLastLogState();
+  console.log({...info2, state: mokka.state});
+};
 
-  for (const node of mokka.nodes) { // todo
-    const info = await mokka.getDb().getState().getInfo();
-    mokka.logger.info(info);
+const getNodes = async (mokka: Mokka) => {
+  const keys = Array.from(mokka.nodes.keys());
+  for (let index = 0; index < mokka.nodes.size; index++) {
+    console.log(`node ${index} / ${mokka.nodes.get(keys[index]).address} with state ${mokka.nodes.get(keys[index]).getLastLogState().index}`);
   }
+};
 
-
+const resetNode = async (mokka: Mokka, index) => {
+  const keys = Array.from(mokka.nodes.keys());
+  mokka.nodes.get(keys[index]).setLastLogState(new StateModel());
 };
 
 initMokka();

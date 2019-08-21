@@ -5,7 +5,7 @@ tsconfig.json
 tslint.json
 dist/test
 _config.yml
-webpack.config.js
+webpack.config.ts
 webpack_report.html
 dump
 examples

@@ -210,3 +210,4 @@ get_log 3
 
 That's all, now you can easily boot your own cluster. 
 All source code can be found under ``examples/node/cluster``.
+In case, you are going to run the demo from mokka's repo, then first run: ```npm run build_dist``` for generating mokka dist folder.

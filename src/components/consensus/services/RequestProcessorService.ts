@@ -41,9 +41,8 @@ class RequestProcessorService extends AbstractRequestService {
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
     }
 
-    if (packet.type === messageTypes.APPEND_ACK) {
+    if (packet.type === messageTypes.APPEND_ACK)
       await this.appendApi.appendAck(packet);
-    }
 
     if (packet.type === messageTypes.VOTE)
       replies = [await this.voteApi.vote(packet)];
@@ -54,11 +53,8 @@ class RequestProcessorService extends AbstractRequestService {
     if (packet.type === messageTypes.ERROR)
       this.mokka.emit(eventTypes.ERROR, new Error(packet.data));
 
-    if (packet.type === messageTypes.APPEND) {
-      console.log('got packet')
+    if (packet.type === messageTypes.APPEND)
       replies = await this.appendApi.append(packet);
-      console.log(replies);
-    }
 
     if (packet.type === messageTypes.APPEND_FAIL)
       replies = await this.appendApi.appendFail(packet);
