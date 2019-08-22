@@ -59,7 +59,7 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
     for (const mokka of ctx.mokkas)
       mokka.send({type: 'connect'});
 
-   // await new Promise(res => setTimeout(res, 1000));
+    // await new Promise(res => setTimeout(res, 1000));
 
     for (let i = 0; i < 100; i++) {
       ctx.mokkas[0].send({
@@ -86,7 +86,7 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
 
         mokka.on('message', (msg: any) => {
 
-         // if (msg.type !== 'info' || msg.args[0].index !== 2000)
+          // if (msg.type !== 'info' || msg.args[0].index !== 2000)
           if (msg.type !== 'info' || msg.args[0].index !== 200)
             return;
 
