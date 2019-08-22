@@ -6,7 +6,6 @@ import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
-import {ReplyModel} from '../models/ReplyModel';
 import {validate} from '../utils/proofValidation';
 import {AbstractRequestService} from './AbstractRequestService';
 
@@ -21,79 +20,56 @@ class RequestProcessorService extends AbstractRequestService {
     this.appendApi = new AppendApi(mokka);
   }
 
-  protected async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
+  protected async _process(packet: PacketModel, node: NodeModel): Promise<PacketModel[]> {
 
-    if (packet == null)
-      return null;
+    let replies: PacketModel[] = [];
 
-    let reply = null;
-
-    this.mokka.timer.heartbeat(states.LEADER === this.mokka.state ? this.mokka.heartbeat : this.mokka.timer.timeout());
+    if (states.LEADER !== this.mokka.state && packet.state === states.LEADER) {
+      this.mokka.timer.clearHeartbeatTimeout();
+    }
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
 
-      const pubKeys = this.mokka.nodes.map((node: NodeModel) => node.publicKey);
-      pubKeys.push(this.mokka.publicKey);
-      const validated = validate(packet.term, packet.proof, this.mokka.proof, pubKeys);
+      const rawPubKeys = Array.from(this.mokka.nodes.values()).map((node) => node.rawPublicKey);
+      rawPubKeys.push(this.mokka.rawPublicKey);
+      const validated = validate(packet.term, packet.proof, this.mokka.proof, rawPubKeys);
 
       if (!validated) {
-        const reply = await this.messageApi.packet(messageTypes.ERROR, 'validation failed');
-        return new ReplyModel(reply, packet.publicKey);
+        return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'validation failed')];
       }
 
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
-      this.mokka.timer.clearElectionTimeout();
     }
 
-    const lastInfo = await this.mokka.getDb().getState().getInfo();
+    if (packet.type === messageTypes.APPEND_ACK)
+      await this.appendApi.appendAck(packet);
 
     if (packet.type === messageTypes.VOTE)
-      reply = await this.voteApi.vote(packet);
+      replies = [await this.voteApi.vote(packet)];
 
     if (packet.type === messageTypes.VOTED)
-      reply = await this.voteApi.voted(packet);
+      replies = await this.voteApi.voted(packet);
 
     if (packet.type === messageTypes.ERROR)
       this.mokka.emit(eventTypes.ERROR, new Error(packet.data));
 
     if (packet.type === messageTypes.APPEND)
-      reply = await this.appendApi.append(packet);
-
-    if (packet.type === messageTypes.APPEND_ACK)
-      reply = await this.appendApi.appendAck(packet);
+      replies = await this.appendApi.append(packet);
 
     if (packet.type === messageTypes.APPEND_FAIL)
-      reply = await this.appendApi.appendFail(packet);
-
-    if (packet.type === messageTypes.RE_APPEND)
-      reply = await this.appendApi.obtain(packet);
+      replies = await this.appendApi.appendFail(packet);
 
     if (!Object.values(messageTypes).includes(packet.type)) {
-      const response = await this.messageApi.packet(messageTypes.ERROR, 'Unknown message type: ' + packet.type);
-      reply = new ReplyModel(response, packet.publicKey);
+      replies = [
+        await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'Unknown message type: ' + packet.type)
+      ];
     }
 
-    this.mokka.timer.heartbeat(states.LEADER === this.mokka.state ? this.mokka.heartbeat : this.mokka.timer.timeout());
-
-    if (packet.state === states.LEADER &&
-      lastInfo.index > 0 &&
-      packet.last.index === lastInfo.index &&
-      !packet.last.responses.includes(this.mokka.publicKey)) {
-      const response = await this.messageApi.packet(messageTypes.APPEND_ACK);
-      reply = new ReplyModel(response, packet.publicKey);
+    if (this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
+      this.mokka.timer.heartbeat(this.mokka.timer.timeout());
     }
 
-    if (!reply &&
-      this.mokka.state !== states.LEADER &&
-      packet.type === messageTypes.ACK &&
-      packet.last && packet.last.index > lastInfo.index &&
-      packet.last.createdAt < Date.now() - this.mokka.heartbeat) {
-
-      const response = await this.messageApi.packet(messageTypes.RE_APPEND);
-      reply = new ReplyModel(response, packet.publicKey);
-    }
-
-    return reply;
+    return replies;
   }
 
 }

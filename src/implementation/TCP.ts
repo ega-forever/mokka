@@ -2,23 +2,22 @@
 import msg from 'axon';
 
 import {Mokka} from '../components/consensus/main';
-import {IIndexObject} from '../components/shared/types/IIndexObjectType';
 
 class TCPMokka extends Mokka {
 
-  private sockets: IIndexObject<any> = {};
+  private sockets: Map<string, any> = new Map<string, any>();
 
   public initialize() {
     this.logger.info(`initializing reply socket on port  ${this.address}`);
 
-    this.sockets[this.address] = msg.socket('rep');
+    this.sockets.set(this.address, msg.socket('rep'));
 
-    this.sockets[this.address].bind(this.address);
-    this.sockets[this.address].on('message', (data: Buffer) => {
+    this.sockets.get(this.address).bind(this.address);
+    this.sockets.get(this.address).on('message', (data: Buffer) => {
       this.emit('data', data);
     });
 
-    this.sockets[this.address].on('error', () => {
+    this.sockets.get(this.address).on('error', () => {
       this.logger.error(`failed to initialize on port: ${this.address}`);
     });
   }
@@ -31,28 +30,28 @@ class TCPMokka extends Mokka {
    */
   public async write(address: string, packet: Buffer): Promise<void> {
 
-    if (!this.sockets[address]) {
-      this.sockets[address] = msg.socket('req');
+    if (!this.sockets.has(address)) {
+      this.sockets.set(address, msg.socket('req'));
 
-      this.sockets[address].connect(address);
-      this.sockets[address].on('error', () => {
+      this.sockets.get(address).connect(address);
+      this.sockets.get(address).on('error', () => {
         this.logger.error(`failed to write to: ${this.address}`);
       });
     }
 
-    this.sockets[address].send(packet);
+    this.sockets.get(address).send(packet);
   }
 
   public async disconnect(): Promise<void> {
     await super.disconnect();
-    for (const socket of Object.values(this.sockets)) {
+    for (const socket of this.sockets.values()) {
       socket.close();
     }
   }
 
-  public connect(): void {
+  public async connect(): Promise<void> {
     this.initialize();
-    super.connect();
+    await super.connect();
   }
 
 }

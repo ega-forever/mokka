@@ -1,61 +1,48 @@
-import transform from 'lodash/transform';
-import values from 'lodash/values';
-// @ts-ignore
-import secrets from 'secrets.js-grempe';
-import nacl from 'tweetnacl';
-import {IIndexObject} from '../../shared/types/IIndexObjectType';
+import crypto from 'crypto';
+import secrets = require('secrets.js-grempe');
 
 const _extract = (proof: string):
   { term: number, time: number, items: Array<{ secret: string, signature: string }> } => {
-
-  const items = [];
-
+  
   const splitProof = proof.split('x');
-  const itemsAmount = parseInt(splitProof[0], 10);
-  proof = splitProof[1];
-  const term = parseInt(splitProof[2], 10);
-  const time = parseInt(splitProof[3], 10);
+  const term = parseInt(splitProof[1], 10);
+  const time = parseInt(splitProof[2], 10);
 
-  const offset = proof.length / itemsAmount;
-  const secretSize = offset - 128;
+  const shareWithSigs = splitProof[0].split('y').slice(1);
 
-  for (let index = 0; index < proof.length; index += offset) {
-    const item = proof.substr(index, index + offset);
-
-    const secret = item.substr(0, secretSize);
-    const signature = item.substr(secretSize, 128);
-
-    items.push({secret, signature});
-  }
+  const items = shareWithSigs.map((shareWithSig) => {
+    const split = shareWithSig.split('g');
+    return {
+      secret: split[0],
+      signature: split[1]
+    };
+  });
 
   return {term, time, items};
 
 };
 
-const validate = (term: number, proof: string, currentProof: string, publicKeys: string[]) => {
+const validate = (term: number, proof: string, currentProof: string, rawPublicKeys: string[]) => {
 
   if (currentProof && currentProof === proof)
     return true;
 
   const extracted = _extract(proof);
 
-  const items = values(
-    transform(extracted.items, (result: IIndexObject<string>, item) => {
+  const data: { [key: string]: string } = {};
 
-      const pubKey = publicKeys.find((publicKey: string) =>
-        nacl.sign.detached.verify(
-          Buffer.from(item.secret),
-          Buffer.from(item.signature, 'hex'),
-          Buffer.from(publicKey, 'hex')
-        )
-      );
+  for (const item of extracted.items) {
 
-      result[pubKey] = item.secret;
-      return result;
-    }, {})
-  );
+    const pubKey = rawPublicKeys.find((rawPublicKey: string) => {
+      const verify = crypto.createVerify('sha256');
+      verify.update(Buffer.from(item.secret));
+      return verify.verify(rawPublicKey, Buffer.from(item.signature, 'hex'));
+    });
 
-  let comb = secrets.combine(items);
+    data[pubKey] = item.secret;
+  }
+
+  let comb = secrets.combine(Object.values(data));
   comb = secrets.hex2str(comb);
 
   return comb === `${term}x${extracted.time}`;

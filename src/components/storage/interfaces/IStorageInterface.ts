@@ -1,5 +1,11 @@
 import {EventEmitter} from 'events';
 
+interface ICreateReadStreamOptions {
+  gt?: string;
+  lt?: string;
+  limit?: number;
+}
+
 export interface IStorageInterface {
 
   del(index: string): Promise<void>;
@@ -8,10 +14,10 @@ export interface IStorageInterface {
 
   put(index: string, data: any): Promise<void>;
 
-  createReadStream(options: any): EventEmitter;
+  createReadStream(options: ICreateReadStreamOptions): EventEmitter;
 
-  createKeyStream(options: any): EventEmitter;
+  createKeyStream(options: ICreateReadStreamOptions): EventEmitter;
 
-  close(cb: any): void;
+  close(cb: (err: Error | null) => void): void;
 
 }

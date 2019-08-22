@@ -1,11 +1,5 @@
-import findIndex from 'lodash/findIndex';
-import initial from 'lodash/initial';
-import sortBy from 'lodash/sortBy';
-// @ts-ignore
-import secrets from 'secrets.js-grempe';
-import {Semaphore} from 'semaphore';
-import semaphore from 'semaphore';
-import nacl from 'tweetnacl';
+import crypto from 'crypto';
+import secrets = require('secrets.js-grempe');
 import eventTypes from '../../shared/constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
@@ -13,16 +7,15 @@ import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
 import {MessageApi} from './MessageApi';
+import {compressPublicKeySecp256k1} from '../utils/keyPair';
 
 class NodeApi {
 
-  private mokka: Mokka;
-  private semaphore: Semaphore;
+  private readonly mokka: Mokka;
   private messageApi: MessageApi;
 
   constructor(mokka: Mokka) {
     this.mokka = mokka;
-    this.semaphore = semaphore(1);
     this.messageApi = new MessageApi(mokka);
   }
 
@@ -30,7 +23,9 @@ class NodeApi {
 
     const publicKey = multiaddr.match(/\w+$/).toString();
 
-    if (this.mokka.publicKey === publicKey)
+    const shortPubKey = publicKey.length === 66 ? publicKey : compressPublicKeySecp256k1(publicKey);
+
+    if (this.mokka.publicKey === shortPubKey)
       return;
 
     const node = new NodeModel(null, multiaddr, states.CHILD);
@@ -38,88 +33,84 @@ class NodeApi {
     node.write = this.mokka.write.bind(this.mokka);
     node.once('end', () => this.leave(node.publicKey));
 
-    this.mokka.nodes.push(node);
+    this.mokka.nodes.set(shortPubKey, node);
     this.mokka.emit(eventTypes.NODE_JOIN, node);
 
-    this.mokka.gossip.handleNewPeers([publicKey]);
+    this.mokka.gossip.handleNewPeers([shortPubKey]);
 
     return node;
   }
 
   public leave(publicKey: string): void {
 
-    const index = findIndex(this.mokka.nodes, (node: NodeModel) => node.publicKey === publicKey);
+    const node = this.mokka.nodes.get(publicKey);
+    this.mokka.nodes.delete(publicKey);
 
-    if (index === -1)
-      return;
-
-    this.mokka.nodes.splice(index, 1);
-
-    const node = this.mokka.nodes[index];
     this.mokka.emit(eventTypes.NODE_LEAVE, node);
   }
 
-  public async promote() {
+  public async promote(): Promise<void> {
 
-    return await new Promise((res) => {
+    if (this.mokka.state === states.CANDIDATE) {
+      return;
+    }
 
-      this.semaphore.take(async () => {
+    const startTime = Date.now();
+    const token = `${this.mokka.term + 1}x${startTime}`;
+    const secret = secrets.str2hex(token);
 
-        const startTime = Date.now();
-        const token = `${this.mokka.term + 1}x${startTime}`;
-        const secret = secrets.str2hex(token);
+    const shares: string[] = secrets.share(secret, this.mokka.nodes.size + 1, this.mokka.majority());
+    const peerPubKeys = Array.from(this.mokka.nodes.keys());
 
-        const shares = sortBy(secrets.share(secret, this.mokka.nodes.length + 1, this.mokka.majority()))
-          .map((share: string, index: number) => {
+    const voteData = shares
+      .sort()
+      .map((share: string, index: number) => {
 
-            if (index === this.mokka.nodes.length) {
-              const signature = Buffer.from(
-                nacl.sign.detached(
-                  Buffer.from(share),
-                  Buffer.from(this.mokka.privateKey, 'hex')
-                )
-              ).toString('hex');
-              return {
-                publicKey: this.mokka.publicKey,
-                share,
-                signature,
-                voted: true
-              };
-            }
+        if (index === this.mokka.nodes.size) {
 
-            return {
-              publicKey: this.mokka.nodes[index].publicKey,
-              share,
-              signature: null,
-              voted: false
-            };
-          });
+          const sign = crypto.createSign('sha256');
+          sign.update(Buffer.from(share));
 
-        this.mokka.setVote(
-          new VoteModel(this.mokka.publicKey, shares, secret, startTime)
-        );
-        this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
-
-        const startVote = Date.now();
-        for (const share of initial(shares)) {
-          const packet = await this.messageApi.packet(messageTypes.VOTE, {
-            share: share.share
-          });
-
-          await this.messageApi.message(share.publicKey, packet);
+          const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
+          return {
+            publicKey: this.mokka.publicKey,
+            share,
+            signature,
+            voted: true
+          };
         }
 
-        const timeout = this.mokka.timer.timeout() - (Date.now() - startVote);
-
-        if (timeout > 0)
-          await new Promise((res) => setTimeout(res, timeout));
-
-        this.mokka.timer.setVoteTimeout();
-        this.semaphore.leave();
-        res();
+        return {
+          publicKey: peerPubKeys[index],
+          share,
+          signature: null,
+          voted: false
+        };
       });
 
-    });
+    this.mokka.setVote(
+      new VoteModel(this.mokka.publicKey, voteData, secret, startTime)
+    );
+    this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
+
+    // const startVote = Date.now();
+    for (const share of voteData.slice(0, -1)) {
+      const packet = await this.messageApi.packet(messageTypes.VOTE, share.publicKey, {
+        share: share.share
+      });
+
+      await this.messageApi.message(packet);
+    }
+
+    // this.mokka.timer.setVoteTimeout();
+
+    await new Promise((res) => setTimeout(res, this.mokka.election.max));
+
+    if (this.mokka.state === states.CANDIDATE) {
+      this.mokka.logger.info('change state back to FOLLOWER');
+      this.mokka.setState(states.FOLLOWER, this.mokka.term - 1, '');
+    }
+
   }
 
 }

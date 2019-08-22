@@ -5,12 +5,15 @@ class PacketModel {
   public publicKey: string;
   public type: number;
   public data: any;
+  public peer: {
+    publicKey: string;
+    number: number;
+  };
   public last: {
     index: number,
     hash: string,
     term: number,
-    createdAt: number,
-    responses: string[]
+    createdAt: number
   };
   public proof: string;
 
@@ -23,10 +26,13 @@ class PacketModel {
       index: number,
       hash: string,
       term: number,
-      createdAt: number,
-      responses: string[]
+      createdAt: number
     },
     proof: string,
+    peer: {
+      publicKey: string,
+      number: number
+    },
     data: any = null) {
     this.state = state;
     this.type = type;
@@ -34,7 +40,12 @@ class PacketModel {
     this.publicKey = publicKey;
     this.last = last;
     this.data = data;
+    this.peer = peer;
     this.proof = proof;
+  }
+
+  public compact() {
+    // todo remove peer.publicKey
   }
 
 }

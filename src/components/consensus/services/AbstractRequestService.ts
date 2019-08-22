@@ -1,52 +1,34 @@
-import has from 'lodash/has';
-import isArray from 'lodash/isArray';
-import {Semaphore} from 'semaphore';
-import semaphore from 'semaphore';
 import {MessageApi} from '../api/MessageApi';
-import messageTypes from '../constants/MessageTypes';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
-import {ReplyModel} from '../models/ReplyModel';
+import {NodeModel} from '../models/NodeModel';
 
 class AbstractRequestService {
 
   protected mokka: Mokka;
-  protected semaphore: Semaphore;
   protected messageApi: MessageApi;
 
   constructor(mokka: Mokka) {
     this.mokka = mokka;
-    this.semaphore = semaphore(1);
     this.messageApi = new MessageApi(mokka);
   }
 
   public async process(packet: PacketModel) {
 
-    const data: ReplyModel[] | ReplyModel =
-      packet.type === messageTypes.ACK ?
-        await this._process(packet) :
-        await new Promise((res) => {
-          this.semaphore.take(async () => {
-            const data = await this._process(packet);
-            res(data || null);
-            this.semaphore.leave();
-          });
-        });
+    const node = this.mokka.nodes.get(packet.publicKey);
 
-    if (!has(data, 'who') && !has(data, '0.who'))
+    if (!node)
       return;
 
-    if (isArray(data)) {
-      for (const item of data)
-        await this.messageApi.message(item.who, item.reply);
+    this.mokka.emit(`${packet.publicKey}:${packet.type}`, packet.data);
 
-      return;
-    }
+    const data: PacketModel[] = await this._process(packet, node);
 
-    await this.messageApi.message(data.who, data.reply);
+    for (const item of data)
+      await this.messageApi.message(item);
   }
 
-  protected async _process(packet: PacketModel): Promise<ReplyModel[] | ReplyModel | null> {
+  protected async _process(packet: PacketModel, node: NodeModel): Promise<PacketModel[]> {
     throw new Error('process should be implemented');
   }
 

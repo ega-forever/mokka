@@ -1,5 +1,3 @@
-import {Semaphore} from 'semaphore';
-import semaphore = require('semaphore');
 import prefixes from '../constants/prefixes';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {StateModel} from '../models/StateModel';
@@ -7,25 +5,23 @@ import {EntryApi} from './EntryApi';
 
 class StateApi {
 
-  private sem: Semaphore;
   private db: IStorageInterface;
   private entryApi: EntryApi;
 
-  constructor(db: any) {
+  constructor(db: IStorageInterface) {
     this.db = db;
-    this.sem = semaphore(1);
     this.entryApi = new EntryApi(db);
   }
 
   public async setState(state: StateModel): Promise<void> {
-    await this.db.put(prefixes.states.toString(), state);
+    await this.db.put(`${prefixes.states}`, state);
   }
 
   public async getInfo(): Promise<StateModel> {
     try {
-      return await this.db.get(prefixes.states.toString());
+      return await this.db.get(`${prefixes.states}`);
     } catch (e) {
-      return new StateModel({});
+      return new StateModel();
     }
   }
 
