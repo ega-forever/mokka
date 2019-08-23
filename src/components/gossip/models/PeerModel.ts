@@ -1,25 +1,25 @@
 import {EventEmitter} from 'events';
-import sortBy from 'lodash/sortBy';
-import toPairs from 'lodash/toPairs';
-import nacl from 'tweetnacl';
 import eventTypes from '../../shared/constants/EventTypes';
-import {IIndexObject} from '../../shared/types/IIndexObjectType';
 import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
+import crypto from 'crypto';
 
 class PeerModel extends EventEmitter {
 
-  private pubKey: string;
-  private attrs: IIndexObject<string> = {}; // local storage
-  private detector = new AccrualFailureDetector();
+  private readonly pubKey: string;
+  private readonly rawPubKey: string;
+  private readonly attrs: Map<string, { value: any, number: number }>; // local storage
+  private detector: AccrualFailureDetector;
   private alive: boolean = true;
   private heartBeatVersion: number = 0;
   private maxVersionSeen: number = 0;
   private PHI: number = 8;
-  private HEARTBEAT_KEY = '__heartbeat__';
 
-  constructor(pubKey: string) {
+  constructor(pubKey: string, rawPubKey: string) {
     super();
     this.pubKey = pubKey;
+    this.rawPubKey = rawPubKey;
+    this.attrs = new Map<string, { value: any, number: number }>();
+    this.detector = new AccrualFailureDetector();
   }
 
   get publicKey(): string {
@@ -30,54 +30,51 @@ class PeerModel extends EventEmitter {
     return this.maxVersionSeen;
   }
 
-  public updateWithDelta(k: string, v: string, n: number): void {
-    if (n > this.maxVersionSeen) {
-      const d = new Date();
-      this.detector.add(d.getTime());
-      this.setLocalKey(k, v, n);
-      this.maxVersionSeen = n;
+  public updateWithDelta(k: string, v: { key: string, value: any, signature: string }, n: number): void {
+    if (n <= this.maxVersionSeen) {
+      return;
     }
+    const d = new Date();
+    this.detector.add(d.getTime());
+    this.setLocalKey(k, v, n);
+    this.maxVersionSeen = n;
   }
 
-  public setLocalKey(k: string, v: any, n: number): void {
+  public setLocalKey(k: string, v: { key: string, value: any, signature: string }, n: number): void {
 
-    if (k !== this.HEARTBEAT_KEY) {
+    if (!v.signature)
+      return;
 
-      if (!v.signature)
-        return;
+    const verify = crypto.createVerify('sha256');
+    verify.update(Buffer.from(k));
+    const isSigned = verify.verify(this.rawPubKey, Buffer.from(v.signature, 'hex'));
 
-      const isSigned = nacl.sign.detached.verify(
-        Buffer.from(k),
-        Buffer.from(v.signature, 'hex'),
-        Buffer.from(this.pubKey, 'hex')
-      );
-
-      if (!isSigned)
-        return;
-    }
+    if (!isSigned)
+      return;
 
     if (n > this.maxVersionSeen)
       this.maxVersionSeen = n;
 
-    // @ts-ignore
-    this.attrs[k] = [v, n];
+    this.attrs.set(k, {value: v, number: n});
     this.emit(eventTypes.GOSSIP_PEER_UPDATE, k, v);
   }
 
   public beatHeart(): void {
     this.heartBeatVersion += 1;
-    this.setLocalKey(this.HEARTBEAT_KEY, this.heartBeatVersion.toString(), this.maxVersionSeen);
   }
 
-  public deltasAfterVersion(lowestVersion: number): any[] {
+  public deltasAfterVersion(lowestVersion: number, highestVersion: number): Array<[string, any, number]> {
 
-    const pairs = toPairs(this.attrs).filter((pair: any[]) =>
-      pair[0] !== this.HEARTBEAT_KEY && pair[1][1] > lowestVersion)
-      .map((pair: any[]) =>
-        [pair[0], ...pair[1]]
-      );
+    const data: Array<[string, any, number]> = [];
 
-    return sortBy(pairs, (item: any[]) => item[2]);
+    for (const key of this.attrs.keys()) {
+      const value = this.attrs.get(key);
+      if (value.number > lowestVersion && value.number < highestVersion) {
+        data.push([key, value.value, value.number]);
+      }
+    }
+
+    return data.sort((item, item2) => item[2] > item2[2] ? 1 : -1);
   }
 
   public isSuspect(): boolean {
@@ -111,20 +108,22 @@ class PeerModel extends EventEmitter {
   }
 
   public getPendingLogs(): Array<{ hash: string, log: any }> {
-    const data = toPairs(this.attrs)
-      .filter((pair: any[]) => pair[0] !== this.HEARTBEAT_KEY)
-      .map((pair: any[]) => ({hash: pair[0], log: pair[1][0]}));
 
-    // @ts-ignore
-    return sortBy(data, (item: any[]) => item[2]);
+    const data: Array<{ hash: string, log: any }> = [];
+
+    for (const key of this.attrs.keys()) {
+      data.push({hash: key, log: this.attrs.get(key).value});
+    }
+
+    return data;
   }
 
   public getPending(key: string): any {
-    return this.attrs[key];
+    return this.attrs.get(key);
   }
 
   public pullPending(key: string): void {
-    delete this.attrs[key];
+    this.attrs.delete(key);
   }
 }
 

@@ -12,8 +12,6 @@
         "lib": ["es2018","esnext.asynciterable"]
     },
     "exclude": [
-        "node_modules",
-        "dist",
-        "examples"
+        "node_modules"
     ]
 }

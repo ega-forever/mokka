@@ -7,7 +7,7 @@ class EntryApi {
 
   private db: IStorageInterface;
 
-  constructor(db: any) {
+  constructor(db: IStorageInterface) {
     this.db = db;
   }
 

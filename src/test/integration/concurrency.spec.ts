@@ -1,10 +1,9 @@
 import Promise from 'bluebird';
-import {Buffer} from 'buffer';
 import {expect} from 'chai';
 import {fork} from 'child_process';
+import crypto from 'crypto';
 import * as _ from 'lodash';
 import * as path from 'path';
-import * as nacl from 'tweetnacl';
 
 describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
   beforeEach(async () => {
@@ -13,11 +12,20 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
 
     ctx.keys = [];
 
-    for (let i = 0; i < nodesCount; i++)
-      ctx.keys.push(Buffer.from(nacl.sign.keyPair().secretKey).toString('hex'));
+    for (let i = 0; i < nodesCount; i++) {
+      const node = crypto.createECDH('secp256k1');
+      node.generateKeys();
+      ctx.keys.push({
+        privateKey: node.getPrivateKey().toString('hex'),
+        publicKey: node.getPublicKey('hex', 'compressed')
+      });
+    }
 
     for (let index = 0; index < ctx.keys.length; index++) {
-      const instance = fork(path.join(__dirname, 'workers/MokkaWorker.js'), [], {stdio: 'inherit'});
+      const instance = fork(path.join(__dirname, 'workers/MokkaWorker.ts'), [], {
+        execArgv: ['-r', 'ts-node/register']
+      });
+
       mokkas.push(instance);
       instance.send({
         args: [
@@ -51,17 +59,19 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
     for (const mokka of ctx.mokkas)
       mokka.send({type: 'connect'});
 
-    for (let i = 0; i < 1000; i++) {
+    // await new Promise(res => setTimeout(res, 1000));
+
+    for (let i = 0; i < 100; i++) {
       ctx.mokkas[0].send({
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
-          nonce: Date.now() + i + '1',
+          nonce: Date.now() + (i * Math.random() * 100) + '1',
           value: (Date.now() + i).toString()
         }],
         type: 'push'
       });
       ctx.mokkas[1].send({
         args: ['0x4CDAA7A3dF73f9EBD1D0b528c26b34Bea8828D51', {
-          nonce: Date.now() + i + '2',
+          nonce: Date.now() + (i * Math.random() * 100) + '2',
           value: (Date.now() + i).toString()
         }],
         type: 'push'
@@ -76,7 +86,8 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
 
         mokka.on('message', (msg: any) => {
 
-          if (msg.type !== 'info' || msg.args[0].index !== 2000)
+          // if (msg.type !== 'info' || msg.args[0].index !== 2000)
+          if (msg.type !== 'info' || msg.args[0].index !== 200)
             return;
 
           clearInterval(timeoutId);

@@ -1,32 +1,33 @@
-const ganache = require('ganache-core'),
-  config = require('./config'),
-  TCPMokka = require('./TCPMokka'),
-  bunyan = require('bunyan'),
-  Web3 = require('web3'),
-  sem = require('semaphore')(1),
-  Tx = require('ganache-core/lib/utils/transaction'),
-  Block = require('ganache-core/node_modules/ethereumjs-block'),
-  MokkaEvents = require('mokka/dist/components/shared/constants/EventTypes'),
-  MokkaStates = require('mokka/dist/components/consensus/constants/NodeStates'),
-  detect = require('detect-port');
+import bunyan from 'bunyan';
+import detect = require('detect-port');
+import ganache from 'ganache-core';
+import Tx from 'ganache-core/lib/utils/transaction';
+import Block from 'ganache-core/node_modules/ethereumjs-block';
+import * as MokkaStates from 'mokka/dist/components/consensus/constants/NodeStates';
+import * as MokkaEvents from 'mokka/dist/components/shared/constants/EventTypes';
+import TCPMokka from 'mokka/dist/implementation/TCP';
+import semaphore = require('semaphore');
+import Web3 = require('web3');
+import config from './config';
 
 const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
+const sem = semaphore(1);
 
 const startGanache = async (node) => {
 
-  const accounts = config.nodes.map(node => ({
-    secretKey: Buffer.from(node.secretKey.slice(64), 'hex'),
-    balance: node.balance
+  const accounts = config.nodes.map((node) => ({
+    balance: node.balance,
+    secretKey: `0x${node.secretKey.slice(0, 64)}`
   }));
 
   const server = ganache.server({
-    accounts: accounts,
+    accounts,
     default_balance_ether: 500,
     network_id: 86,
     time: new Date('12-12-2018')
   });
 
-  await new Promise(res => {
+  await new Promise((res) => {
     server.listen(node.ganache, () => {
       console.log('started');
       res();
@@ -36,18 +37,18 @@ const startGanache = async (node) => {
   return server;
 };
 
-const startMokka = (node) => {
+const startMokka = async (node) => {
 
   const mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${node.port}/${node.publicKey}`,
-    electionMin: 300,
-    electionMax: 1000,
-    heartbeat: 200,
-    gossipHeartbeat: 200,
+    electionMax: 300,
+    electionMin: 100,
+    gossipHeartbeat: 100,
+    heartbeat: 50,
     logger,
     privateKey: node.secretKey
   });
-  mokka.connect();
+  await mokka.connect();
   mokka.on(MokkaEvents.default.STATE, () => {
     logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
   });
@@ -56,7 +57,7 @@ const startMokka = (node) => {
     logger.error(err);
   });
 
-  config.nodes.filter(nodec => nodec.publicKey !== node.publicKey).forEach(nodec => {
+  config.nodes.filter((nodec) => nodec.publicKey !== node.publicKey).forEach((nodec) => {
     mokka.nodeApi.join(`tcp://127.0.0.1:${nodec.port}/${nodec.publicKey}`);
 
   });
@@ -64,11 +65,10 @@ const startMokka = (node) => {
   return mokka;
 };
 
-
 const init = async () => {
 
   const allocated = await Promise.all(
-    config.nodes.map(async node =>
+    config.nodes.map(async (node) =>
       node.ganache === await detect(node.ganache)
     )
   );
@@ -80,14 +80,13 @@ const init = async () => {
 
   const node = config.nodes[index];
 
-  const mokka = startMokka(node);
-  const server = await startGanache(node, mokka);
+  const mokka = await startMokka(node);
+  const server = await startGanache(node);
 
+  server.provider.engine.on('rawBlock', async (blockJSON) => {
 
-  server.provider.engine.on('rawBlock', async blockJSON => {
-
-    const block = await new Promise((res, rej) => {
-      server.provider.manager.state.blockchain.getBlock(blockJSON.hash, (err, data) => err ? rej(data) : res(data))
+    const block: Block = await new Promise((res, rej) => {
+      server.provider.manager.state.blockchain.getBlock(blockJSON.hash, (err, data) => err ? rej(data) : res(data));
     });
 
     if (mokka.state !== MokkaStates.default.LEADER)
@@ -104,7 +103,7 @@ const init = async () => {
     sem.take(async () => {
       const {log} = await mokka.getDb().getEntry().get(index);
       const block = new Block(Buffer.from(log.value.value, 'hex'));
-      block.transactions = block.transactions.map(tx => new Tx(tx));
+      block.transactions = block.transactions.map((tx) => new Tx(tx));
 
       await new Promise((res, rej) => {
         server.provider.manager.state.blockchain.processBlock(
@@ -112,7 +111,7 @@ const init = async () => {
           block,
           true,
           (err, data) => err ? rej(err) : res(data)
-        )
+        );
       });
 
       logger.info(`new block added ${block.hash().toString('hex')}`);
@@ -120,9 +119,7 @@ const init = async () => {
       sem.leave();
     });
 
-
   });
-
 
   const bound = server.provider.send;
 
@@ -130,16 +127,19 @@ const init = async () => {
 
     if (mokka.state !== MokkaStates.default.LEADER && payload.method === 'eth_sendTransaction') {
 
-      const node = config.nodes.find(node => node.publicKey === mokka.leaderPublicKey);
+      const node = config.nodes.find((node) => node.publicKey === mokka.leaderPublicKey);
 
+      console.log(node)
+
+      // @ts-ignore
       const web3 = new Web3(`http://localhost:${node.ganache}`);
       const hash = await new Promise((res, rej) =>
         web3.eth.sendTransaction(...payload.params, (err, result) => err ? rej(err) : res(result))
       );
 
       // await until tx will be processed
-      await new Promise(res => {
-        let intervalPid = setInterval(async () => {
+      await new Promise((res) => {
+        const intervalPid = setInterval(async () => {
 
           const tx = await new Promise((res, rej) =>
             server.provider.manager.eth_getTransactionByHash(
@@ -150,7 +150,7 @@ const init = async () => {
 
           if (tx) {
             clearInterval(intervalPid);
-            res()
+            res();
           }
 
         }, 200);
@@ -165,9 +165,8 @@ const init = async () => {
       return cb(null, reply);
     }
 
-    return bound.call(server.provider, payload, cb)
+    return bound.call(server.provider, payload, cb);
   };
 };
-
 
 module.exports = init();

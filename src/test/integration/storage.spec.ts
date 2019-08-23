@@ -1,6 +1,7 @@
 import Promise from 'bluebird';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
+import crypto from 'crypto';
 import {createHmac} from 'crypto';
 import fs from 'fs-extra';
 // @ts-ignore
@@ -8,29 +9,30 @@ import leveldown from 'leveldown';
 // @ts-ignore
 import * as _ from 'lodash';
 import * as path from 'path';
-import {EntryModel} from '../components/storage/models/EntryModel';
-import {StateModel} from '../components/storage/models/StateModel';
-import TCPMokka from '../implementation/TCP';
+import {EntryModel} from '../../components/storage/models/EntryModel';
+import {StateModel} from '../../components/storage/models/StateModel';
+import TCPMokka from '../../implementation/TCP';
 
 describe('storage tests', (ctx = {}) => {
 
   beforeEach(async () => {
 
-    // tslint:disable-next-line
-    const key = 'f7954a52cb4e6cb8a83ed0d6150a3dd1e4ae2c150054660b14abbdc23e16262b7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15';
-    const dbPath = path.join('./', 'dump', 'test.db');
+    const node = crypto.createECDH('secp256k1');
+    node.generateKeys();
+
+    const dbPath = path.join(__dirname, '../../../', 'dump', 'test.db');
 
     fs.removeSync(dbPath);
 
     ctx.mokka = new TCPMokka({
-      address: `tcp://127.0.0.1:2000/${key.substring(64, 128)}`,
+      address: `tcp://127.0.0.1:2000/${node.getPublicKey('hex', 'compressed')}`,
       electionMax: 1000,
       electionMin: 300,
       gossipHeartbeat: 200,
       heartbeat: 200,
       logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-      privateKey: key,
-      storage: leveldown(`${path.join(__dirname, '../..', 'dump', 'test.db')}_db`)
+      privateKey: node.getPrivateKey('hex'),
+      storage: leveldown(`${dbPath}_db`)
     });
 
     await Promise.delay(500);
@@ -143,11 +145,9 @@ describe('storage tests', (ctx = {}) => {
       const start = Date.now();
       const randomIndex = _.random(3000 * num, 6000 * num);
 
-      const state = new StateModel({
-        committedIndex: randomIndex - 10,
-        hash: createHmac('sha256', 'data' + 99999).digest('hex'),
-        index: 99999
-      });
+      const state = new StateModel(9999,
+        createHmac('sha256', 'data' + 99999).digest('hex')
+      );
 
       await ctx.mokka.getDb().getState().setState(state);
 

@@ -1,0 +1,30 @@
+{
+  "extends": "tslint:recommended",
+  "parser":  "@typescript-eslint/parser",
+  "rules": {
+    "quotes": [
+      "error", "single"
+    ],
+    "quotemark": [true, "single"],
+    "no-console": true,
+    "no-empty": [true, "allow-empty-catch"],
+    "no-shadowed-variable": false,
+    "trailing-comma": [true, {
+      "singleline": "never",
+      "multiline": {
+        "objects": "never",
+        "arrays": "never",
+        "functions": "never",
+        "typeLiterals": "ignore"
+      }
+    }],
+    "variable-name": [true, "ban-keywords", "check-format", "allow-leading-underscore"],
+    "no-default-export": false,
+    "curly": ["error", "multi"],
+    "dot-location": [2, "property"],
+    "eqeqeq": [2, "always", {"null": "ignore"}],
+    "handle-callback-err": [2, "^(err|error)$"],
+    "indent": [2, 2, {"SwitchCase": 1}],
+    "space-before-function-paren": ["error", "always"]
+  }
+}

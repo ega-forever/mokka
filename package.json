@@ -1,11 +1,11 @@
 {
   "name": "mokka",
-  "version": "0.3.1",
+  "version": "0.4.1",
   "description": "",
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
-    "test": "mocha dist/test/*spec.js --timeout 120000",
+    "test": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack",
     "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"
@@ -22,21 +22,14 @@
   "author": "zyev.egor@gmail.com",
   "license": "AGPLv3",
   "dependencies": {
+    "big-integer": "^1.6.44",
     "encoding-down": "^3.0.1",
     "levelup": "^3.1.1",
-    "lodash": "^4.17.11",
     "memdown": "^3.0.0",
-    "merkle-tools": "^1.4.0",
-    "rlp": "^2.2.3",
-    "secrets.js-grempe": "^1.1.0",
-    "semaphore": "^1.1.0",
-    "tick-tock": "^1.0.0",
-    "tweetnacl": "^1.0.1"
+    "secrets.js-grempe": "^1.1.0"
   },
   "devDependencies": {
-    "@types/bn.js": "^4.11.5",
-    "@types/lodash": "^4.14.123",
-    "@types/semaphore": "^1.1.0",
+    "lodash": "^4.17.11",
     "@types/bluebird": "^3.5.26",
     "@types/bunyan": "^1.8.6",
     "@types/chai": "^4.1.4",
@@ -50,8 +43,8 @@
     "fs-extra": "^7.0.1",
     "leveldown": "^5.0.3",
     "mocha": "^5.2.0",
-    "nodemon": "~1.17.5",
     "ts-loader": "^5.4.5",
+    "ts-node": "^8.3.0",
     "tslint": "^5.15.0",
     "typescript": "^3.4.1",
     "webpack": "^4.30.0",

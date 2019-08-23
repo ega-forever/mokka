@@ -7,6 +7,7 @@ export default {
   ERROR: 'error',
   LOG: 'log',
   LOG_ACK: 'log_ack',
+  COMMITTED: 'committed',
   GOSSIP_NEW_PEER: 'peer_new',
   GOSSIP_PEER_UPDATE: 'peer_update',
   GOSSIP_PEER_ALIVE: 'peer_alive',

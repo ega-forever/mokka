@@ -1,9 +1,9 @@
-import random from 'lodash/random';
 import {GossipController} from '../gossip/main';
 import {MokkaStorage} from '../storage/main';
 import {LogApi} from './api/LogApi';
 import {NodeApi} from './api/NodeApi';
 import messageTypes from './constants/MessageTypes';
+import NodeStates from './constants/NodeStates';
 import {TimerController} from './controllers/TimerController';
 import {ILoggerInterface} from './interfaces/ILoggerInterface';
 import {ISettingsInterface} from './interfaces/ISettingsInterface';
@@ -11,7 +11,6 @@ import {NodeModel} from './models/NodeModel';
 import {VoteModel} from './models/VoteModel';
 import {GossipRequestProcessorService} from './services/GossipRequestProcessorService';
 import {RequestProcessorService} from './services/RequestProcessorService';
-import decodePacket from './utils/decodePacket';
 
 class Mokka extends NodeModel {
 
@@ -65,27 +64,46 @@ class Mokka extends NodeModel {
   }
 
   public quorum(responses: number) {
-    if (!this.nodes.length || !responses) return false;
+    if (!this.nodes.size || !responses) return false;
 
     return responses >= this.majority();
   }
 
+  public committedIndex() {
+
+    const results = Array.from(this.nodes.values())
+      .map((node) => node.getLastLogState().index)
+      .filter((index) => index !== -1);
+
+    if (results.length + 1 < this.majority())
+      return -1;
+
+    return results.sort()[0];
+  }
+
   public majority() {
-    return Math.ceil(this.nodes.length / 2) + 1;
+    return Math.ceil(this.nodes.size / 2) + 1;
   }
 
   public setVote(vote: VoteModel): void {
     this.vote = vote;
   }
 
-  public connect(): void {
+  public async connect(): Promise<void> { // todo set last log index for each peer
+    const info = await this.getDb().getState().getInfo();
+
+    if (info) {
+      this.setState(NodeStates.FOLLOWER, info.term, null);
+      this.setLastLogState(info);
+    }
+
     this.gossip.start();
     this.logApi.runLoop();
-    this.timer.heartbeat(random(0, this.election.max));
+//    this.logApi.runAckLoop();
+    this.timer.heartbeat(Math.round(Math.random() * this.election.max));
   }
 
   public async disconnect(): Promise<void> {
-    this.timer.clearVoteTimeout();
     this.timer.clearHeartbeatTimeout();
     this.gossip.stop();
     this.logApi.stop();
@@ -95,7 +113,7 @@ class Mokka extends NodeModel {
   private _registerEvents() {
     this.on('data', async (packet) => {
 
-      packet = decodePacket(packet);
+      packet = JSON.parse(packet.toString());
 
       if ([
         messageTypes.GOSSIP_SECOND_RESPONSE,
