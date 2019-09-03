@@ -46,7 +46,8 @@ const startMokka = async (node) => {
     gossipHeartbeat: 100,
     heartbeat: 50,
     logger,
-    privateKey: node.secretKey
+    privateKey: node.secretKey,
+    proofExpiration: 30000
   });
   await mokka.connect();
   mokka.on(MokkaEvents.default.STATE, () => {
@@ -54,7 +55,7 @@ const startMokka = async (node) => {
   });
 
   mokka.on(MokkaEvents.default.ERROR, (err) => {
-    logger.error(err);
+    // logger.error(err);
   });
 
   config.nodes.filter((nodec) => nodec.publicKey !== node.publicKey).forEach((nodec) => {
@@ -129,13 +130,18 @@ const init = async () => {
 
       const node = config.nodes.find((node) => node.publicKey === mokka.leaderPublicKey);
 
-      console.log(node)
-
       // @ts-ignore
       const web3 = new Web3(`http://localhost:${node.ganache}`);
-      const hash = await new Promise((res, rej) =>
-        web3.eth.sendTransaction(...payload.params, (err, result) => err ? rej(err) : res(result))
-      );
+
+      let hash;
+
+      try {
+        hash = await new Promise((res, rej) =>
+          web3.eth.sendTransaction(...payload.params, (err, result) => err ? rej(err) : res(result))
+        );
+      } catch (e) {
+        return cb(e, null);
+      }
 
       // await until tx will be processed
       await new Promise((res) => {

@@ -27,7 +27,7 @@ class TimerController {
 
     const heartbeatFunc = async () => {
 
-      if (states.LEADER !== this.mokka.state) {
+      if (this.mokka.state !== states.LEADER || this.mokka.isProofTokenExpired()) {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
@@ -38,7 +38,7 @@ class TimerController {
 
       for (const node of this.mokka.nodes.values()) {
         const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
-        await this.messageApi.message(packet); // todo this cause delay in heartbeat
+        await this.messageApi.message(packet);
       }
 
       this.timers.delete('heartbeat');

@@ -36,10 +36,12 @@ class NodeModel extends EventEmitter {
   public readonly nodes: Map<string, NodeModel> = new Map<string, NodeModel>();
   public readonly rawPublicKey: string;
   public readonly rawPrivateKey: string;
+
   private _state: number;
   private _term: number = 0;
   private _proof: string;
   private _leaderPublicKey: string = '';
+  private _proofMintedTime: number = 0;
   private readonly nodeAddress: string;
   private lastLog: StateModel = new StateModel();
 
@@ -79,11 +81,17 @@ class NodeModel extends EventEmitter {
     throw new Error('should be implemented!');
   }
 
-  public setState(state: number, term: number = this._term, leaderPublicKey: string, proof: string = null) {
+  public setState(
+    state: number,
+    term: number = this._term,
+    leaderPublicKey: string,
+    proof: string = null,
+    proofMintedTime: number = 0) {
     this._state = state;
     this._term = term;
     this._leaderPublicKey = leaderPublicKey;
     this._proof = proof;
+    this._proofMintedTime = proofMintedTime;
     this.emit(eventTypes.STATE);
   }
 
@@ -93,6 +101,10 @@ class NodeModel extends EventEmitter {
 
   public getLastLogState(): StateModel {
     return this.lastLog;
+  }
+
+  public getProofMintedTime(): number {
+    return this._proofMintedTime;
   }
 
 }
