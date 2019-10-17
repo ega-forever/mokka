@@ -24,21 +24,35 @@ class RequestProcessorService extends AbstractRequestService {
 
     let replies: PacketModel[] = [];
 
+    // todo
+    if (
+      packet.state === states.LEADER &&
+      this.mokka.proof === packet.proof &&
+      this.mokka.proofExpiration &&
+      this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now()
+    ) {
+      return replies;
+    }
+
     if (states.LEADER !== this.mokka.state && packet.state === states.LEADER) {
       this.mokka.timer.clearHeartbeatTimeout();
     }
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
 
-      const rawPubKeys = Array.from(this.mokka.nodes.values()).map((node) => node.rawPublicKey);
-      rawPubKeys.push(this.mokka.rawPublicKey);
-      const validated = validate(packet.term, packet.proof, this.mokka.proof, rawPubKeys);
+      const rawPubKeysMap = new Map<string, string>();
+
+      for (const node of this.mokka.nodes.values()) {
+        rawPubKeysMap.set(node.rawPublicKey, node.publicKey);
+      }
+
+      const {validated, minted} = validate(packet.term, packet.proof, rawPubKeysMap, packet.publicKey);
 
       if (!validated) {
         return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'validation failed')];
       }
 
-      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof);
+      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof, minted);
     }
 
     if (packet.type === messageTypes.APPEND_ACK)

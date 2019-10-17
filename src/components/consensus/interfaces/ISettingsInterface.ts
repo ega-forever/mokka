@@ -6,6 +6,7 @@ export interface ISettingsInterface {
   privateKey: string;
   address: string;
   heartbeat: number;
+  proofExpiration?: number;
   logger: {
     error: () => void,
     info: () => void,

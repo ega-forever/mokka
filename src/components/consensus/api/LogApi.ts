@@ -52,15 +52,19 @@ class LogApi {
         continue;
       }
 
-      const aliveNodes = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
+    //  const aliveNodes = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
 
       const leaderInfo = this.mokka.getLastLogState();
 
-      for (const node of aliveNodes) {
+      for (const node of this.mokka.nodes.values()) {
         const info = node.getLastLogState();
 
         // todo use latency
-        if (leaderInfo.index === info.index || info.createdAt > Date.now() - this.mokka.election.max)
+        if (
+          leaderInfo.index === info.index ||
+          (info.index !== 0 && info.createdAt > Date.now() - this.mokka.election.max) ||
+          leaderInfo.createdAt > Date.now() - this.mokka.election.max
+        )
           continue;
 
         await this.broadcastInRange(node, leaderInfo.index);

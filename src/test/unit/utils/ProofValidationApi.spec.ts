@@ -43,6 +43,7 @@ describe('ProofValidationApi tests', (ctx = {}) => {
 
   // todo
 
+/*
   it('should validate the proof', async () => {
 
     const proof = '3x805da0ab6c98d9bdb69dfe002b6b8b3dd27d15a821e1b5ce6b12b85453bec06f06b05ffd4904f654ecdd99dc7b60e24babd95bd3f2bbd9f0e92fa6f369\n' +
@@ -59,6 +60,7 @@ describe('ProofValidationApi tests', (ctx = {}) => {
     console.log(result);
 
   });
+*/
 
   afterEach(async () => {
     await Promise.delay(1000);

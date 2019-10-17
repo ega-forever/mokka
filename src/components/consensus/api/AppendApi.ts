@@ -29,10 +29,7 @@ class AppendApi {
       return replies;
 
     if (lastInfo.index >= packet.data.index) {
-      const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey, {
-        index: packet.data.index,
-        term: packet.data.term
-      });
+      const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey);
 
       replies.push(reply);
       return replies;
