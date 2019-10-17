@@ -31,7 +31,6 @@ class RequestProcessorService extends AbstractRequestService {
       this.mokka.proofExpiration &&
       this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now()
     ) {
-      console.log(`expired ${this.mokka.proof.slice(0, 10)}`)
       return replies;
     }
 

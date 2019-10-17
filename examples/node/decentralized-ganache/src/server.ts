@@ -10,7 +10,7 @@ import semaphore = require('semaphore');
 import Web3 = require('web3');
 import config from './config';
 
-const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
+const logger = bunyan.createLogger({name: 'mokka.logger', level: 60});
 const sem = semaphore(1);
 
 const startGanache = async (node) => {
@@ -83,6 +83,8 @@ const init = async () => {
 
   const mokka = await startMokka(node);
   const server = await startGanache(node);
+  // @ts-ignore
+  const web3 = new Web3(server.provider);
 
   server.provider.engine.on('rawBlock', async (blockJSON) => {
 
@@ -105,6 +107,13 @@ const init = async () => {
       const {log} = await mokka.getDb().getEntry().get(index);
       const block = new Block(Buffer.from(log.value.value, 'hex'));
       block.transactions = block.transactions.map((tx) => new Tx(tx));
+
+
+      const savedBlock = await web3.eth.getBlock(index);
+
+      if (savedBlock) {
+        return sem.leave();
+      }
 
       await new Promise((res, rej) => {
         server.provider.manager.state.blockchain.processBlock(

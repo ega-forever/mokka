@@ -7,7 +7,7 @@
     "gen_keys": "ts-node src/get_keys.ts",
     "run_1": "set INDEX=0 && ts-node src/cluster.ts",
     "run_2": "set INDEX=1 && ts-node src/cluster.ts",
-    "run_3": "set INDEX=2 && ts-node src/cluster_node.js"
+    "run_3": "set INDEX=2 && ts-node src/cluster.ts"
   },
   "author": "",
   "license": "ISC",
