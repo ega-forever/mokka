@@ -147,7 +147,7 @@ class VoteApi {
       }, '');
 
     compacted = `${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
-    this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted);
+    this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.started);
 
     this.mokka.timer.heartbeat(this.mokka.heartbeat);
     // todo send immediate heartbeat

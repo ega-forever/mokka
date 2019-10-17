@@ -15,7 +15,7 @@ consensus features
 implementation features
 * Persists to LevelDB (or any database exposing a [LevelDown](https://github.com/level/leveldown) interface).
 * Custom transport layer support: Mokka separate interface implementation and consensus.
-* Custom RSM implementation: you can create your own applier rules.
+* Fully customizable: you can create your own state machine around Mokka consensus.
 
 ## Installation
 
@@ -40,14 +40,15 @@ Please check the ``Custom transport layer`` section.
 Arguments:
 
 * `address` (string):  an address in custom format. The only rule is that address should include the public key in the end
- (example: `"tcp://127.0.0.1:2003/7b85cee8bf60035d1bbccff5c47635733b9818ddc8f34927d00df09c1da80b15"`)
+ (example: `"tcp://127.0.0.1:2003/03fec1b3d32dbb0641877f65b4e77ba8466f37ab948c0b4780e4ed191be411d694"`)
 * `electionMin` (integer): minimum time required for voting
 * `electionMax` (integer): max time required for voting
 * `heartbeat` (integer): leader heartbeat timeout
 * `gossipHeartbeat` (integer): gossip heartbeat timeout
+* `proofExpiration` (integer, optional): when the leader's proof token should expire. If not specified, then proof won't ever expired
 * `storage`: levelDb compatible instance (can be leveldown, memdown and so on). Also be sure, that your instance satisfy the interface ```IStorageInterface```. 
 * `logger` (ILoggerInterface): logger instance. If omitted, then console.log will be used
-* `privateKey`: the 64 length private key. Please take a look at [tweetnacl](https://www.npmjs.com/package/tweetnacl#naclsignkeypair) key pair generator
+* `privateKey`: the 64 length private key. Please take a look at [example](examples/node/decentralized-ganache/src/gen_keys.ts) key pair generator
 
 ### mokka.logApi.push (key: string, value: any): void
 
@@ -55,7 +56,15 @@ push new log and replicate it over the cluster.
 
 ### await mokka.getDb().getState().getInfo(): Promise<StateModel>
 
-Returns the current state of node (last log index, last committed log index, merkle root)
+Returns the current state of node, stored in db (last log index, last committed log index, merkle root)
+
+### mokka.nodes.get(<public_key>).getLastLogState(): StateModel
+
+Returns the current known state of follower. This request only works on leader node. 
+
+### mokka.getLastLogState(): StateModel
+
+Returns the current state of node, stored in memory (should be equal to the db's one) (last log index, last committed log index, merkle root)
 
 ### await mokka.getDb().getEntry().get(index: number): Promise<EntryModel>
 
@@ -101,6 +110,7 @@ In order to communicate between nodes, you have to implement the interface by yo
 | Node.js | Browser |
 | --- | --- |
 | [running cluster](examples/node/cluster/README.md) | [running cluster](examples/node/cluster/README.md) |
+| [running private blockchain](examples/node/decentralized-ganache/README.md) | -
 
 
 

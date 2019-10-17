@@ -10,7 +10,7 @@ import semaphore = require('semaphore');
 import Web3 = require('web3');
 import config from './config';
 
-const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
+const logger = bunyan.createLogger({name: 'mokka.logger', level: 60});
 const sem = semaphore(1);
 
 const startGanache = async (node) => {
@@ -46,7 +46,8 @@ const startMokka = async (node) => {
     gossipHeartbeat: 100,
     heartbeat: 50,
     logger,
-    privateKey: node.secretKey
+    privateKey: node.secretKey,
+    proofExpiration: 30000
   });
   await mokka.connect();
   mokka.on(MokkaEvents.default.STATE, () => {
@@ -54,7 +55,7 @@ const startMokka = async (node) => {
   });
 
   mokka.on(MokkaEvents.default.ERROR, (err) => {
-    logger.error(err);
+    // logger.error(err);
   });
 
   config.nodes.filter((nodec) => nodec.publicKey !== node.publicKey).forEach((nodec) => {
@@ -82,6 +83,8 @@ const init = async () => {
 
   const mokka = await startMokka(node);
   const server = await startGanache(node);
+  // @ts-ignore
+  const web3 = new Web3(server.provider);
 
   server.provider.engine.on('rawBlock', async (blockJSON) => {
 
@@ -104,6 +107,13 @@ const init = async () => {
       const {log} = await mokka.getDb().getEntry().get(index);
       const block = new Block(Buffer.from(log.value.value, 'hex'));
       block.transactions = block.transactions.map((tx) => new Tx(tx));
+
+
+      const savedBlock = await web3.eth.getBlock(index);
+
+      if (savedBlock) {
+        return sem.leave();
+      }
 
       await new Promise((res, rej) => {
         server.provider.manager.state.blockchain.processBlock(
@@ -129,13 +139,18 @@ const init = async () => {
 
       const node = config.nodes.find((node) => node.publicKey === mokka.leaderPublicKey);
 
-      console.log(node)
-
       // @ts-ignore
       const web3 = new Web3(`http://localhost:${node.ganache}`);
-      const hash = await new Promise((res, rej) =>
-        web3.eth.sendTransaction(...payload.params, (err, result) => err ? rej(err) : res(result))
-      );
+
+      let hash;
+
+      try {
+        hash = await new Promise((res, rej) =>
+          web3.eth.sendTransaction(...payload.params, (err, result) => err ? rej(err) : res(result))
+        );
+      } catch (e) {
+        return cb(e, null);
+      }
 
       // await until tx will be processed
       await new Promise((res) => {

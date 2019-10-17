@@ -16,6 +16,7 @@ class Mokka extends NodeModel {
 
   public election: { min: number, max: number };
   public heartbeat: number;
+  public proofExpiration: number;
   public gossip: GossipController;
   public logger: ILoggerInterface;
   public vote: VoteModel = new VoteModel();
@@ -35,6 +36,7 @@ class Mokka extends NodeModel {
     };
 
     this.heartbeat = options.heartbeat || 50;
+    this.proofExpiration = options.proofExpiration;
     this.logger = options.logger || {
       // tslint:disable-next-line
       error: console.log,
@@ -108,6 +110,10 @@ class Mokka extends NodeModel {
     this.gossip.stop();
     this.logApi.stop();
     await this.getDb().end();
+  }
+
+  public isProofTokenExpired(): boolean {
+    return this.proofExpiration && this.getProofMintedTime() + this.proofExpiration < Date.now();
   }
 
   private _registerEvents() {
