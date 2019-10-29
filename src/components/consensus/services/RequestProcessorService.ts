@@ -24,7 +24,6 @@ class RequestProcessorService extends AbstractRequestService {
 
     let replies: PacketModel[] = [];
 
-    // todo
     if (
       packet.state === states.LEADER &&
       this.mokka.proof === packet.proof &&
@@ -65,7 +64,7 @@ class RequestProcessorService extends AbstractRequestService {
       replies = await this.voteApi.voted(packet);
 
     if (packet.type === messageTypes.ERROR)
-      this.mokka.emit(eventTypes.ERROR, new Error(packet.data));
+      this.mokka.emit(eventTypes.ERROR, packet.data);
 
     if (packet.type === messageTypes.APPEND)
       replies = await this.appendApi.append(packet);
