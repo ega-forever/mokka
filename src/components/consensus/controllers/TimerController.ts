@@ -32,8 +32,9 @@ class TimerController {
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
 
-        if (this.mokka.state !== states.LEADER)
+        if (this.mokka.state !== states.LEADER) {
           return this.heartbeat(this.timeout());
+        }
       }
 
       for (const node of this.mokka.nodes.values()) {
@@ -41,7 +42,6 @@ class TimerController {
         await this.messageApi.message(packet);
       }
 
-      this.timers.delete('heartbeat');
       this.heartbeat(this.mokka.heartbeat);
     };
 

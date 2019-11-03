@@ -2,6 +2,7 @@ import prefixes from '../constants/prefixes';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {EntryModel} from '../models/EntryModel';
 import getBnNumber from '../utils/getBnNumber';
+import {StateModel} from "../models/StateModel";
 
 class EntryApi {
 
@@ -50,6 +51,24 @@ class EntryApi {
     await this.db.put(`${prefixes.logs}:${getBnNumber(entry.index)}`, entry);
   }
 
+  public async compact(): Promise<void> {
+
+    const state: StateModel = await this.db.get(`${prefixes.states}`);
+    const keys = new Set<string>();
+
+    for (let index = state.index; index > 0; index--) {
+      const log = await this.get(index);
+      if (!log)
+        continue;
+
+      const isExist = keys.has(log.log.key);
+      if (isExist) {
+        await this.db.del(`${prefixes.logs}:${getBnNumber(index)}`);
+      } else {
+        keys.add(log.log.key);
+      }
+    }
+  }
 }
 
 export {EntryApi};

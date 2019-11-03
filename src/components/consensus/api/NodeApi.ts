@@ -1,13 +1,14 @@
 import crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
 import eventTypes from '../../shared/constants/EventTypes';
+import {StateModel} from '../../storage/models/StateModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
-import {MessageApi} from './MessageApi';
 import {compressPublicKeySecp256k1} from '../utils/keyPair';
+import {MessageApi} from './MessageApi';
 
 class NodeApi {
 
@@ -53,6 +54,12 @@ class NodeApi {
 
     if (this.mokka.state === states.CANDIDATE) {
       return;
+    }
+
+    // todo drop peer states
+
+    for (const node of this.mokka.nodes.values()) {
+      node.setLastLogState(new StateModel());
     }
 
     const startTime = Date.now();

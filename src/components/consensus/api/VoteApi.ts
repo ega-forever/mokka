@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
+import {StateModel} from '../../storage/models/StateModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import voteTypes from '../constants/VoteTypes';
@@ -72,13 +73,7 @@ class VoteApi {
 
   public async voted(packet: PacketModel): Promise<PacketModel[]> {
 
-    if (states.CANDIDATE !== this.mokka.state) {
-      const reply = await this.messageApi.packet(
-        messageTypes.ERROR,
-        packet.publicKey,
-        'No longer a candidate, ignoring vote');
-      return [reply];
-    }
+    // todo add case, update node state in case signature is valid and running the current round
 
     if (!packet.data.signature) {
       const reply = await this.messageApi.packet(
@@ -108,6 +103,18 @@ class VoteApi {
         messageTypes.ERROR,
         packet.publicKey,
         'wrong share for vote provided!');
+      return [reply];
+    }
+
+    const node = this.mokka.nodes.get(packet.publicKey);
+
+    node.setLastLogState(new StateModel(packet.last.index, packet.last.hash, packet.last.term, packet.last.createdAt));
+
+    if (states.CANDIDATE !== this.mokka.state) {
+      const reply = await this.messageApi.packet(
+        messageTypes.ERROR,
+        packet.publicKey,
+        'No longer a candidate, ignoring vote');
       return [reply];
     }
 
