@@ -61,6 +61,27 @@ const getAllPendings = () => {
   process.send({type: 'pendings_all', args: [pendings]});
 };
 
+const compact = async () => {
+  await mokka.getDb().getEntry().compact();
+  process.send({type: 'compacted', args: []});
+};
+
+const getAllLogs = async () => {
+
+  const state = await mokka.getDb().getState().getInfo();
+  const logs = [];
+
+  for (let index = 0; index <= state.index; index++) {
+    const entry = await mokka.getDb().getEntry().get(index);
+    if (entry === null)
+      continue;
+
+    logs.push(entry.log);
+  }
+
+  process.send({type: 'logs', args: [logs]});
+};
+
 process.on('message', (m) => {
   if (m.type === 'init')
     init(m.args[0]);
@@ -80,4 +101,9 @@ process.on('message', (m) => {
   if (m.type === 'pendings_all')
     getAllPendings();
 
+  if (m.type === 'compact')
+    compact();
+
+  if (m.type === 'logs_all')
+    getAllLogs();
 });

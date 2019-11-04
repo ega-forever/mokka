@@ -112,7 +112,7 @@ class LogApi {
         continue;
       }
 
-      const appendPacket = await this.messageApi.packet(messageTypes.APPEND, node.publicKey, entry);
+      const appendPacket = this.messageApi.packet(messageTypes.APPEND, node.publicKey, entry);
       await this.messageApi.message(appendPacket);
 
       const status = await new Promise((res) => {
@@ -190,7 +190,7 @@ class LogApi {
       return;
 
     for (const follower of this.mokka.nodes.values()) {
-      const appendPacket = await this.messageApi.packet(messageTypes.APPEND, follower.publicKey, entry);
+      const appendPacket = this.messageApi.packet(messageTypes.APPEND, follower.publicKey, entry);
       await this.messageApi.message(appendPacket);
     }
   }

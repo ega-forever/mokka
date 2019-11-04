@@ -83,7 +83,7 @@ class GossipController extends EventEmitter {
       digest: this.scuttle.digest()
     };
 
-    const reply = await this.messageApi.packet(messageTypes.GOSSIP_REQUEST, peer.publicKey, data);
+    const reply = this.messageApi.packet(messageTypes.GOSSIP_REQUEST, peer.publicKey, data);
     await this.messageApi.message(reply);
   }
 

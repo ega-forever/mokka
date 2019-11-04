@@ -100,16 +100,13 @@ class NodeApi {
     );
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
-    // const startVote = Date.now();
     for (const share of voteData.slice(0, -1)) {
-      const packet = await this.messageApi.packet(messageTypes.VOTE, share.publicKey, {
+      const packet = this.messageApi.packet(messageTypes.VOTE, share.publicKey, {
         share: share.share
       });
 
       await this.messageApi.message(packet);
     }
-
-    // this.mokka.timer.setVoteTimeout();
 
     await new Promise((res) => setTimeout(res, this.mokka.election.max));
 

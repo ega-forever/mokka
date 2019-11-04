@@ -27,11 +27,11 @@ describe('TimeCtrl tests', (ctx = {}) => {
     for (let index = 0; index < 3; index++) {
       const instance = new TCPMokka({
         address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
-        electionMax: 1000,
-        electionMin: 300,
-        gossipHeartbeat: 200,
-        heartbeat: 200,
-        logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
+        electionMax: 300,
+        electionMin: 100,
+        gossipHeartbeat: 100,
+        heartbeat: 50,
+        logger: bunyan.createLogger({name: 'mokka.logger', level: 10}),
         privateKey: ctx.keys[index].privateKey,
         proofExpiration: 5000
       });
@@ -54,7 +54,7 @@ describe('TimeCtrl tests', (ctx = {}) => {
   it('should check heartbeat (as leader, should send ack)', async () => {
 
     const node = ctx.nodes[0] as Mokka;
-    node.setState(NodeStates.LEADER, 1, null);
+    node.setState(NodeStates.LEADER, 1, node.leaderPublicKey, 'super_proof', Date.now());
 
     const start = Date.now();
     node.timer.heartbeat();
@@ -62,9 +62,10 @@ describe('TimeCtrl tests', (ctx = {}) => {
     const packet: any = await new Promise((res) => {
       (node.timer as any).messageApi.message = res;
     });
+    node.timer.clearHeartbeatTimeout();
     const end = Date.now();
 
-    expect((end - start) - node.heartbeat).to.be.lt(10);
+    expect((end - start) - node.heartbeat).to.be.lt(node.heartbeat);
     expect(packet.type).to.be.eq(MessageTypes.ACK);
     await node.disconnect();
   });
@@ -81,47 +82,48 @@ describe('TimeCtrl tests', (ctx = {}) => {
     await new Promise((res) => {
       (node.timer as any).nodeApi.promote = res;
     });
+    node.timer.clearHeartbeatTimeout();
     const end = Date.now();
 
-    expect((end - start) - timeout).to.be.lt(5);
+    expect((end - start) - timeout).to.be.lte(node.heartbeat);
     await node.disconnect();
   });
 
-/*  it('should run infinite heartbeat when leader (delay in send message, slow heartbeat)', async () => {
+  /*  it('should run infinite heartbeat when leader (delay in send message, slow heartbeat)', async () => {
 
-    const node = ctx.nodes[0] as Mokka;
-    node.setState(NodeStates.LEADER, 1, null);
+      const node = ctx.nodes[0] as Mokka;
+      node.setState(NodeStates.LEADER, 1, null);
 
-    const start = Date.now();
-    node.timer.heartbeat();
+      const start = Date.now();
+      node.timer.heartbeat();
 
-    const ends: any = await new Promise((res) => {
+      const ends: any = await new Promise((res) => {
 
-      const arr = [];
+        const arr = [];
 
-      (node.timer as any).messageApi.message = async () => {
-        arr.push(Date.now());
+        (node.timer as any).messageApi.message = async () => {
+          arr.push(Date.now());
 
-        if (arr.length === 5 * node.nodes.size) {
-          node.removeAllListeners(EventTypes.HEARTBEAT_TIMEOUT);
-          res(arr);
-        }
+          if (arr.length === 5 * node.nodes.size) {
+            node.removeAllListeners(EventTypes.HEARTBEAT_TIMEOUT);
+            res(arr);
+          }
 
-        await new Promise((res) => setTimeout(res, 50));
-      };
-    });
+          await new Promise((res) => setTimeout(res, 50));
+        };
+      });
 
-    // todo
+      // todo
 
-    /!* for (let index = 0; index < ends.length; index += node.nodes.size) {
+      /!* for (let index = 0; index < ends.length; index += node.nodes.size) {
 
-       if (index === 0) {
-         expect((ends[index] - start)).to.be.gt(node.heartbeat + 5);
-       } else {
-         expect(ends[index] - ends[index - node.nodes.size]).to.be.gt(node.heartbeat + 5);
-       }
-     }*!/
-    await node.disconnect();
-  });*/
+         if (index === 0) {
+           expect((ends[index] - start)).to.be.gt(node.heartbeat + 5);
+         } else {
+           expect(ends[index] - ends[index - node.nodes.size]).to.be.gt(node.heartbeat + 5);
+         }
+       }*!/
+      await node.disconnect();
+    });*/
 
 });

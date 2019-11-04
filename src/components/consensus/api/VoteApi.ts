@@ -63,7 +63,7 @@ class VoteApi {
 
     this.mokka.setVote(vote);
 
-    const reply = await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
+    const reply = this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
       signature
     });
     return [reply];
@@ -134,7 +134,7 @@ class VoteApi {
     this.mokka.timer.heartbeat(this.mokka.heartbeat);
     // todo send immediate heartbeat
     for (const node of this.mokka.nodes.values()) {
-      const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
+      const packet = this.messageApi.packet(messageTypes.ACK, node.publicKey);
       await this.messageApi.message(packet);
     }
   }
