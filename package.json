@@ -5,7 +5,7 @@
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
-    "test": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts",
+    "test": "mocha --timeout 180000 -r ts-node/register src/test/unit/**/TimerCtrl.spec.ts",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack",
     "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"

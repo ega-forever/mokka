@@ -1,4 +1,3 @@
-import {Buffer} from 'buffer';
 import bunyan from 'bunyan';
 import crypto from 'crypto';
 import {MessageApi} from '../../../components/consensus/api/MessageApi';
@@ -29,7 +28,8 @@ describe('MessageApi tests', (ctx = {}) => {
         gossipHeartbeat: 100,
         heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index].privateKey
+        privateKey: ctx.keys[index].privateKey,
+        proofExpiration: 5000
       });
 
       for (let i = 0; i < 3; i++)
@@ -42,16 +42,12 @@ describe('MessageApi tests', (ctx = {}) => {
   });
 
   // todo implement tests for checking max size
-  
+
   it('check message size', async () => {
 
     const messageApi = new MessageApi(ctx.nodes[0]);
 
     const packet = await messageApi.packet(1, ctx.nodes[1].publicKey, null);
-
-    console.log(Buffer.from(JSON.stringify(packet)).byteLength);
-
   });
-
 
 });

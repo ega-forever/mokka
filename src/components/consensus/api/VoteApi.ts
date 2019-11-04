@@ -19,32 +19,29 @@ class VoteApi {
     this.messageApi = new MessageApi(mokka);
   }
 
-  public async vote(packet: PacketModel): Promise<PacketModel> {
+  public async vote(packet: PacketModel): Promise<PacketModel[]> {
 
     if (!packet.data.share) {
-      return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
-        granted: false,
-        reason: voteTypes.NO_SHARE,
-        signature: null
-      });
+      this.mokka.logger.trace(`[vote] peer ${packet.publicKey} hasn't provided a share`);
+      return [];
     }
 
     const lastInfo = this.mokka.getLastLogState();
 
     if (lastInfo.term >= packet.term || lastInfo.index > packet.last.index) {
-      return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
-        reason: lastInfo.term >= packet.term ?
-          voteTypes.CANDIDATE_OUTDATED_BY_TERM : voteTypes.CANDIDATE_OUTDATED_BY_HISTORY,
-        signature: null
-      });
+
+      if (lastInfo.term >= packet.term) {
+        this.mokka.logger.trace(`[vote] peer ${packet.publicKey} outdated by term`);
+      } else {
+        this.mokka.logger.trace(`[vote] peer ${packet.publicKey} outdated by history`);
+      }
+
+      return [];
     }
 
     if (lastInfo.index === packet.last.index && lastInfo.hash !== packet.last.hash) {
-
-      return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
-        reason: voteTypes.CANDIDATE_HAS_WRONG_HISTORY,
-        signature: null
-      });
+      this.mokka.logger.trace(`[vote] peer ${packet.publicKey} has wrong history`);
+      return [];
     }
 
     const sign = crypto.createSign('sha256');
@@ -66,31 +63,24 @@ class VoteApi {
 
     this.mokka.setVote(vote);
 
-    return await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
+    const reply = await this.messageApi.packet(messageTypes.VOTED, packet.publicKey, {
       signature
     });
+    return [reply];
   }
 
-  public async voted(packet: PacketModel): Promise<PacketModel[]> {
-
-    // todo add case, update node state in case signature is valid and running the current round
+  public async voted(packet: PacketModel): Promise<void> {
 
     if (!packet.data.signature) {
-      const reply = await this.messageApi.packet(
-        messageTypes.ERROR,
-        packet.publicKey,
-        'the vote hasn\'t been singed, ignoring vote');
-      return [reply];
+      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} hasn't provided the signature`);
+      return;
     }
 
     const localShare = this.mokka.vote.shares.find((share) => share.publicKey === packet.publicKey);
 
     if (!localShare) {
-      const reply = await this.messageApi.packet(
-        messageTypes.ERROR,
-        packet.publicKey,
-        'the share has not been found');
-      return [reply];
+      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided wrong share`);
+      return;
     }
 
     const verify = crypto.createVerify('sha256');
@@ -99,31 +89,16 @@ class VoteApi {
     const isSigned = verify.verify(rawPublicKey, Buffer.from(packet.data.signature, 'hex'));
 
     if (!isSigned) {
-      const reply = await this.messageApi.packet(
-        messageTypes.ERROR,
-        packet.publicKey,
-        'wrong share for vote provided!');
-      return [reply];
+      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided wrong signature for share`);
+      return;
     }
 
     const node = this.mokka.nodes.get(packet.publicKey);
 
     node.setLastLogState(new StateModel(packet.last.index, packet.last.hash, packet.last.term, packet.last.createdAt));
 
-    if (states.CANDIDATE !== this.mokka.state) {
-      const reply = await this.messageApi.packet(
-        messageTypes.ERROR,
-        packet.publicKey,
-        'No longer a candidate, ignoring vote');
-      return [reply];
-    }
-
-    if (localShare.voted) {
-      const reply = await this.messageApi.packet(
-        messageTypes.ERROR,
-        packet.publicKey,
-        'already voted for this candidate!');
-      return [reply];
+    if (states.CANDIDATE !== this.mokka.state || localShare.voted) {
+      return;
     }
 
     localShare.voted = true;
@@ -132,7 +107,7 @@ class VoteApi {
     const votedAmount = this.mokka.vote.shares.filter((share) => share.voted).length;
 
     if (!this.mokka.quorum(votedAmount))
-      return [];
+      return;
 
     const validatedShares = this.mokka.vote.shares
       .filter((share) => share.voted)
@@ -142,7 +117,7 @@ class VoteApi {
 
     if (comb !== this.mokka.vote.secret) {
       this.mokka.vote = new VoteModel();
-      return [];
+      return;
     }
 
     const votedShares = this.mokka.vote.shares.filter((share) => share.voted);
@@ -162,8 +137,6 @@ class VoteApi {
       const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
       await this.messageApi.message(packet);
     }
-
-    return [];
   }
 }
 

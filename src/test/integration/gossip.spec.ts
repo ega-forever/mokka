@@ -3,6 +3,7 @@ import {expect} from 'chai';
 import {fork} from 'child_process';
 import crypto from 'crypto';
 import * as path from 'path';
+import {Mokka} from '../../components/consensus/main';
 
 describe('gossip tests', (ctx = {mokkas: []}) => {
 
@@ -42,8 +43,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         instance.kill();
     };
 
-    process.on('SIGINT', kill);
-    process.on('SIGTERM', kill);
+    process.once('SIGINT', kill);
+    process.once('SIGTERM', kill);
     ctx.mokkas = mokkas;
 
   });
@@ -59,6 +60,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
           if (msg.type !== 'gossip_update')
             return;
           expect(msg.args[0]).to.eq(ctx.keys[1].publicKey);
+          (ctx.mokkas[0] as Mokka).removeAllListeners('message');
           res();
         });
       }),
@@ -67,6 +69,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
           if (msg.type !== 'gossip_update')
             return;
           expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
+          (ctx.mokkas[1] as Mokka).removeAllListeners('message');
           res();
         });
       }),
@@ -101,6 +104,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
 
           clearInterval(timeoutId);
           res(msg.args[0]);
+          (mokka as Mokka).removeAllListeners('message');
         });
       })
     );
@@ -115,6 +119,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         mokka.on('message', (msg: any) => {
           if (msg.type !== 'pendings')
             return;
+
+          (mokka as Mokka).removeAllListeners('message');
           res(msg.args[0]);
         });
       })
@@ -137,6 +143,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
           if (msg.type !== 'gossip_update')
             return;
           expect(msg.args[0]).to.eq(ctx.keys[1].publicKey);
+          (ctx.mokkas[0] as Mokka).removeAllListeners('message');
           res();
         });
       }),
@@ -145,6 +152,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
           if (msg.type !== 'gossip_update')
             return;
           expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
+          (ctx.mokkas[1] as Mokka).removeAllListeners('message');
           res();
         });
       }),
@@ -171,6 +179,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         mokka.on('message', (msg: any) => {
           if (msg.type !== 'pendings')
             return;
+
+          (mokka as Mokka).removeAllListeners('message');
           res(msg.args[0]);
         });
       })
@@ -196,6 +206,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
           return;
 
         clearInterval(timeoutId);
+        (ctx.mokkas[0] as Mokka).removeAllListeners('message');
         res(msg.args[0]);
       });
     });
@@ -206,6 +217,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
       ctx.mokkas[0].on('message', (msg: any) => {
         if (msg.type !== 'pendings')
           return;
+
+        (ctx.mokkas[0] as Mokka).removeAllListeners('message');
         res(msg.args[0]);
       });
     });
@@ -250,6 +263,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
           if (msg.type !== 'gossip_update')
             return;
           expect(msg.args[0]).to.eq(ctx.keys[0].publicKey);
+          (ctx.mokkas[1] as Mokka).removeAllListeners('message');
           res();
         });
       }),
@@ -276,6 +290,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
         mokka.on('message', (msg: any) => {
           if (msg.type !== 'pendings_all')
             return;
+
+          (mokka as Mokka).removeAllListeners('message');
           res(msg.args[0]);
         });
       })
@@ -301,6 +317,7 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
           return;
 
         clearInterval(timeoutId);
+        (ctx.mokkas[0] as Mokka).removeAllListeners('message');
         res(msg.args[0]);
       });
     });
@@ -311,6 +328,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
       ctx.mokkas[0].on('message', (msg: any) => {
         if (msg.type !== 'pendings_all')
           return;
+
+        (ctx.mokkas[0] as Mokka).removeAllListeners('message');
         res(msg.args[0]);
       });
     });
@@ -322,6 +341,8 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     for (const node of ctx.mokkas)
       node.kill();
 
+    process.removeAllListeners('SIGINT');
+    process.removeAllListeners('SIGTERM');
     await Promise.delay(1000);
   });
 

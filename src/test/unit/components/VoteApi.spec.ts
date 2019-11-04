@@ -34,7 +34,8 @@ describe('VoteApi tests', (ctx = {}) => {
         gossipHeartbeat: 100,
         heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index].privateKey
+        privateKey: ctx.keys[index].privateKey,
+        proofExpiration: 5000
       });
 
       for (let i = 0; i < 3; i++)
@@ -62,7 +63,7 @@ describe('VoteApi tests', (ctx = {}) => {
 
     const start = Date.now();
     const result = await followerVoteApi.vote(packet);
-    expect(result.data.signature).to.not.be.undefined;
+    expect(result[0].data.signature).to.not.be.undefined;
     expect(Date.now() - start).to.be.lt(10);
 
   });

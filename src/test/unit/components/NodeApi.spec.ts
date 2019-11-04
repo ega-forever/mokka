@@ -31,7 +31,8 @@ describe('NodeApi tests', (ctx = {}) => {
         gossipHeartbeat: 100,
         heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index].privateKey
+        privateKey: ctx.keys[index].privateKey,
+        proofExpiration: 5000
       });
 
       for (let i = 0; i < 3; i++)
@@ -61,7 +62,6 @@ describe('NodeApi tests', (ctx = {}) => {
     expect(candidateNode.state).to.be.eq(NodeStates.LEADER);
     await candidateNode.disconnect();
   });
-
 
   it('should not pass promote, because no votes received', async () => {
 

@@ -17,7 +17,8 @@ const init = (params: any) => {
     gossipHeartbeat: 100,
     heartbeat: 50,
     logger,
-    privateKey: params.keys[params.index].privateKey
+    privateKey: params.keys[params.index].privateKey,
+    proofExpiration: 5000
   });
 
   for (let i = 0; i < params.keys.length; i++)

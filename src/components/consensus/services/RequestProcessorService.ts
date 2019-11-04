@@ -58,10 +58,10 @@ class RequestProcessorService extends AbstractRequestService {
       await this.appendApi.appendAck(packet);
 
     if (packet.type === messageTypes.VOTE)
-      replies = [await this.voteApi.vote(packet)];
+      replies = await this.voteApi.vote(packet);
 
     if (packet.type === messageTypes.VOTED)
-      replies = await this.voteApi.voted(packet);
+      await this.voteApi.voted(packet);
 
     if (packet.type === messageTypes.ERROR)
       this.mokka.emit(eventTypes.ERROR, packet.data);

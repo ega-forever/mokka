@@ -32,7 +32,8 @@ describe('TimeCtrl tests', (ctx = {}) => {
         gossipHeartbeat: 200,
         heartbeat: 200,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index].privateKey
+        privateKey: ctx.keys[index].privateKey,
+        proofExpiration: 5000
       });
 
       for (let i = 0; i < 3; i++)
@@ -122,6 +123,5 @@ describe('TimeCtrl tests', (ctx = {}) => {
      }*!/
     await node.disconnect();
   });*/
-
 
 });
