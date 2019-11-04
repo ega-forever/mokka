@@ -64,30 +64,17 @@ class GossipController extends EventEmitter {
 
   public gossip() {
 
-    const livePeer = this.livePeersPublicKeys().length > 0 ? this.chooseRandom(this.livePeersPublicKeys()) : null;
+    const peer = this.chooseRandom(new Array(...this.peers.keys()));
 
-    if (livePeer)
-      this.gossipToPeer(livePeer);
-
-    // Possilby gossip to a dead peer
-    const prob = this.deadPeersPublicKeys().length / (this.livePeersPublicKeys().length + 1);
-    if (Math.random() < prob) {
-      const deadPeer = this.chooseRandom(this.deadPeersPublicKeys());
-      this.gossipToPeer(deadPeer);
-    }
-
-    for (const pubKey of Object.keys(this.peers)) {
-      const peer = this.peers.get(pubKey);
-      if (peer !== this.ownState)
-        peer.isSuspect();
-    }
+    if (peer)
+      this.gossipToPeer(peer);
   }
 
-  public chooseRandom(peersPublicKeys: string[]) {
-    const remotePeers = peersPublicKeys.filter((peer) => peer !== this.mokka.publicKey);
-    const i = Math.floor(Math.random() * 1000000) % remotePeers.length;
-    const publicKey = remotePeers[i];
-
+  public chooseRandom(peersPublicKeys: string[]): PeerModel {
+    const remotePeers = new Set<string>(peersPublicKeys);
+    remotePeers.delete(this.mokka.publicKey);
+    const i = Math.floor(Math.random() * 1000000) % remotePeers.size;
+    const publicKey = new Array(...remotePeers.values())[i];
     return this.peers.get(publicKey);
   }
 
@@ -98,32 +85,6 @@ class GossipController extends EventEmitter {
 
     const reply = await this.messageApi.packet(messageTypes.GOSSIP_REQUEST, peer.publicKey, data);
     await this.messageApi.message(reply);
-  }
-
-  public livePeersPublicKeys(): string[] {
-
-    const pubKeys = [];
-
-    for (const pubKey of this.peers.keys()) {
-      if (this.peers.get(pubKey).isAlive()) {
-        pubKeys.push(pubKey);
-      }
-    }
-
-    return pubKeys;
-  }
-
-  public deadPeersPublicKeys(): string[] {
-
-    const pubKeys = [];
-
-    for (const pubKey of this.peers.keys()) {
-      if (!this.peers.get(pubKey).isAlive()) {
-        pubKeys.push(pubKey);
-      }
-    }
-
-    return pubKeys;
   }
 
   public handleNewPeers(pubKeys: string[]) {

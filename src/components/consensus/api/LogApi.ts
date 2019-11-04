@@ -52,14 +52,11 @@ class LogApi {
         continue;
       }
 
-    //  const aliveNodes = Array.from(this.mokka.nodes.values()).filter((node) => node.getLastLogState().index !== -1);
-
       const leaderInfo = this.mokka.getLastLogState();
 
       for (const node of this.mokka.nodes.values()) {
         const info = node.getLastLogState();
-
-        // todo use latency
+        
         if (
           leaderInfo.index === info.index ||
           (info.index !== 0 && info.createdAt > Date.now() - this.mokka.election.max) ||
@@ -110,6 +107,11 @@ class LogApi {
   private async broadcastInRange(node: NodeModel, lastIndex: number) {
     for (let index = (node.getLastLogState().index || 1); index <= lastIndex; index++) {
       const entry = await this.mokka.getDb().getEntry().get(index);
+
+      if (entry === null) {
+        continue;
+      }
+
       const appendPacket = await this.messageApi.packet(messageTypes.APPEND, node.publicKey, entry);
       await this.messageApi.message(appendPacket);
 

@@ -25,12 +25,8 @@ class AppendApi {
 
     const lastInfo = this.mokka.getLastLogState();
 
-    if (packet.data.index > lastInfo.index + 1)
-      return replies;
-
     if (lastInfo.index >= packet.data.index) {
       const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey);
-
       replies.push(reply);
       return replies;
     }
@@ -43,7 +39,8 @@ class AppendApi {
         packet.data.term,
         packet.data.signature,
         packet.data.index,
-        packet.data.hash
+        packet.data.hash,
+        this.mokka.term
       );
 
       this.mokka.setLastLogState({

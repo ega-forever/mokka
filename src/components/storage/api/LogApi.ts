@@ -23,7 +23,8 @@ class LogApi {
     term: number,
     signature: string,
     index: number = null,
-    hash: string = null
+    hash: string = null,
+    currentTerm: number = null
   ): Promise<EntryModel> {
 
     const {index: lastIndex, hash: lastHash} = await this.stateApi.getInfo();
@@ -35,27 +36,29 @@ class LogApi {
       });
     }
 
-    if (Number.isInteger(index) && index !== 0 && index !== lastIndex + 1) {
-      return Promise.reject({
-        code: 3,
-        message: `can't apply logs not in direct order (received ${index} while current is ${lastIndex})!`
-      });
-    }
-
     if (!Number.isInteger(index))
       index = lastIndex + 1;
 
-    const generatedHash = crypto.createHmac('sha256', lastHash)
-      .update(JSON.stringify(log))
-      .digest('hex');
+    if (currentTerm && hash && currentTerm === term) {
 
-    if (hash && generatedHash !== hash) {
-      return Promise.reject({code: 2, message: 'can\'t save wrong hash!'});
+      const generatedHash = crypto.createHmac('sha256', lastHash)
+        .update(JSON.stringify(log))
+        .digest('hex');
+
+      if (hash && generatedHash !== hash) {
+        return Promise.reject({code: 2, message: 'can\'t save wrong hash!'});
+      }
+    }
+
+    if (hash === null) {
+      hash = crypto.createHmac('sha256', lastHash)
+        .update(JSON.stringify(log))
+        .digest('hex');
     }
 
     const entry = new EntryModel({
       createdAt: Date.now(),
-      hash: generatedHash,
+      hash,
       index,
       log,
       signature,
@@ -70,6 +73,7 @@ class LogApi {
       index: entry.index,
       term: entry.term
     };
+
     await this.stateApi.setState(state);
 
     return entry;
