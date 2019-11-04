@@ -1,8 +1,8 @@
 import prefixes from '../constants/prefixes';
 import {IStorageInterface} from '../interfaces/IStorageInterface';
 import {EntryModel} from '../models/EntryModel';
+import {StateModel} from '../models/StateModel';
 import getBnNumber from '../utils/getBnNumber';
-import {StateModel} from "../models/StateModel";
 
 class EntryApi {
 
