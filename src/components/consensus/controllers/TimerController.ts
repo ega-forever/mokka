@@ -32,16 +32,16 @@ class TimerController {
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
 
-        if (this.mokka.state !== states.LEADER)
+        if (this.mokka.state !== states.LEADER) {
           return this.heartbeat(this.timeout());
+        }
       }
 
       for (const node of this.mokka.nodes.values()) {
-        const packet = await this.messageApi.packet(messageTypes.ACK, node.publicKey);
+        const packet = this.messageApi.packet(messageTypes.ACK, node.publicKey);
         await this.messageApi.message(packet);
       }
 
-      this.timers.delete('heartbeat');
       this.heartbeat(this.mokka.heartbeat);
     };
 
@@ -59,8 +59,6 @@ class TimerController {
   }
 
   public timeout() {
-    // return _.random(this.beat, parseInt(this.beat * 1.5)); //todo use latency
-
     return this.mokka.heartbeat * 1.2 + Math.round((this.mokka.heartbeat * 0.5) * Math.random());
   }
 

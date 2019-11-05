@@ -23,7 +23,7 @@ class GossipApi {
       updates: sc.deltas
     };
 
-    return await this.messageApi.packet(messageTypes.GOSSIP_FIRST_RESPONSE, packet.publicKey, data);
+    return this.messageApi.packet(messageTypes.GOSSIP_FIRST_RESPONSE, packet.publicKey, data);
   }
 
   public async firstResponse(packet: PacketModel): Promise<PacketModel> {
@@ -35,7 +35,7 @@ class GossipApi {
       updates
     };
 
-    return await this.messageApi.packet(messageTypes.GOSSIP_SECOND_RESPONSE, packet.publicKey, data);
+    return this.messageApi.packet(messageTypes.GOSSIP_SECOND_RESPONSE, packet.publicKey, data);
   }
 
   public async secondResponse(packet: PacketModel): Promise<void> {

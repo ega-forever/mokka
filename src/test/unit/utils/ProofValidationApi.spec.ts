@@ -1,7 +1,6 @@
 import Promise from 'bluebird';
 import bunyan from 'bunyan';
 import crypto from 'crypto';
-import {validate} from '../../../components/consensus/utils/proofValidation';
 import TCPMokka from '../../../implementation/TCP';
 
 describe('ProofValidationApi tests', (ctx = {}) => {
@@ -29,7 +28,8 @@ describe('ProofValidationApi tests', (ctx = {}) => {
         gossipHeartbeat: 200,
         heartbeat: 200,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index].privateKey
+        privateKey: ctx.keys[index].privateKey,
+        proofExpiration: 5000
       });
 
       for (let i = 0; i < 3; i++)
