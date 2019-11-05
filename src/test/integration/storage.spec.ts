@@ -32,6 +32,7 @@ describe('storage tests', (ctx = {}) => {
       heartbeat: 200,
       logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
       privateKey: node.getPrivateKey('hex'),
+      proofExpiration: 5000,
       storage: leveldown(`${dbPath}_db`)
     });
 

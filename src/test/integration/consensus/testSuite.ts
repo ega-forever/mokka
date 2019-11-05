@@ -352,7 +352,6 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
     expect(_.chain(states).uniqBy(_.isEqual).size().value()).to.eq(1);
   });
 
-
   it(`should replicate the queued logs and append them (${nodesCount} nodes)`, async () => {
 
     for (const mokka of ctx.mokkas)

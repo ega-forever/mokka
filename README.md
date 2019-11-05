@@ -45,7 +45,7 @@ Arguments:
 * `electionMax` (integer): max time required for voting
 * `heartbeat` (integer): leader heartbeat timeout
 * `gossipHeartbeat` (integer): gossip heartbeat timeout
-* `proofExpiration` (integer, optional): when the leader's proof token should expire. If not specified, then proof won't ever expired
+* `proofExpiration` (integer): when the leader's proof token should expire.
 * `storage`: levelDb compatible instance (can be leveldown, memdown and so on). Also be sure, that your instance satisfy the interface ```IStorageInterface```. 
 * `logger` (ILoggerInterface): logger instance. If omitted, then console.log will be used
 * `privateKey`: the 64 length private key. Please take a look at [example](examples/node/decentralized-ganache/src/gen_keys.ts) key pair generator
@@ -74,6 +74,9 @@ Returns entry (i.e. structure with log), by provided index.
 
 Returns N (specified in limit) logs after specified index.
 
+### await mokka.getDb().getEntry().compact(): Promise<void>
+
+Compacts logs by their key (keep most recent version).
 
 
 ## Events
@@ -96,6 +99,13 @@ Also gossip expose events. To use them, you have to listen events from gossip in
 * `peer_alive`: once gossip checked that certain peer alive
 * `peer_failed`: once gossip can't receive any answer from certain peer
 
+# Resync process
+
+In case, the certain instance has been dropped, the leader will reappend all logs. However, you should keep in mind, that follower is passive. 
+Which means, that communication comes from leader to the follower. 
+The leader only updates the its local state (info about every follower) during the voting process. 
+So, the dropped node will be resynced once new voting happen (by expiration timeout or condition)
+
 # Custom transport layer
 
 In order to communicate between nodes, you have to implement the interface by yourself. As an example you can take a look at TCP implementation: ```src/implementation/TCP```.
@@ -104,6 +114,9 @@ In order to communicate between nodes, you have to implement the interface by yo
 * The ```async initialize()``` function, which fires on mokka start. This method is useful, when you want to open the connection, for instance, tcp one, or connect to certain message broker like rabbitMQ.
 
 * The ```async write(address: string, packet: Buffer)``` function, which fires each time mokka wants to broadcast message to other peer (address param).
+
+Also, keep in mind, that mokka doesn't handle the disconnected / dead peers, which means that mokka will try to make requests to all presented members in cluster, 
+even if they are not available. So, you need to handle it on your own.
 
 # Examples
 

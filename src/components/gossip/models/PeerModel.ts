@@ -1,25 +1,20 @@
+import crypto from 'crypto';
 import {EventEmitter} from 'events';
 import eventTypes from '../../shared/constants/EventTypes';
-import {AccrualFailureDetector} from '../utils/accrualFailureDetector';
-import crypto from 'crypto';
 
 class PeerModel extends EventEmitter {
 
   private readonly pubKey: string;
   private readonly rawPubKey: string;
   private readonly attrs: Map<string, { value: any, number: number }>; // local storage
-  private detector: AccrualFailureDetector;
-  private alive: boolean = true;
   private heartBeatVersion: number = 0;
   private maxVersionSeen: number = 0;
-  private PHI: number = 8;
 
   constructor(pubKey: string, rawPubKey: string) {
     super();
     this.pubKey = pubKey;
     this.rawPubKey = rawPubKey;
     this.attrs = new Map<string, { value: any, number: number }>();
-    this.detector = new AccrualFailureDetector();
   }
 
   get publicKey(): string {
@@ -34,8 +29,6 @@ class PeerModel extends EventEmitter {
     if (n <= this.maxVersionSeen) {
       return;
     }
-    const d = new Date();
-    this.detector.add(d.getTime());
     this.setLocalKey(k, v, n);
     this.maxVersionSeen = n;
   }
@@ -75,36 +68,6 @@ class PeerModel extends EventEmitter {
     }
 
     return data.sort((item, item2) => item[2] > item2[2] ? 1 : -1);
-  }
-
-  public isSuspect(): boolean {
-    const d = new Date();
-    const phi = this.detector.phi(d.getTime());
-    if (phi > this.PHI) {
-      this.markDead();
-      return true;
-    }
-
-    this.markAlive();
-    return false;
-  }
-
-  public isAlive(): boolean {
-    return this.alive;
-  }
-
-  public markAlive(): void {
-    if (!this.alive) {
-      this.alive = true;
-      this.emit(eventTypes.GOSSIP_PEER_ALIVE);
-    }
-  }
-
-  public markDead(): void {
-    if (this.alive) {
-      this.alive = false;
-      this.emit(eventTypes.GOSSIP_PEER_FAILED);
-    }
   }
 
   public getPendingLogs(): Array<{ hash: string, log: any }> {

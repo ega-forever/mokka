@@ -91,7 +91,7 @@ class Mokka extends NodeModel {
     this.vote = vote;
   }
 
-  public async connect(): Promise<void> { // todo set last log index for each peer
+  public async connect(): Promise<void> {
     const info = await this.getDb().getState().getInfo();
 
     if (info) {
@@ -101,7 +101,6 @@ class Mokka extends NodeModel {
 
     this.gossip.start();
     this.logApi.runLoop();
-//    this.logApi.runAckLoop();
     this.timer.heartbeat(Math.round(Math.random() * this.election.max));
   }
 

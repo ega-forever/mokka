@@ -8,9 +8,9 @@ import {AppendApi} from '../../../components/consensus/api/AppendApi';
 import {MessageApi} from '../../../components/consensus/api/MessageApi';
 import messageTypes from '../../../components/consensus/constants/MessageTypes';
 import NodeStates from '../../../components/consensus/constants/NodeStates';
+import {convertKeyPairToRawSecp256k1} from '../../../components/consensus/utils/keyPair';
 import {StateModel} from '../../../components/storage/models/StateModel';
 import TCPMokka from '../../../implementation/TCP';
-import {convertKeyPairToRawSecp256k1} from '../../../components/consensus/utils/keyPair';
 
 describe('AppendApi tests', (ctx = {}) => {
 
@@ -37,7 +37,8 @@ describe('AppendApi tests', (ctx = {}) => {
         gossipHeartbeat: 200,
         heartbeat: 200,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
-        privateKey: ctx.keys[index].privateKey
+        privateKey: ctx.keys[index].privateKey,
+        proofExpiration: 5000
       });
 
       for (let i = 0; i < 3; i++)
@@ -82,7 +83,6 @@ describe('AppendApi tests', (ctx = {}) => {
       expect(Date.now() - start).to.be.lt(100); // todo should be 10
     }
   });
-
 
   it('should ignore append, once we receive wrong index', async () => {
 
@@ -356,7 +356,6 @@ describe('AppendApi tests', (ctx = {}) => {
     expect(reply[0].type === messageTypes.APPEND);
     expect(reply[0].data.index === entry.index);
   });
-
 
   afterEach(async () => {
     await Promise.delay(1000);

@@ -1,13 +1,14 @@
 import crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
 import eventTypes from '../../shared/constants/EventTypes';
+import {StateModel} from '../../storage/models/StateModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
-import {MessageApi} from './MessageApi';
 import {compressPublicKeySecp256k1} from '../utils/keyPair';
+import {MessageApi} from './MessageApi';
 
 class NodeApi {
 
@@ -55,6 +56,12 @@ class NodeApi {
       return;
     }
 
+    // todo drop peer states
+
+    for (const node of this.mokka.nodes.values()) {
+      node.setLastLogState(new StateModel());
+    }
+
     const startTime = Date.now();
     const token = `${this.mokka.term + 1}x${startTime}`;
     const secret = secrets.str2hex(token);
@@ -93,16 +100,13 @@ class NodeApi {
     );
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
-    // const startVote = Date.now();
     for (const share of voteData.slice(0, -1)) {
-      const packet = await this.messageApi.packet(messageTypes.VOTE, share.publicKey, {
+      const packet = this.messageApi.packet(messageTypes.VOTE, share.publicKey, {
         share: share.share
       });
 
       await this.messageApi.message(packet);
     }
-
-    // this.mokka.timer.setVoteTimeout();
 
     await new Promise((res) => setTimeout(res, this.mokka.election.max));
 

@@ -25,12 +25,8 @@ class AppendApi {
 
     const lastInfo = this.mokka.getLastLogState();
 
-    if (packet.data.index > lastInfo.index + 1)
-      return replies;
-
     if (lastInfo.index >= packet.data.index) {
-      const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey);
-
+      const reply = this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey);
       replies.push(reply);
       return replies;
     }
@@ -43,7 +39,8 @@ class AppendApi {
         packet.data.term,
         packet.data.signature,
         packet.data.index,
-        packet.data.hash
+        packet.data.hash,
+        this.mokka.term
       );
 
       this.mokka.setLastLogState({
@@ -63,12 +60,12 @@ class AppendApi {
       if (err.code === 2 || err.code === 3)
         return [];
 
-      const reply = await this.messageApi.packet(messageTypes.APPEND_FAIL, packet.publicKey, {index: lastInfo.index});
+      const reply = this.messageApi.packet(messageTypes.APPEND_FAIL, packet.publicKey, {index: lastInfo.index});
       replies.push(reply);
       return replies;
     }
 
-    const reply = await this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey);
+    const reply = this.messageApi.packet(messageTypes.APPEND_ACK, packet.publicKey);
     replies.push(reply);
 
     return replies;
@@ -105,11 +102,11 @@ class AppendApi {
     const lastInfo = await this.mokka.getLastLogState();
 
     if (packet.data.index > lastInfo.index) {
-      return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'wrong index!')];
+      return [this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'wrong index!')];
     }
 
     const entity = await this.mokka.getDb().getEntry().get(packet.data.index);
-    return [await this.messageApi.packet(messageTypes.APPEND, packet.publicKey, entity)];
+    return [this.messageApi.packet(messageTypes.APPEND, packet.publicKey, entity)];
   }
 
 }

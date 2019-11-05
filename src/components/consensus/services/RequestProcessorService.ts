@@ -48,7 +48,7 @@ class RequestProcessorService extends AbstractRequestService {
       const {validated, minted} = validate(packet.term, packet.proof, rawPubKeysMap, packet.publicKey);
 
       if (!validated) {
-        return [await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'validation failed')];
+        return [this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'validation failed')];
       }
 
       this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof, minted);
@@ -58,10 +58,10 @@ class RequestProcessorService extends AbstractRequestService {
       await this.appendApi.appendAck(packet);
 
     if (packet.type === messageTypes.VOTE)
-      replies = [await this.voteApi.vote(packet)];
+      replies = await this.voteApi.vote(packet);
 
     if (packet.type === messageTypes.VOTED)
-      replies = await this.voteApi.voted(packet);
+      await this.voteApi.voted(packet);
 
     if (packet.type === messageTypes.ERROR)
       this.mokka.emit(eventTypes.ERROR, packet.data);
@@ -74,7 +74,7 @@ class RequestProcessorService extends AbstractRequestService {
 
     if (!Object.values(messageTypes).includes(packet.type)) {
       replies = [
-        await this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'Unknown message type: ' + packet.type)
+        this.messageApi.packet(messageTypes.ERROR, packet.publicKey, 'Unknown message type: ' + packet.type)
       ];
     }
 
