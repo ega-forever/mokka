@@ -34,7 +34,7 @@ class RequestProcessorService extends AbstractRequestService {
     }
 
     if (states.LEADER !== this.mokka.state && packet.state === states.LEADER) {
-      this.mokka.timer.clearHeartbeatTimeout();
+      this.mokka.heartbeatCtrl.stopBeat();
     }
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
@@ -79,7 +79,8 @@ class RequestProcessorService extends AbstractRequestService {
     }
 
     if (this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
-      this.mokka.timer.heartbeat(this.mokka.timer.timeout());
+      this.mokka.heartbeatCtrl.adjustBeat(this.mokka.heartbeatCtrl.timeout());
+      this.mokka.heartbeatCtrl.watchBeat();
     }
 
     return replies;

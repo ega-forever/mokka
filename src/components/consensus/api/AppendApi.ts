@@ -55,7 +55,7 @@ class AppendApi {
       this.mokka.logger.info(`the ${packet.data.index} has been saved`);
       this.mokka.emit(eventTypes.LOG, packet.data.index);
     } catch (err) {
-      this.mokka.logger.error(`error during save log: ${JSON.stringify(err)}`);
+      this.mokka.logger.trace(`error during save log: ${JSON.stringify(err)}`);
 
       if (err.code === 2 || err.code === 3)
         return [];
