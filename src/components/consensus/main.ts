@@ -4,7 +4,7 @@ import {LogApi} from './api/LogApi';
 import {NodeApi} from './api/NodeApi';
 import messageTypes from './constants/MessageTypes';
 import NodeStates from './constants/NodeStates';
-import {TimerController} from './controllers/TimerController';
+import {HeartbeatController} from './controllers/HeartbeatController';
 import {ILoggerInterface} from './interfaces/ILoggerInterface';
 import {ISettingsInterface} from './interfaces/ISettingsInterface';
 import {NodeModel} from './models/NodeModel';
@@ -18,14 +18,14 @@ class Mokka extends NodeModel {
   public heartbeat: number;
   public proofExpiration: number;
   public gossip: GossipController;
-  public logger: ILoggerInterface;
+  public readonly logger: ILoggerInterface;
   public vote: VoteModel = new VoteModel();
-  public timer: TimerController;
-  public logApi: LogApi;
-  public nodeApi: NodeApi;
-  private db: MokkaStorage;
-  private gossipRequestProcessorService: GossipRequestProcessorService;
-  private requestProcessorService: RequestProcessorService;
+  public readonly heartbeatCtrl: HeartbeatController;
+  public readonly logApi: LogApi;
+  public readonly nodeApi: NodeApi;
+  private readonly db: MokkaStorage;
+  private readonly gossipRequestProcessorService: GossipRequestProcessorService;
+  private readonly requestProcessorService: RequestProcessorService;
 
   constructor(options: ISettingsInterface) {
     super(options.privateKey, options.address);
@@ -46,7 +46,7 @@ class Mokka extends NodeModel {
       trace: console.log
     };
 
-    this.timer = new TimerController(this);
+    this.heartbeatCtrl = new HeartbeatController(this);
 
     this.gossip = new GossipController(this, options.gossipHeartbeat);
 
@@ -101,13 +101,14 @@ class Mokka extends NodeModel {
 
     this.gossip.start();
     this.logApi.runLoop();
-    this.timer.heartbeat(Math.round(Math.random() * this.election.max));
+    this.heartbeatCtrl.adjustBeat(Math.round(Math.random() * this.election.max));
+    this.heartbeatCtrl.watchBeat();
   }
 
   public async disconnect(): Promise<void> {
-    this.timer.clearHeartbeatTimeout();
     this.gossip.stop();
     this.logApi.stop();
+    await this.heartbeatCtrl.stopBeat();
     await this.getDb().end();
   }
 

@@ -56,7 +56,7 @@ class LogApi {
 
       for (const node of this.mokka.nodes.values()) {
         const info = node.getLastLogState();
-        
+
         if (
           leaderInfo.index === info.index ||
           (info.index !== 0 && info.createdAt > Date.now() - this.mokka.election.max) ||
@@ -90,7 +90,7 @@ class LogApi {
       const pendings = this.mokka.gossip.getPendings(1); // todo replace with generators + async
 
       if (!pendings.length) {
-        await new Promise((res) => setTimeout(res, this.mokka.timer.timeout()));
+        await new Promise((res) => setTimeout(res, this.mokka.heartbeatCtrl.timeout()));
         continue;
       }
 
