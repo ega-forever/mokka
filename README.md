@@ -125,6 +125,13 @@ even if they are not available. So, you need to handle it on your own.
 | [running cluster](examples/node/cluster/README.md) | [running cluster](examples/node/cluster/README.md) |
 | [running private blockchain](examples/node/decentralized-ganache/README.md) | -
 
+# Supported protocols
+
+
+| Node.js | 
+| --- | 
+| [TCP](src/implementation/TCP.ts) | 
+| [ZMQ](src/implementation/ZMQ.ts) | 
 
 
 # License

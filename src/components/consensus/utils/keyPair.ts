@@ -1,5 +1,5 @@
 import bigInt from 'big-integer';
-import crypto, {ECDH} from 'crypto';
+import {ECDH} from 'crypto';
 
 // @ts-ignore
 const prime = new bigInt('fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f', 16);
