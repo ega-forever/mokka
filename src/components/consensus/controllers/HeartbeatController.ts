@@ -32,7 +32,7 @@ class HeartbeatController {
 
     while (this.runBeat) {
       if (this.adjustmentDate > Date.now()) {
-        await new Promise((res) => setTimeout(res, Date.now() - this.adjustmentDate));
+        await new Promise((res) => setTimeout(res, this.adjustmentDate - Date.now()));
         continue;
       }
 
@@ -57,7 +57,7 @@ class HeartbeatController {
 
   }
 
-  public adjustBeat(duration: number) {
+  public setNextBeat(duration: number) {
     this.adjustmentDate = Date.now() + duration;
   }
 

@@ -57,8 +57,6 @@ class Mokka extends NodeModel {
 
     this.logApi = new LogApi(this);
     this.nodeApi = new NodeApi(this);
-
-    this._registerEvents();
   }
 
   public getDb(): MokkaStorage {
@@ -101,7 +99,7 @@ class Mokka extends NodeModel {
 
     this.gossip.start();
     this.logApi.runLoop();
-    this.heartbeatCtrl.adjustBeat(Math.round(Math.random() * this.election.max));
+    this.heartbeatCtrl.setNextBeat(Math.round(Math.random() * this.election.max));
     this.heartbeatCtrl.watchBeat();
   }
 
@@ -116,20 +114,17 @@ class Mokka extends NodeModel {
     return this.proofExpiration && this.getProofMintedTime() + this.proofExpiration < Date.now();
   }
 
-  private _registerEvents() {
-    this.on('data', async (packet) => {
+  public async emitPacket(packet: Buffer) {
+    const parsedPacket = JSON.parse(packet.toString());
 
-      packet = JSON.parse(packet.toString());
+    if ([
+      messageTypes.GOSSIP_SECOND_RESPONSE,
+      messageTypes.GOSSIP_FIRST_RESPONSE,
+      messageTypes.GOSSIP_REQUEST
+    ].includes(parsedPacket.type))
+      return await this.gossipRequestProcessorService.process(parsedPacket);
 
-      if ([
-        messageTypes.GOSSIP_SECOND_RESPONSE,
-        messageTypes.GOSSIP_FIRST_RESPONSE,
-        messageTypes.GOSSIP_REQUEST
-      ].includes(packet.type))
-        return await this.gossipRequestProcessorService.process(packet);
-
-      await this.requestProcessorService.process(packet);
-    });
+    await this.requestProcessorService.process(parsedPacket);
   }
 
 }

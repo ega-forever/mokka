@@ -1,4 +1,3 @@
-// @ts-ignore
 import msg from 'axon';
 
 import {Mokka} from '../components/consensus/main';
@@ -14,7 +13,7 @@ class TCPMokka extends Mokka {
 
     this.sockets.get(this.address).bind(this.address);
     this.sockets.get(this.address).on('message', (data: Buffer) => {
-      this.emit('data', data);
+      this.emitPacket(data);
     });
 
     this.sockets.get(this.address).on('error', () => {

@@ -16,6 +16,12 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
     for (let i = 0; i < nodesCount; i++) {
       const node = crypto.createECDH('secp256k1');
       node.generateKeys();
+
+      if (node.getPrivateKey().toString('hex').length !== 64) {
+        i--;
+        continue;
+      }
+
       ctx.keys.push({
         privateKey: node.getPrivateKey('hex'),
         publicKey: node.getPublicKey('hex', 'compressed')

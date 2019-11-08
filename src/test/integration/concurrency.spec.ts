@@ -15,6 +15,12 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
     for (let i = 0; i < nodesCount; i++) {
       const node = crypto.createECDH('secp256k1');
       node.generateKeys();
+
+      if (node.getPrivateKey().toString('hex').length !== 64) {
+        i--;
+        continue;
+      }
+
       ctx.keys.push({
         privateKey: node.getPrivateKey().toString('hex'),
         publicKey: node.getPublicKey('hex', 'compressed')
@@ -52,6 +58,7 @@ describe('concurrency tests (5 nodes)', async (ctx = {}, nodesCount = 5) => {
     for (const node of ctx.mokkas) {
       node.kill();
     }
+    await Promise.delay(1000);
   });
 
   it(`should replicate the queued logs on several nodes and append them (${nodesCount} nodes)`, async () => {

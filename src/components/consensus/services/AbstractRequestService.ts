@@ -1,7 +1,7 @@
 import {MessageApi} from '../api/MessageApi';
 import {Mokka} from '../main';
-import {PacketModel} from '../models/PacketModel';
 import {NodeModel} from '../models/NodeModel';
+import {PacketModel} from '../models/PacketModel';
 
 class AbstractRequestService {
 
