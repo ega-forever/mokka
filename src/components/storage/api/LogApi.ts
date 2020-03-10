@@ -46,7 +46,7 @@ class LogApi {
         .digest('hex');
 
       if (hash && generatedHash !== hash) {
-        return Promise.reject({code: 2, message: 'can\'t save wrong hash!'});
+        return Promise.reject({code: 2, message: `can't save wrong hash! received`});
       }
     }
 

@@ -3,7 +3,6 @@ import secrets = require('secrets.js-grempe');
 import {StateModel} from '../../storage/models/StateModel';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
-import voteTypes from '../constants/VoteTypes';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
@@ -131,8 +130,7 @@ class VoteApi {
     compacted = `${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.started);
 
-    this.mokka.timer.heartbeat(this.mokka.heartbeat);
-    // todo send immediate heartbeat
+    this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeat);
     for (const node of this.mokka.nodes.values()) {
       const packet = this.messageApi.packet(messageTypes.ACK, node.publicKey);
       await this.messageApi.message(packet);

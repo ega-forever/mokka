@@ -27,18 +27,16 @@ class RequestProcessorService extends AbstractRequestService {
     if (
       packet.state === states.LEADER &&
       this.mokka.proof === packet.proof &&
-      this.mokka.proofExpiration &&
       this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now()
     ) {
       return replies;
     }
 
     if (states.LEADER !== this.mokka.state && packet.state === states.LEADER) {
-      this.mokka.timer.clearHeartbeatTimeout();
+      this.mokka.heartbeatCtrl.setNextBeat(this.mokka.election.max);
     }
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
-
       const rawPubKeysMap = new Map<string, string>();
 
       for (const node of this.mokka.nodes.values()) {
@@ -79,7 +77,7 @@ class RequestProcessorService extends AbstractRequestService {
     }
 
     if (this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
-      this.mokka.timer.heartbeat(this.mokka.timer.timeout());
+      this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeatCtrl.timeout());
     }
 
     return replies;

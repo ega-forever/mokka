@@ -5,27 +5,36 @@ import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 
-class TimerController {
+class HeartbeatController {
 
   private mokka: Mokka;
-  private timers: Map<string, NodeJS.Timer>;
+  private adjustmentDate: number;
   private messageApi: MessageApi;
   private nodeApi: NodeApi;
+  private runBeat: boolean;
 
   constructor(mokka: Mokka) {
     this.mokka = mokka;
-    this.timers = new Map<string, NodeJS.Timer>();
     this.messageApi = new MessageApi(mokka);
     this.nodeApi = new NodeApi(mokka);
+    this.runBeat = false;
   }
 
-  public heartbeat(duration: number = this.mokka.heartbeat): void {
+  public async stopBeat() {
+    this.runBeat = false;
+    if (this.adjustmentDate)
+      await new Promise((res) => setTimeout(res, Date.now() - this.adjustmentDate));
+  }
 
-    if (this.timers.has('heartbeat')) {
-      clearTimeout(this.timers.get('heartbeat'));
-    }
+  public async watchBeat() {
 
-    const heartbeatFunc = async () => {
+    this.runBeat = true;
+
+    while (this.runBeat) {
+      if (this.adjustmentDate > Date.now()) {
+        await new Promise((res) => setTimeout(res, this.adjustmentDate - Date.now()));
+        continue;
+      }
 
       if (this.mokka.state !== states.LEADER || this.mokka.isProofTokenExpired()) {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
@@ -33,7 +42,8 @@ class TimerController {
         await this.nodeApi.promote();
 
         if (this.mokka.state !== states.LEADER) {
-          return this.heartbeat(this.timeout());
+          this.adjustmentDate = Date.now() + this.timeout();
+          continue;
         }
       }
 
@@ -42,20 +52,13 @@ class TimerController {
         await this.messageApi.message(packet);
       }
 
-      this.heartbeat(this.mokka.heartbeat);
-    };
+      this.adjustmentDate = Date.now() + this.mokka.heartbeat;
+    }
 
-    const heartbeatTimeout = setTimeout(heartbeatFunc, duration);
-
-    this.timers.set('heartbeat', heartbeatTimeout);
   }
 
-  public clearHeartbeatTimeout(): void {
-    if (!this.timers.has('heartbeat'))
-      return;
-
-    clearTimeout(this.timers.get('heartbeat'));
-    this.timers.delete('heartbeat');
+  public setNextBeat(duration: number) {
+    this.adjustmentDate = Date.now() + duration;
   }
 
   public timeout() {
@@ -64,4 +67,4 @@ class TimerController {
 
 }
 
-export {TimerController};
+export {HeartbeatController};

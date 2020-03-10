@@ -16,6 +16,12 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
     for (let i = 0; i < 5; i++) {
       const node = crypto.createECDH('secp256k1');
       node.generateKeys();
+
+      if (node.getPrivateKey().toString('hex').length !== 64) {
+        i--;
+        continue;
+      }
+
       ctx.keys.push({
         privateKey: node.getPrivateKey('hex'),
         publicKey: node.getPublicKey('hex', 'compressed')
@@ -237,11 +243,16 @@ describe('gossip tests', (ctx = {mokkas: []}) => {
 
     const fakeKeys = ctx.keys.slice(0);
     const node = crypto.createECDH('secp256k1');
-    node.generateKeys();
-    fakeKeys[1] = {
-      privateKey: node.getPrivateKey('hex'),
-      publicKey: node.getPublicKey('hex')
-    };
+    let privKey = '';
+
+    while (privKey.length !== 64) {
+      node.generateKeys();
+      privKey = node.getPrivateKey('hex');
+      fakeKeys[1] = {
+        privateKey: node.getPrivateKey('hex'),
+        publicKey: node.getPublicKey('hex')
+      };
+    }
 
     ctx.mokkas[1].send({
       args: [

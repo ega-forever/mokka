@@ -1,4 +1,3 @@
-// @ts-ignore
 import msg from 'axon';
 
 import {Mokka} from '../components/consensus/main';
@@ -10,11 +9,11 @@ class TCPMokka extends Mokka {
   public initialize() {
     this.logger.info(`initializing reply socket on port  ${this.address}`);
 
-    this.sockets.set(this.address, msg.socket('rep'));
+    this.sockets.set(this.address, msg.socket('sub-emitter'));
 
     this.sockets.get(this.address).bind(this.address);
     this.sockets.get(this.address).on('message', (data: Buffer) => {
-      this.emit('data', data);
+      this.emitPacket(data);
     });
 
     this.sockets.get(this.address).on('error', () => {
@@ -25,21 +24,19 @@ class TCPMokka extends Mokka {
   /**
    * The message to write.
    *
+   * @param {string} address The peer address
    * @param {Object} packet The packet to write to the connection.
    * @api private
    */
   public async write(address: string, packet: Buffer): Promise<void> {
 
     if (!this.sockets.has(address)) {
-      this.sockets.set(address, msg.socket('req'));
+      this.sockets.set(address, msg.socket('pub-emitter'));
 
       this.sockets.get(address).connect(address);
-      this.sockets.get(address).on('error', () => {
-        this.logger.error(`failed to write to: ${this.address}`);
-      });
     }
 
-    this.sockets.get(address).send(packet);
+    this.sockets.get(address).emit('message', packet);
   }
 
   public async disconnect(): Promise<void> {
