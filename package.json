@@ -5,7 +5,8 @@
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
-    "test": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts src/test/**/**/*.spec.ts",
+    "test": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts",
+    "test1": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts src/test/**/**/*.spec.ts",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack",
     "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"
@@ -50,6 +51,6 @@
     "webpack": "^4.42.0",
     "webpack-bundle-analyzer": "^3.3.2",
     "webpack-cli": "^3.3.1",
-    "zeromq": "^6.0.0-beta.2"
+    "zeromq": "^6.0.0-beta.6"
   }
 }

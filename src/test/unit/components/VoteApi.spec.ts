@@ -2,11 +2,11 @@ import Promise from 'bluebird';
 import bunyan from 'bunyan';
 import {expect} from 'chai';
 import crypto from 'crypto';
-import {MessageApi} from '../../../components/consensus/api/MessageApi';
-import {VoteApi} from '../../../components/consensus/api/VoteApi';
-import MessageTypes from '../../../components/consensus/constants/MessageTypes';
-import NodeStates from '../../../components/consensus/constants/NodeStates';
-import {Mokka} from '../../../components/consensus/main';
+import {MessageApi} from '../../../consensus/api/MessageApi';
+import {VoteApi} from '../../../consensus/api/VoteApi';
+import MessageTypes from '../../../consensus/constants/MessageTypes';
+import NodeStates from '../../../consensus/constants/NodeStates';
+import {Mokka} from '../../../consensus/main';
 import TCPMokka from '../../../implementation/TCP';
 
 describe('VoteApi tests', (ctx = {}) => {
@@ -57,12 +57,13 @@ describe('VoteApi tests', (ctx = {}) => {
     const followerNode = ctx.nodes[1] as Mokka;
     const followerVoteApi = new VoteApi(followerNode);
 
-    const packet = await candidateMessageApi.packet(MessageTypes.VOTE, followerNode.publicKey, {
+    const packet = await candidateMessageApi.packet(MessageTypes.VOTE, {
       share: '123'
     });
 
     const start = Date.now();
     const result = await followerVoteApi.vote(packet);
+    // tslint:disable-next-line:no-unused-expression
     expect(result[0].data.signature).to.not.be.undefined;
     expect(Date.now() - start).to.be.lt(10);
 

@@ -1,6 +1,6 @@
 import msg from 'axon';
 
-import {Mokka} from '../components/consensus/main';
+import {Mokka} from '../consensus/main';
 
 class TCPMokka extends Mokka {
 

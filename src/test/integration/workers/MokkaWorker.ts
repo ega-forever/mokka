@@ -1,7 +1,7 @@
 import * as bunyan from 'bunyan';
 import * as _ from 'lodash';
-import states from '../../../components/consensus/constants/NodeStates';
-import eventTypes from '../../../components/shared/constants/EventTypes';
+import eventTypes from '../../../consensus/constants/EventTypes';
+import states from '../../../consensus/constants/NodeStates';
 import TCPMokka from '../../../implementation/TCP';
 
 let mokka: TCPMokka = null;
@@ -31,55 +31,13 @@ const init = (params: any) => {
 
   mokka.on(eventTypes.STATE, () => {
     logger.info(`index #${params.index} state ${_.invert(states)[mokka.state]}`);
+    process.send({type: 'state', args: [mokka.state, mokka.leaderPublicKey]});
   });
 
-  mokka.gossip.on(eventTypes.GOSSIP_PEER_UPDATE, (peer: string, key: string, value: any) => {
-    process.send({type: 'gossip_update', args: [peer, key, value]});
-  });
 };
 
 const connect = () => {
   mokka.connect();
-};
-
-const push = (address: string, data: any) => {
-  mokka.logApi.push(address, data);
-};
-
-const info = async () => {
-  const info = await mokka.getDb().getState().getInfo();
-  process.send({type: 'info', args: [info]});
-};
-
-const getPending = () => {
-  const pendings = mokka.gossip.ownState.getPendingLogs();
-  process.send({type: 'pendings', args: [pendings]});
-};
-
-const getAllPendings = () => {
-  const pendings = mokka.gossip.getPendings();
-  process.send({type: 'pendings_all', args: [pendings]});
-};
-
-const compact = async () => {
-  await mokka.getDb().getEntry().compact();
-  process.send({type: 'compacted', args: []});
-};
-
-const getAllLogs = async () => {
-
-  const state = await mokka.getDb().getState().getInfo();
-  const logs = [];
-
-  for (let index = 0; index <= state.index; index++) {
-    const entry = await mokka.getDb().getEntry().get(index);
-    if (entry === null)
-      continue;
-
-    logs.push(entry.log);
-  }
-
-  process.send({type: 'logs', args: [logs]});
 };
 
 process.on('message', (m) => {
@@ -88,22 +46,4 @@ process.on('message', (m) => {
 
   if (m.type === 'connect')
     connect();
-
-  if (m.type === 'push')
-    push(m.args[0], m.args[1]);
-
-  if (m.type === 'info')
-    info();
-
-  if (m.type === 'pendings')
-    getPending();
-
-  if (m.type === 'pendings_all')
-    getAllPendings();
-
-  if (m.type === 'compact')
-    compact();
-
-  if (m.type === 'logs_all')
-    getAllLogs();
 });

@@ -1,6 +1,6 @@
 import * as zmq from 'zeromq';
 
-import {Mokka} from '../components/consensus/main';
+import {Mokka} from '../consensus/main';
 
 class ZMQMokka extends Mokka {
 
