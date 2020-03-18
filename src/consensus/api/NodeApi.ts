@@ -102,7 +102,7 @@ class NodeApi {
 
     if (this.mokka.state === states.CANDIDATE) {
       this.mokka.logger.info('change state back to FOLLOWER');
-      this.mokka.setState(states.FOLLOWER, this.mokka.term - 1, '');
+      this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
     }
 
   }
