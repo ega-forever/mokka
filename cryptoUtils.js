@@ -98,12 +98,18 @@ const partialSign = (term, message, nonce, privateKeyHex, publicKeyHex, index, n
   return secretKey.multiply(e).mod(curve.n).add(k).mod(curve.n).toString(16);
 };
 
-const partialSigVerify = (message, pubKeyCombinedHex, pubKeyCombinedHashHex, partialSigHex, nonceCombinedHex, index, pubKeyHex, nonceHex, nonceIsNegated) => {
+const partialSigVerify = (term, message, messageNonce, pubKeyCombinedHex, pubKeyCombinedHashHex, partialSigHex, nonceCombinedHex, index, pubKeyHex, nonceIsNegated) => {
+
+  const secretNonce = buildNonce(term, pubKeyHex, messageNonce, message, pubKeyCombinedHex);
+  const RNonce = curve.G.multiply(BigInteger.fromHex(secretNonce));
+  const nonce = convert.pointToBuffer(RNonce);
+
+
   const R = convert.pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
   const Rx = convert.intToBuffer(R.affineX);
   const e = math.getE(Rx, convert.pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')), Buffer.from(message));
   const coefficient = computeCoefficient(pubKeyCombinedHashHex, index);
-  const Ri = convert.pubKeyToPoint(Buffer.from(nonceHex, 'hex'));
+  const Ri = convert.pubKeyToPoint(nonce);
   let RP = math.getR(
     BigInteger.fromHex(partialSigHex),
     e.multiply(BigInteger.fromHex(coefficient)).mod(curve.n),

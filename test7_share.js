@@ -1,8 +1,3 @@
-const schnorr = require('bip-schnorr');
-const ecurve = require('ecurve');
-const convert = schnorr.convert;
-const BigInteger = require('bigi'); //npm install --save bigi@1.1.0
-const curve = ecurve.getCurveByName('secp256k1');
 const utils = require('./cryptoUtils');
 
 
@@ -95,21 +90,18 @@ class Node {
 
   collectVote (publicKey, signature) {
 
-    const publicKeyIndex = this.publicKeys.findIndex(p => p.toString('hex') === publicKey);
-
-    const secretNonce = utils.buildNonce(this.voteSession.term, publicKey, this.voteSession.nonce, this.voteSession.message, this.voteSession.pubKeyCombined);
-    const R = curve.G.multiply(BigInteger.fromHex(secretNonce));
-    const nonce = convert.pointToBuffer(R).toString('hex');
+    const publicKeyIndex = this.publicKeys.indexOf(publicKey);
 
     utils.partialSigVerify(
+      this.voteSession.term,
       this.voteSession.message,
+      this.voteSession.nonce,
       this.voteSession.pubKeyCombined,
       this.voteSession.pubKeyHash,
       signature,
       this.voteSession.nonceCombined,
       publicKeyIndex,
       publicKey,
-      nonce,
       this.voteSession.nonceIsNegated
     );
 
