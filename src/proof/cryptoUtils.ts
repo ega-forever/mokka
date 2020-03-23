@@ -5,16 +5,15 @@ import * as ecurve from 'ecurve';
 
 const curve = ecurve.getCurveByName('secp256k1');
 
-const buildNonce = (
+export const buildNonce = (
   term: number,
+  messageNonce: number,
   publicKeyHex: string,
-  messageStr: string,
   pubKeyCombinedHex: string) => {
-  const hash = crypto.createHmac('sha256', `${term}:${publicKeyHex}`).digest('hex');
+  const hash = crypto.createHmac('sha256', `${term}:${messageNonce}:${publicKeyHex}`).digest('hex');
   const sessionId = Buffer.from(hash, 'hex');
   const nonceData = Buffer.concat([
     sessionId,
-    Buffer.from(messageStr),
     Buffer.from(pubKeyCombinedHex, 'hex')
   ]);  // todo message should be replaced with part of SSS
   return crypto.createHash('sha256')
@@ -24,12 +23,14 @@ const buildNonce = (
 
 export const buildCombinedNonce = (
   term: number,
+  messageNonce: number,
   publicKeysHex: string[],
   pubKeyCombinedHex: string,
-  messageStr: string) => {
+  partial: boolean = false
+): { nonce: string, nonceIsNegated: boolean } => {
 
   const nonces = publicKeysHex.map((publicKey) => {
-    const secretNonce = buildNonce(term, publicKey, messageStr, pubKeyCombinedHex);
+    const secretNonce = buildNonce(term, messageNonce, publicKey, pubKeyCombinedHex);
     const R = curve.G.multiply(BigInteger.fromHex(secretNonce));
     return R.getEncoded(true);
   });
@@ -40,6 +41,29 @@ export const buildCombinedNonce = (
   for (let i = 1; i < nonces.length; i++) {
     R = R.add(pubKeyToPoint(nonces[i]));
   }
+
+  if (math.jacobi(R.affineY) !== 1 && !partial) {
+    nonceIsNegated = true;
+    R = R.negate();
+  }
+  return {nonce: R.getEncoded(!partial).toString('hex'), nonceIsNegated};
+};
+
+export const buildPartialCombinedNonce = (
+  partialCombinedNonceHex: string,
+  term: number,
+  messageNonce: number,
+  publicKeyHex: string,
+  pubKeyCombinedHex: string) => {
+
+  const secretNonce = buildNonce(term, messageNonce, publicKeyHex, pubKeyCombinedHex);
+  const nonce = curve.G.multiply(BigInteger.fromHex(secretNonce)).getEncoded(true);
+
+  let nonceIsNegated = false;
+
+  let R = ecurve.Point.decodeFrom(curve, Buffer.from(partialCombinedNonceHex, 'hex'))
+    .add(pubKeyToPoint(nonce));
+
   if (math.jacobi(R.affineY) !== 1) {
     nonceIsNegated = true;
     R = R.negate();
@@ -93,7 +117,7 @@ const computeCoefficient = (publicKeyHashHex: string, index: number): string => 
 
 export const partialSign = (
   term: number,
-  message: string,
+  messageNonce: number,
   privateKeyHex: string,
   publicKeyHex: string,
   index: number,
@@ -104,21 +128,25 @@ export const partialSign = (
 
   const coefficient = computeCoefficient(pubKeyCombinedHashHex, index);
   const secretKey = BigInteger.fromHex(privateKeyHex).multiply(BigInteger.fromHex(coefficient)).mod(curve.n);
-  const secretNonce = buildNonce(term, publicKeyHex, message, pubKeyCombinedHex);
+  const secretNonce = buildNonce(term, messageNonce, publicKeyHex, pubKeyCombinedHex);
 
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
   const RX = R.affineX.toBuffer(32);
-  const e = math.getE(RX, pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')), Buffer.from(message));
+  const e = math.getE(
+    RX,
+    pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')),
+    Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0'))
+  );
   let k = BigInteger.fromHex(secretNonce);
   if (nonceIsNegated) {
     k = k.negate();
   }
-  return secretKey.multiply(e).mod(curve.n).add(k).mod(curve.n).toString(16);
+  return secretKey.multiply(e).mod(curve.n).add(k).mod(curve.n).toString(16).padStart(64, '0');
 };
 
 export const partialSigVerify = (
   term: number,
-  message: string,
+  messageNonce: number,
   pubKeyCombinedHex: string,
   pubKeyCombinedHashHex: string,
   partialSigHex: string,
@@ -127,12 +155,16 @@ export const partialSigVerify = (
   pubKeyHex: string,
   nonceIsNegated: boolean): boolean => {
 
-  const secretNonce = buildNonce(term, pubKeyHex, message, pubKeyCombinedHex);
+  const secretNonce = buildNonce(term, messageNonce, pubKeyHex, pubKeyCombinedHex);
   const nonce = curve.G.multiply(BigInteger.fromHex(secretNonce)).getEncoded(true);
 
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
   const RX = R.affineX.toBuffer(32);
-  const e = math.getE(RX, pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')), Buffer.from(message));
+  const e = math.getE(
+    RX,
+    pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')),
+    Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0'))
+  );
   const coefficient = computeCoefficient(pubKeyCombinedHashHex, index);
   const RI = pubKeyToPoint(nonce);
   let RP = math.getR(
@@ -154,15 +186,16 @@ export const partialSigCombine = (nonceCombinedHex: string, partialSigsHex: stri
   for (let i = 1; i < partialSigsHex.length; i++) {
     s = s.add(BigInteger.fromHex(partialSigsHex[i], 'hex')).mod(curve.n);
   }
-  return Buffer.concat([RX, Buffer.from(s.toString(16), 'hex')]).toString('hex');
+  return Buffer.concat([RX, Buffer.from(s.toString(16).padStart(64, '0'), 'hex')]).toString('hex');
 };
 
-export const verify = (pubKeyHex: string, message: string, signatureHex: string): boolean => {
+export const verify = (term: number, messageNonce: number, pubKeyHex: string, signatureHex: string): boolean => {
   const P = pubKeyToPoint(Buffer.from(pubKeyHex, 'hex'));
   const r = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(0, 32));
   const s = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(32, 64));
-  const e = math.getE(r.toBuffer(32), P, Buffer.from(message));
+  const e = math.getE(r.toBuffer(32), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
   const R = math.getR(s, e, P);
+
   return !(R.curve.isInfinity(R) || math.jacobi(R.affineY) !== 1 || !R.affineX.equals(r));
 };
 

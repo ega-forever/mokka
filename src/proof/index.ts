@@ -1,3 +1,4 @@
+import assert from 'assert';
 import * as utils from './cryptoUtils';
 import {getCombinations} from './utils';
 
@@ -11,9 +12,11 @@ class Node {
   };
   private term: number;
   private readonly voteSession: {
-    message: string,
+    messageNonce: number,
     publicKeyToNonceMap: Map<string, { nonce: string, nonceIsNegated: boolean }>,
-    replies: Map<string, Map<string, string>> // peer_pubKey: {<multi_pubkey_hash>: <signature>}
+    replies: Map<string, Map<string, string>>,
+    nonces: string[],
+    expireIn: number
   };
 
   constructor(peerPublicKeys: string[], privateKey: string, publicKey: string) {
@@ -27,7 +30,9 @@ class Node {
     this.term = 12;
 
     this.voteSession = {
-      message: null,
+      expireIn: 1000,
+      messageNonce: null,
+      nonces: [],
       publicKeyToNonceMap: new Map<string, { nonce: string, nonceIsNegated: boolean }>(),
       replies: new Map<string, Map<string, string>>()
     };
@@ -52,18 +57,18 @@ class Node {
     }
   }
 
-  public startVoting(): Array<{ message: string, publicKey: string, term: number }> {
+  public startVoting(): Array<{ nonce: number, publicKey: string, term: number }> {
 
-    const payload: Array<{ message: string, publicKey: string, term: number }> = [];
-    this.voteSession.message = 'random message'.padEnd(32, '0');
+    const payload: Array<{ nonce: number, publicKey: string, term: number }> = [];
+    this.voteSession.messageNonce = Date.now();
 
     for (const publicKeyCombined of this.multiPublicKeyToPublicKeyHashAndPairsMap.keys()) {
       const publicKeysInvolved = this.multiPublicKeyToPublicKeyHashAndPairsMap.get(publicKeyCombined).pairs;
       const {nonce: nonceCombined, nonceIsNegated} = utils.buildCombinedNonce(
         this.term,
+        this.voteSession.messageNonce,
         publicKeysInvolved,
-        publicKeyCombined,
-        this.voteSession.message
+        publicKeyCombined
       );
 
       this.voteSession.publicKeyToNonceMap.set(publicKeyCombined, {
@@ -74,7 +79,7 @@ class Node {
 
     for (const publicKey of [...this.peerPublicKeys, this.ownPair.publicKey]) {
       const votePayload = {
-        message: this.voteSession.message,
+        nonce: this.voteSession.messageNonce,
         publicKey,
         term: this.term
       };
@@ -82,7 +87,6 @@ class Node {
       // todo there may be a pair where my own key is not present
       if (publicKey === this.ownPair.publicKey) { // todo should work for all possible nonces
         const selfVote = this.vote(publicKey, votePayload);
-
         for (const multiPublicKey of this.voteSession.publicKeyToNonceMap.keys()) {
           if (!this.voteSession.replies.has(multiPublicKey)) {
             this.voteSession.replies.set(multiPublicKey, new Map<string, string>());
@@ -92,8 +96,6 @@ class Node {
             this.voteSession.replies.get(multiPublicKey).set(publicKey, selfVote.get(multiPublicKey));
           }
         }
-
-
         continue;
       }
 
@@ -103,22 +105,26 @@ class Node {
     return payload;
   }
 
-  public vote(candidatePublicKey: string, payload: { message: string, term: number }): Map<string, string> {
+  public vote(
+    candidatePublicKey: string,
+    payload: { nonce: number, term: number }): Map<string, string> {
+
+    // assert(Date.now() - payload.nonce < this.voteSession.expireIn); // todo uncomment
 
     const multiPublicKeyToSigMap: Map<string, string> = new Map<string, string>();
 
     for (const publicKeyCombined of this.multiPublicKeyToPublicKeyHashAndPairsMap.keys()) {
-      const data = this.multiPublicKeyToPublicKeyHashAndPairsMap.get(publicKeyCombined);
+      const multiPublicKeyData = this.multiPublicKeyToPublicKeyHashAndPairsMap.get(publicKeyCombined);
 
-      if (!data.pairs.includes(candidatePublicKey)) {
+      if (!multiPublicKeyData.pairs.includes(candidatePublicKey)) {
         continue;
       }
 
-      const {nonce: nonceCombined, nonceIsNegated} = utils.buildCombinedNonce(
+      const {nonce: nonceCombined, nonceIsNegated} = utils.buildCombinedNonce( // todo pass share
         this.term,
-        data.pairs,
-        publicKeyCombined,
-        payload.message
+        payload.nonce,
+        multiPublicKeyData.pairs,
+        publicKeyCombined
       );
 
       this.voteSession.publicKeyToNonceMap.set(publicKeyCombined, {
@@ -128,13 +134,13 @@ class Node {
 
       const sig = utils.partialSign(
         payload.term,
-        payload.message,
+        payload.nonce,
         this.ownPair.privateKey,
         this.ownPair.publicKey,
-        data.pairs.indexOf(this.ownPair.publicKey),
+        multiPublicKeyData.pairs.indexOf(this.ownPair.publicKey),
         nonceCombined,
         publicKeyCombined,
-        data.hash,
+        multiPublicKeyData.hash,
         nonceIsNegated
       );
 
@@ -156,9 +162,9 @@ class Node {
 
       const signature = signaturesMap.get(multiPublicKey);
 
-      const isValid = utils.partialSigVerify(
+      const isValid = utils.partialSigVerify( // todo use current share
         this.term,
-        this.voteSession.message,
+        this.voteSession.messageNonce,
         multiPublicKey,
         publicKeyData.hash,
         signature,
@@ -191,9 +197,18 @@ class Node {
 
     const nonceCombined = this.voteSession.publicKeyToNonceMap.get(multiKeyInQuorum).nonce;
 
-    const fullSignature = utils.partialSigCombine(nonceCombined, Array.from(this.voteSession.replies.get(multiKeyInQuorum).values()));
-    const isValid = utils.verify(multiKeyInQuorum, this.voteSession.message, fullSignature);
+    const fullSignature = utils.partialSigCombine(
+      nonceCombined,
+      Array.from(this.voteSession.replies.get(multiKeyInQuorum).values())
+    );
+    const isValid = utils.verify(this.term, this.voteSession.messageNonce, multiKeyInQuorum, fullSignature);
     console.log('verified status: ', isValid);
+    if (!isValid) {
+      console.log(this.term, this.voteSession.messageNonce);
+      process.exit(0);
+    }
+
+    // todo check on follower side: signature, message, round (nonce)
   }
 
 }
@@ -210,6 +225,7 @@ const privateKeys = [
   '2031e7fed15c770519707bb092a6337215530e921ccea42030c15d86e8eaf0b8'
 ];
 
+
 const leaderNode = new Node(publicKeys.filter((pk) => pk !== publicKeys[0]), privateKeys[0], publicKeys[0]);
 
 const followerNodes = new Map();
@@ -221,7 +237,8 @@ followerNodes.set(publicKeys[2], new Node(publicKeys.filter((pk) => pk !== publi
 const payloadsToSend = leaderNode.startVoting();
 
 for (const payload of payloadsToSend) {
+  const start = Date.now();
   const signaturesMap = followerNodes.get(payload.publicKey).vote(publicKeys[0], payload);
+  // console.log(`processed in ${Date.now() - start}`);
   leaderNode.collectVote(payload.publicKey, signaturesMap);
 }
-
