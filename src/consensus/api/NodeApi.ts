@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import secrets = require('secrets.js-grempe');
+import * as utils from '../../proof/cryptoUtils';
 import eventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
@@ -7,6 +8,7 @@ import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
 import {compressPublicKeySecp256k1} from '../utils/keyPair';
+import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
 
 class NodeApi {
@@ -53,49 +55,62 @@ class NodeApi {
     }
 
     const startTime = Date.now();
-    const token = `${this.mokka.term + 1}x${startTime}`;
-    const secret = secrets.str2hex(token);
-
-    const shares: string[] = secrets.share(secret, this.mokka.nodes.size + 1, this.mokka.majority());
-    const peerPubKeys = Array.from(this.mokka.nodes.keys());
-
-    const voteData = shares
-      .sort()
-      .map((share: string, index: number) => {
-
-        if (index === this.mokka.nodes.size) {
-
-          const sign = crypto.createSign('sha256');
-          sign.update(Buffer.from(share));
-
-          const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
-          return {
-            publicKey: this.mokka.publicKey,
-            share,
-            signature,
-            voted: true
-          };
-        }
-
-        return {
-          publicKey: peerPubKeys[index],
-          share,
-          signature: null,
-          voted: false
-        };
-      });
-
-    this.mokka.setVote(
-      new VoteModel(this.mokka.publicKey, voteData, secret, startTime)
-    );
+    const vote = new VoteModel(startTime, this.mokka.election.max);
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
-    for (const share of voteData.slice(0, -1)) {
+    console.log(`starting voting with term: ${this.mokka.term}`)
+
+
+    for (const publicKeyCombined of this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.keys()) {
+      const publicKeysInvolved = this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.get(publicKeyCombined).pairs;
+      const {nonce: nonceCombined, nonceIsNegated} = utils.buildCombinedNonce(
+        this.mokka.term,
+        startTime,
+        publicKeysInvolved,
+        publicKeyCombined
+      );
+
+      vote.publicKeyToNonce.set(publicKeyCombined, {
+        nonce: nonceCombined,
+        nonceIsNegated
+      });
+    }
+
+    this.mokka.setVote(vote);
+
+    for (const publicKey of [...this.mokka.nodes.keys(), this.mokka.publicKey]) {
+      const votePayload = {
+        nonce: startTime,
+        publicKey,
+        term: this.mokka.term
+      };
+
+      if (publicKey === this.mokka.publicKey) { // todo should work for all possible nonces
+        const selfVote = buildVote(
+          votePayload.nonce,
+          votePayload.publicKey,
+          votePayload.term,
+          this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap,
+          this.mokka.privateKey,
+          this.mokka.publicKey
+        );
+        for (const multiPublicKey of vote.publicKeyToNonce.keys()) {
+          if (!vote.peerReplies.has(multiPublicKey)) {
+            vote.peerReplies.set(multiPublicKey, new Map<string, string>());
+          }
+
+          if (selfVote.has(multiPublicKey)) {
+            vote.peerReplies.get(multiPublicKey).set(publicKey, selfVote.get(multiPublicKey));
+          }
+        }
+        continue;
+      }
+
       const packet = this.messageApi.packet(messageTypes.VOTE, {
-        share: share.share
+        nonce: startTime
       });
 
-      await this.messageApi.message(packet, share.publicKey);
+      await this.messageApi.message(packet, publicKey);
     }
 
     await new Promise((res) => setTimeout(res, this.mokka.election.max));

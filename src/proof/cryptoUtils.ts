@@ -112,7 +112,7 @@ const computeCoefficient = (publicKeyHashHex: string, index: number): string => 
     .update(data)
     .digest('hex');
 
-  return BigInteger.fromHex(hash).mod(curve.n).toString(16);
+  return BigInteger.fromHex(hash).mod(curve.n).toString(16).padStart(64, '0');
 };
 
 export const partialSign = (

@@ -10,5 +10,4 @@ export interface ISettingsInterface {
     info: () => void,
     trace: () => void
   };
-  gossipHeartbeat: number;
 }

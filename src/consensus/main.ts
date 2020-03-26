@@ -12,7 +12,7 @@ class Mokka extends NodeModel {
   public heartbeat: number;
   public proofExpiration: number;
   public readonly logger: ILoggerInterface;
-  public vote: VoteModel = new VoteModel();
+  public vote: VoteModel;
   public readonly heartbeatCtrl: HeartbeatController;
   public readonly nodeApi: NodeApi;
   private readonly requestProcessorService: RequestProcessorService;
@@ -47,15 +47,13 @@ class Mokka extends NodeModel {
     return responses >= this.majority();
   }
 
-  public majority() {
-    return Math.ceil(this.nodes.size / 2) + 1;
-  }
-
   public setVote(vote: VoteModel): void {
     this.vote = vote;
   }
 
   public async connect(): Promise<void> {
+    this.calculateMultiPublicKeys();
+
     this.heartbeatCtrl.setNextBeat(Math.round(Math.random() * this.election.max));
     this.heartbeatCtrl.watchBeat();
   }

@@ -5,7 +5,9 @@ import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
+import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
+import * as utils from '../../proof/cryptoUtils';
 
 class VoteApi {
 
@@ -19,8 +21,9 @@ class VoteApi {
 
   public async vote(packet: PacketModel): Promise<PacketModel[]> {
 
-    if (!packet.data.share) {
-      this.mokka.logger.trace(`[vote] peer ${packet.publicKey} hasn't provided a share`);
+    console.log('!!', this.mokka.term, packet.term);
+    if (!packet.data.nonce) {
+      this.mokka.logger.trace(`[vote] peer ${packet.publicKey} hasn't provided a nonce`);
       return [];
     }
 
@@ -28,88 +31,113 @@ class VoteApi {
       return [];
     }
 
-    const sign = crypto.createSign('sha256');
-    sign.update(Buffer.from(packet.data.share));
+    /*    const sign = crypto.createSign('sha256');
+        sign.update(Buffer.from(packet.data.share));
 
-    const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');
+        const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');*/
 
-    const vote = new VoteModel(
-      packet.publicKey,
-      [{
-        publicKey: this.mokka.publicKey,
-        share: packet.data.share,
-        signature,
-        voted: true
-      }],
-      null,
-      Date.now()
-    );
-
+    const vote = new VoteModel(packet.data.nonce, this.mokka.election.max);
     this.mokka.setVote(vote);
 
+    // todo build sig
+    const start = Date.now();
+    const voteSigs = buildVote(
+      packet.data.nonce,
+      packet.publicKey,
+      packet.term,
+      this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap,
+      this.mokka.privateKey,
+      this.mokka.publicKey
+    );
+
+    console.log(`built vote: ${Date.now() - start}`)
+
     const reply = this.messageApi.packet(messageTypes.VOTED, {
-      signature
+      combinedKeys: [...voteSigs.keys()],
+      signatures: [...voteSigs.values()]
     });
     return [reply];
   }
 
   public async voted(packet: PacketModel): Promise<void> {
 
-    if (!packet.data.signature) {
-      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} hasn't provided the signature`);
+    if (states.CANDIDATE !== this.mokka.state) {
       return;
     }
 
-    const localShare = this.mokka.vote.shares.find((share) => share.publicKey === packet.publicKey);
-
-    if (!localShare) {
-      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided wrong share`);
+    if (!packet.data.signatures) {
+      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} hasn't provided signatures`);
       return;
     }
 
-    const verify = crypto.createVerify('sha256');
-    verify.update(Buffer.from(localShare.share));
-    const rawPublicKey = this.mokka.nodes.get(packet.publicKey).rawPublicKey;
-    const isSigned = verify.verify(rawPublicKey, Buffer.from(packet.data.signature, 'hex'));
+    const isAnyUnknownKey = packet.data.combinedKeys.find((key) =>
+      ![...this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.keys()].includes(key)
+    );
 
-    if (!isSigned) {
-      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided wrong signature for share`);
+    if (isAnyUnknownKey) {
+      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided unknown combinedPublicKey`);
       return;
     }
 
-    if (states.CANDIDATE !== this.mokka.state || localShare.voted) {
+    for (const multiPublicKey of this.mokka.vote.publicKeyToNonce.keys()) {
+      const nonceData = this.mokka.vote.publicKeyToNonce.get(multiPublicKey);
+      const publicKeyData = this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.get(multiPublicKey);
+
+      if (!packet.data.combinedKeys.includes(multiPublicKey)) {
+        continue;
+      }
+
+      const signature = packet.data.signatures[packet.data.combinedKeys.indexOf(multiPublicKey)];
+
+      const isValid = utils.partialSigVerify( // todo use current share
+        this.mokka.term,
+        this.mokka.vote.nonce,
+        multiPublicKey,
+        publicKeyData.hash,
+        signature,
+        nonceData.nonce,
+        publicKeyData.pairs.indexOf(packet.publicKey),
+        packet.publicKey,
+        nonceData.nonceIsNegated
+      );
+
+      if (!isValid) { // todo should be treated as error
+        console.log('state 2');
+        this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided bad signature`);
+        return;
+      }
+
+      if (!this.mokka.vote.peerReplies.has(multiPublicKey)) {
+        this.mokka.vote.peerReplies.set(multiPublicKey, new Map<string, string>());
+      }
+
+      this.mokka.vote.peerReplies.get(multiPublicKey).set(packet.publicKey, signature);
+    }
+
+    const multiKeyInQuorum = Array.from(this.mokka.vote.peerReplies.keys())
+      .find((multiKey) =>
+        this.mokka.vote.peerReplies.has(multiKey) && this.mokka.quorum(this.mokka.vote.peerReplies.get(multiKey).size)
+      );
+
+    console.log(multiKeyInQuorum);
+    if (!multiKeyInQuorum)
+      return;
+
+    const nonceCombined = this.mokka.vote.publicKeyToNonce.get(multiKeyInQuorum).nonce;
+
+    const fullSignature = utils.partialSigCombine(
+      nonceCombined,
+      Array.from(this.mokka.vote.peerReplies.get(multiKeyInQuorum).values())
+    );
+    const isValid = utils.verify(this.mokka.term, this.mokka.vote.nonce, multiKeyInQuorum, fullSignature);
+
+    if (!isValid) {
+      this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
       return;
     }
 
-    localShare.voted = true;
-    localShare.signature = packet.data.signature;
-
-    const votedAmount = this.mokka.vote.shares.filter((share) => share.voted).length;
-
-    if (!this.mokka.quorum(votedAmount))
-      return;
-
-    const validatedShares = this.mokka.vote.shares
-      .filter((share) => share.voted)
-      .map((share: { share: string }) => share.share);
-
-    const comb = secrets.combine(validatedShares);
-
-    if (comb !== this.mokka.vote.secret) {
-      this.mokka.vote = new VoteModel();
-      return;
-    }
-
-    const votedShares = this.mokka.vote.shares.filter((share) => share.voted);
-
-    let compacted = votedShares
-      .sort((share1, share2) => share1.share > share2.share ? -1 : 1)
-      .reduce((result: string, item: { share: string, signature: string }) => {
-        return `${result}y${item.share}g${item.signature}`;
-      }, '');
-
-    compacted = `${compacted}x${this.mokka.term}x${this.mokka.vote.started}`;
-    this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.started);
+    const compacted = `${this.mokka.vote.nonce}:${multiKeyInQuorum}:${fullSignature}`;
+    this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.nonce);
 
     this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeat);
     for (const node of this.mokka.nodes.values()) {

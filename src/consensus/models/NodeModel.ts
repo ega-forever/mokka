@@ -1,12 +1,8 @@
-import crypto from 'crypto';
 import {EventEmitter} from 'events';
+import * as utils from '../../proof/cryptoUtils';
+import {getCombinations} from '../../proof/utils';
 import eventTypes from '../constants/EventTypes';
 import NodeStates from '../constants/NodeStates';
-import {
-  compressPublicKeySecp256k1,
-  convertKeyPairToRawSecp256k1,
-  convertPublicKeyToRawSecp256k1
-} from '../utils/keyPair';
 
 class NodeModel extends EventEmitter {
 
@@ -33,8 +29,7 @@ class NodeModel extends EventEmitter {
   public readonly privateKey: string;
   public readonly publicKey: string;
   public readonly nodes: Map<string, NodeModel> = new Map<string, NodeModel>();
-  public readonly rawPublicKey: string;
-  public readonly rawPrivateKey: string;
+  public readonly multiPublicKeyToPublicKeyHashAndPairsMap: Map<string, { hash: string, pairs: string[] }>;
 
   private _state: number;
   private _term: number = 0;
@@ -49,30 +44,15 @@ class NodeModel extends EventEmitter {
     state: number = NodeStates.FOLLOWER
   ) {
     super();
-
     this.privateKey = privateKey;
-
-    if (this.privateKey) {
-      const keyPair = crypto.createECDH('secp256k1');
-      keyPair.setPrivateKey(Buffer.from(privateKey, 'hex'));
-      const rawKeyPair = convertKeyPairToRawSecp256k1(keyPair);
-      this.rawPrivateKey = rawKeyPair.privateKey;
-      this.rawPublicKey = rawKeyPair.publicKey;
-    }
-
     this.publicKey = multiaddr.match(/\w+$/).toString();
-
-    if (this.publicKey.length !== 66) {
-      this.publicKey = compressPublicKeySecp256k1(this.publicKey);
-    }
-
-    if (!this.privateKey) {
-      this.rawPublicKey = convertPublicKeyToRawSecp256k1(this.publicKey);
-    }
-
     this._state = state;
-
     this.nodeAddress = multiaddr.split(/\w+$/)[0].replace(/\/$/, '');
+    this.multiPublicKeyToPublicKeyHashAndPairsMap = new Map<string, { hash: string, pairs: string[] }>();
+  }
+
+  public majority() {
+    return Math.ceil(this.nodes.size / 2) + 1;
   }
 
   public write(address: string, packet: Buffer): void {
@@ -95,6 +75,26 @@ class NodeModel extends EventEmitter {
 
   public getProofMintedTime(): number {
     return this._proofMintedTime;
+  }
+
+  public calculateMultiPublicKeys() {
+    const sortedPublicKeys = [...this.nodes.keys(), this.publicKey].sort();
+
+    const combinations = getCombinations(sortedPublicKeys, this.majority());
+    for (const combination of combinations) {
+
+      if (!combination.includes(this.publicKey)) {
+        continue;
+      }
+
+      const pubKeyHash = utils.buildMultiPublicKeyHash(combination);
+      const pubKeyCombined = utils.buildMultiPublicKey(combination);
+
+      this.multiPublicKeyToPublicKeyHashAndPairsMap.set(pubKeyCombined, {
+        hash: pubKeyHash,
+        pairs: combination
+      });
+    }
   }
 
 }

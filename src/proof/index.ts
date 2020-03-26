@@ -1,6 +1,11 @@
 import assert from 'assert';
+import * as BigInteger from 'bigi';
+import * as crypto from 'crypto';
+import * as ecurve from 'ecurve';
 import * as utils from './cryptoUtils';
 import {getCombinations} from './utils';
+
+const curve = ecurve.getCurveByName('secp256k1');
 
 class Node {
 
@@ -15,7 +20,6 @@ class Node {
     messageNonce: number,
     publicKeyToNonceMap: Map<string, { nonce: string, nonceIsNegated: boolean }>,
     replies: Map<string, Map<string, string>>,
-    nonces: string[],
     expireIn: number
   };
 
@@ -32,7 +36,6 @@ class Node {
     this.voteSession = {
       expireIn: 1000,
       messageNonce: null,
-      nonces: [],
       publicKeyToNonceMap: new Map<string, { nonce: string, nonceIsNegated: boolean }>(),
       replies: new Map<string, Map<string, string>>()
     };
@@ -109,7 +112,7 @@ class Node {
     candidatePublicKey: string,
     payload: { nonce: number, term: number }): Map<string, string> {
 
-    // assert(Date.now() - payload.nonce < this.voteSession.expireIn); // todo uncomment
+    assert(Date.now() - payload.nonce < this.voteSession.expireIn);
 
     const multiPublicKeyToSigMap: Map<string, string> = new Map<string, string>();
 
@@ -120,7 +123,7 @@ class Node {
         continue;
       }
 
-      const {nonce: nonceCombined, nonceIsNegated} = utils.buildCombinedNonce( // todo pass share
+      const {nonce: nonceCombined, nonceIsNegated} = utils.buildCombinedNonce(
         this.term,
         payload.nonce,
         multiPublicKeyData.pairs,
@@ -213,6 +216,8 @@ class Node {
 
 }
 
+/*
+
 const publicKeys = [
   '03846f34fdb2345f4bf932cb4b7d278fb3af24f44224fb52ae551781c3a3cad68a',
   '02cd836b1d42c51d80cef695a14502c21d2c3c644bc82f6a7052eb29247cf61f4f',
@@ -224,21 +229,35 @@ const privateKeys = [
   '0a1645eef5a10e1f5011269abba9fd85c4f0cc70820d6f102fb7137f2988ad78',
   '2031e7fed15c770519707bb092a6337215530e921ccea42030c15d86e8eaf0b8'
 ];
+*/
 
+while (1) {
+  const privateKeys = [];
 
-const leaderNode = new Node(publicKeys.filter((pk) => pk !== publicKeys[0]), privateKeys[0], publicKeys[0]);
+  for (let i = 0; i < 3; i++) {
+    const privateKey = crypto.createHmac('sha256', `${Date.now() + Math.random()}`).digest('hex').substr(0, 32);
+    privateKeys.push(privateKey);
+  }
 
-const followerNodes = new Map();
+  const publicKeys = privateKeys.map((pk) => curve.G.multiply(BigInteger.fromHex(pk)).getEncoded(true).toString('hex'));
+
+  console.log(privateKeys);
+  console.log(publicKeys);
+
+  const leaderNode = new Node(publicKeys.filter((pk) => pk !== publicKeys[0]), privateKeys[0], publicKeys[0]);
+
+  const followerNodes = new Map();
 // tslint:disable-next-line:max-line-length
-followerNodes.set(publicKeys[1], new Node(publicKeys.filter((pk) => pk !== publicKeys[1]), privateKeys[1], publicKeys[1]));
+  followerNodes.set(publicKeys[1], new Node(publicKeys.filter((pk) => pk !== publicKeys[1]), privateKeys[1], publicKeys[1]));
 // tslint:disable-next-line:max-line-length
-followerNodes.set(publicKeys[2], new Node(publicKeys.filter((pk) => pk !== publicKeys[2]), privateKeys[2], publicKeys[2]));
+  followerNodes.set(publicKeys[2], new Node(publicKeys.filter((pk) => pk !== publicKeys[2]), privateKeys[2], publicKeys[2]));
 
-const payloadsToSend = leaderNode.startVoting();
+  const payloadsToSend = leaderNode.startVoting();
 
-for (const payload of payloadsToSend) {
-  const start = Date.now();
-  const signaturesMap = followerNodes.get(payload.publicKey).vote(publicKeys[0], payload);
-  // console.log(`processed in ${Date.now() - start}`);
-  leaderNode.collectVote(payload.publicKey, signaturesMap);
+  for (const payload of payloadsToSend) {
+    const start = Date.now();
+    const signaturesMap = followerNodes.get(payload.publicKey).vote(publicKeys[0], payload);
+    // console.log(`processed in ${Date.now() - start}`);
+    leaderNode.collectVote(payload.publicKey, signaturesMap);
+  }
 }

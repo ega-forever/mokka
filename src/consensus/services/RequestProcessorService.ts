@@ -1,11 +1,11 @@
-import eventTypes from '../constants/EventTypes';
+import * as utils from '../../proof/cryptoUtils';
 import {VoteApi} from '../api/VoteApi';
+import eventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
-import {validate} from '../utils/proofValidation';
 import {AbstractRequestService} from './AbstractRequestService';
 
 class RequestProcessorService extends AbstractRequestService {
@@ -34,19 +34,15 @@ class RequestProcessorService extends AbstractRequestService {
     }
 
     if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
-      const rawPubKeysMap = new Map<string, string>();
 
-      for (const node of this.mokka.nodes.values()) {
-        rawPubKeysMap.set(node.rawPublicKey, node.publicKey);
-      }
+      const splittedPoof = packet.proof.split(':');
+      const isValid = utils.verify(packet.term, parseInt(splittedPoof[0], 10), splittedPoof[1], splittedPoof[2]);
 
-      const {validated, minted} = validate(packet.term, packet.proof, rawPubKeysMap, packet.publicKey);
-
-      if (!validated) {
+      if (!isValid) {
         return [this.messageApi.packet(messageTypes.ERROR, 'validation failed')];
       }
 
-      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof, minted);
+      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof, parseInt(splittedPoof[0], 10));
     }
 
     if (packet.type === messageTypes.VOTE)
