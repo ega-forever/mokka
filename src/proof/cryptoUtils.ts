@@ -1,4 +1,3 @@
-import * as math from 'bip-schnorr/src/math';
 import BN from 'bn.js';
 import * as crypto from 'crypto';
 import {ec as EC} from 'elliptic';
@@ -54,7 +53,7 @@ export const buildCombinedNonce = (
   term: number,
   messageNonce: number,
   publicKeysHex: string[],
-  pubKeyCombinedHex: string,
+  pubKeyCombinedHex: string
 ): { nonce: string, nonceIsNegated: boolean } => {
 
   const nonces = publicKeysHex.map((publicKey) => {
@@ -183,7 +182,6 @@ export const partialSigVerify = (
     e.mul(new BN(coefficient, 16)).mod(ec.n),
     pubKeyToPoint(Buffer.from(pubKeyHex, 'hex')));
 
-  // console.log(`new RP: ${pointToPublicKey(RP, true).toString('hex')}`);
   if (!nonceIsNegated) {
     RP = RP.neg();
   }
@@ -193,7 +191,7 @@ export const partialSigVerify = (
 
 export const partialSigCombine = (nonceCombinedHex: string, partialSigsHex: string[]): string => {
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
-  const RX = R.affineX.toBuffer(32);
+  const RX = R.getX().toBuffer();
   let s = new BN(partialSigsHex[0], 16);
   for (let i = 1; i < partialSigsHex.length; i++) {
     s = s.add(new BN(partialSigsHex[i], 16)).mod(ec.n);
@@ -203,14 +201,12 @@ export const partialSigCombine = (nonceCombinedHex: string, partialSigsHex: stri
 
 export const verify = (term: number, messageNonce: number, pubKeyHex: string, signatureHex: string): boolean => {
   const P = pubKeyToPoint(Buffer.from(pubKeyHex, 'hex'));
-  // const r = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(0, 32));
   const r = new BN(signatureHex.slice(0, 32), 16);
-  // const s = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(32, 64));
   const s = new BN(signatureHex.slice(32, 64), 16);
-  const e = math.getE(r.toBuffer(), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
-  const R = math.getR(s, e, P);
+  const e = getE(r.toBuffer(), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
+  const R = getR(s, e, P);
 
-  return !(R.curve.isInfinity(R) || math.jacobi(R.affineY) !== 1 || !R.affineX.equals(r));
+  return !(R.isInfinity() || jacobi(R.getY()) !== 1 || !R.getX().eq(r));
 };
 
 export const pubKeyToPoint = (pubKey) => {

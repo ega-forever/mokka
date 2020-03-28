@@ -176,8 +176,6 @@ export const partialSigVerify = (
     e.multiply(BigInteger.fromHex(coefficient)).mod(curve.n),
     pubKeyToPoint(Buffer.from(pubKeyHex, 'hex')));
 
- // console.log(`RP: ${RP.getEncoded(true).toString('hex')}`);
-
   if (!nonceIsNegated) {
     RP = RP.negate();
   }
