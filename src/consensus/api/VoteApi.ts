@@ -21,7 +21,6 @@ class VoteApi {
 
   public async vote(packet: PacketModel): Promise<PacketModel[]> {
 
-    console.log('!!', this.mokka.term, packet.term);
     if (!packet.data.nonce) {
       this.mokka.logger.trace(`[vote] peer ${packet.publicKey} hasn't provided a nonce`);
       return [];
@@ -30,11 +29,6 @@ class VoteApi {
     if (this.mokka.term >= packet.term) {
       return [];
     }
-
-    /*    const sign = crypto.createSign('sha256');
-        sign.update(Buffer.from(packet.data.share));
-
-        const signature = sign.sign(this.mokka.rawPrivateKey).toString('hex');*/
 
     const vote = new VoteModel(packet.data.nonce, this.mokka.election.max);
     this.mokka.setVote(vote);

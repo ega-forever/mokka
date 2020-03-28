@@ -58,9 +58,6 @@ class NodeApi {
     const vote = new VoteModel(startTime, this.mokka.election.max);
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
-    console.log(`starting voting with term: ${this.mokka.term}`)
-
-
     for (const publicKeyCombined of this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.keys()) {
       const publicKeysInvolved = this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.get(publicKeyCombined).pairs;
       const {nonce: nonceCombined, nonceIsNegated} = utils.buildCombinedNonce(
@@ -112,6 +109,8 @@ class NodeApi {
 
       await this.messageApi.message(packet, publicKey);
     }
+
+    console.log(`starting voting with term: ${this.mokka.term} in ${Date.now() - startTime}`)
 
     await new Promise((res) => setTimeout(res, this.mokka.election.max));
 

@@ -1,38 +1,9 @@
+import * as BigInteger from 'bigi';
 import * as math from 'bip-schnorr/src/math';
-import BN from 'bn.js';
 import * as crypto from 'crypto';
-import {ec as EC} from 'elliptic';
+import * as ecurve from 'ecurve';
 
-const ec = new EC('secp256k1');
-
-function jacobi(num: BN): number {
-  return parseInt(num.toRed(BN.mont(ec.curve.p)).redPow(
-    ec.curve.p.sub(new BN(1, 10))
-      .div(new BN(2, 10))
-  ).fromRed()
-    .toString(10)
-    .slice(0, 3), 10);
-}
-
-function getE(RX: Buffer, P, m: Buffer): BN {
-
-  const hash = crypto.createHash('sha256')
-    .update(
-      Buffer.concat([
-        RX,
-        pointToPublicKey(P, true),
-        m
-      ]))
-    .digest('hex');
-
-  return new BN(hash, 16).mod(ec.curve.n); // todo can be slow, as not red
-}
-
-function getR(s, e, P) {
-  const sG = ec.g.mul(s);
-  const eP: BN = P.mul(e);
-  return sG.add(eP.neg());
-}
+const curve = ecurve.getCurveByName('secp256k1');
 
 export const buildNonce = (
   term: number,
@@ -55,12 +26,13 @@ export const buildCombinedNonce = (
   messageNonce: number,
   publicKeysHex: string[],
   pubKeyCombinedHex: string,
+  partial: boolean = false
 ): { nonce: string, nonceIsNegated: boolean } => {
 
   const nonces = publicKeysHex.map((publicKey) => {
     const secretNonce = buildNonce(term, messageNonce, publicKey, pubKeyCombinedHex);
-    const R = ec.g.mul(new BN(secretNonce, 16));
-    return pointToPublicKey(R, true);
+    const R = curve.G.multiply(BigInteger.fromHex(secretNonce));
+    return R.getEncoded(true);
   });
 
   let nonceIsNegated = false;
@@ -70,12 +42,34 @@ export const buildCombinedNonce = (
     R = R.add(pubKeyToPoint(nonces[i]));
   }
 
-  if (jacobi(R.getY()) !== 1) {
+  if (math.jacobi(R.affineY) !== 1 && !partial) {
     nonceIsNegated = true;
-    R = R.neg();
+    R = R.negate();
   }
 
-  return {nonce: pointToPublicKey(R, true).toString('hex'), nonceIsNegated};
+  return {nonce: R.getEncoded(!partial).toString('hex'), nonceIsNegated};
+};
+
+export const buildPartialCombinedNonce = (
+  partialCombinedNonceHex: string,
+  term: number,
+  messageNonce: number,
+  publicKeyHex: string,
+  pubKeyCombinedHex: string) => {
+
+  const secretNonce = buildNonce(term, messageNonce, publicKeyHex, pubKeyCombinedHex);
+  const nonce = curve.G.multiply(BigInteger.fromHex(secretNonce)).getEncoded(true);
+
+  let nonceIsNegated = false;
+
+  let R = ecurve.Point.decodeFrom(curve, Buffer.from(partialCombinedNonceHex, 'hex'))
+    .add(pubKeyToPoint(nonce));
+
+  if (math.jacobi(R.affineY) !== 1) {
+    nonceIsNegated = true;
+    R = R.negate();
+  }
+  return {nonce: R.getEncoded(true).toString('hex'), nonceIsNegated};
 };
 
 export const buildMultiPublicKeyHash = (publicKeysHex: string[]): string => { // todo sort
@@ -90,15 +84,15 @@ export const buildMultiPublicKey = (orderedPublicKeysHex): string => { // todo s
   for (let i = 0; i < orderedPublicKeysHex.length; i++) {
     const XI = pubKeyToPoint(Buffer.from(orderedPublicKeysHex[i], 'hex'));
     const coefficient = computeCoefficient(publicKeysHash, i);
-    const summand = XI.mul(new BN(coefficient, 16));
+    const summand = XI.multiply(BigInteger.fromHex(coefficient));
     if (X === null) {
       X = summand;
     } else {
       X = X.add(summand);
     }
   }
+  return X.getEncoded(true).toString('hex');
 
-  return pointToPublicKey(X, true).toString('hex');
 };
 
 const computeCoefficient = (publicKeyHashHex: string, index: number): string => {
@@ -119,8 +113,7 @@ const computeCoefficient = (publicKeyHashHex: string, index: number): string => 
     .update(data)
     .digest('hex');
 
-  //  return BigInteger.fromHex(hash).mod(curve.n).toString(16).padStart(64, '0');
-  return new BN(hash, 16).mod(ec.n).toString(16).padStart(64, '0');
+  return BigInteger.fromHex(hash).mod(curve.n).toString(16).padStart(64, '0');
 };
 
 export const partialSign = (
@@ -135,23 +128,22 @@ export const partialSign = (
   nonceIsNegated: boolean): string => {
 
   const coefficient = computeCoefficient(pubKeyCombinedHashHex, index);
-  const secretKey = new BN(privateKeyHex, 16).mul(new BN(coefficient, 16)).mod(ec.n);
+  const secretKey = BigInteger.fromHex(privateKeyHex).multiply(BigInteger.fromHex(coefficient)).mod(curve.n);
   const secretNonce = buildNonce(term, messageNonce, publicKeyHex, pubKeyCombinedHex);
 
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
-
-  const RX = R.getX().toBuffer();
-  const e = getE(
+  const RX = R.affineX.toBuffer(32);
+  const e = math.getE(
     RX,
     pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')),
     Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0'))
   );
 
-  let k = new BN(secretNonce, 16);
+  let k = BigInteger.fromHex(secretNonce);
   if (nonceIsNegated) {
-    k = new BN(0, 10).sub(k);
+    k = k.negate();
   }
-  return secretKey.mul(e).mod(ec.n).add(k).mod(ec.n).abs().toString(16).padStart(64, '0');
+  return secretKey.multiply(e).mod(curve.n).add(k).mod(curve.n).toString(16).padStart(64, '0');
 };
 
 export const partialSigVerify = (
@@ -166,48 +158,48 @@ export const partialSigVerify = (
   nonceIsNegated: boolean): boolean => {
 
   const secretNonce = buildNonce(term, messageNonce, pubKeyHex, pubKeyCombinedHex);
-  const nonce = pointToPublicKey(ec.g.mul(new BN(secretNonce, 16)), true);
+  const nonce = curve.G.multiply(BigInteger.fromHex(secretNonce)).getEncoded(true);
 
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
-  const RX = R.getX().toBuffer();
-  const e = getE(
+  const RX = R.affineX.toBuffer(32);
+  const e = math.getE(
     RX,
     pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')),
     Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0'))
   );
 
   const coefficient = computeCoefficient(pubKeyCombinedHashHex, index);
+
   const RI = pubKeyToPoint(nonce);
-  let RP = getR(
-    new BN(partialSigHex, 16),
-    e.mul(new BN(coefficient, 16)).mod(ec.n),
+  let RP = math.getR(
+    BigInteger.fromHex(partialSigHex),
+    e.multiply(BigInteger.fromHex(coefficient)).mod(curve.n),
     pubKeyToPoint(Buffer.from(pubKeyHex, 'hex')));
 
-  // console.log(`new RP: ${pointToPublicKey(RP, true).toString('hex')}`);
+ // console.log(`RP: ${RP.getEncoded(true).toString('hex')}`);
+
   if (!nonceIsNegated) {
-    RP = RP.neg();
+    RP = RP.negate();
   }
   const sum = RP.add(RI);
-  return sum.isInfinity();
+  return sum.curve.isInfinity(sum);
 };
 
 export const partialSigCombine = (nonceCombinedHex: string, partialSigsHex: string[]): string => {
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
   const RX = R.affineX.toBuffer(32);
-  let s = new BN(partialSigsHex[0], 16);
+  let s = BigInteger.fromHex(partialSigsHex[0]);
   for (let i = 1; i < partialSigsHex.length; i++) {
-    s = s.add(new BN(partialSigsHex[i], 16)).mod(ec.n);
+    s = s.add(BigInteger.fromHex(partialSigsHex[i], 'hex')).mod(curve.n);
   }
   return Buffer.concat([RX, Buffer.from(s.toString(16).padStart(64, '0'), 'hex')]).toString('hex');
 };
 
 export const verify = (term: number, messageNonce: number, pubKeyHex: string, signatureHex: string): boolean => {
   const P = pubKeyToPoint(Buffer.from(pubKeyHex, 'hex'));
-  // const r = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(0, 32));
-  const r = new BN(signatureHex.slice(0, 32), 16);
-  // const s = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(32, 64));
-  const s = new BN(signatureHex.slice(32, 64), 16);
-  const e = math.getE(r.toBuffer(), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
+  const r = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(0, 32));
+  const s = BigInteger.fromBuffer(Buffer.from(signatureHex, 'hex').slice(32, 64));
+  const e = math.getE(r.toBuffer(32), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
   const R = math.getR(s, e, P);
 
   return !(R.curve.isInfinity(R) || math.jacobi(R.affineY) !== 1 || !R.affineX.equals(r));
@@ -215,13 +207,6 @@ export const verify = (term: number, messageNonce: number, pubKeyHex: string, si
 
 export const pubKeyToPoint = (pubKey) => {
   const pubKeyEven = (pubKey[0] - 0x02) === 0;
-  // const x = pubKey.slice(1, 33).toString('hex');
-  return ec.curve.pointFromX(pubKey.slice(1, 33).toString('hex'), !pubKeyEven);
-};
-
-const pointToPublicKey = (P, compressed: boolean): Buffer => {
-  const buffer = Buffer.allocUnsafe(1);
-  // keep sign, if is odd
-  buffer.writeUInt8(compressed ? (P.getY().isEven() ? 0x02 : 0x03) : 0x04, 0);
-  return Buffer.concat([buffer, P.getX().toBuffer()]);
+  const x = BigInteger.fromBuffer(pubKey.slice(1, 33));
+  return curve.pointFromX(!pubKeyEven, x);
 };
