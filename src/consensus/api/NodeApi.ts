@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-import secrets = require('secrets.js-grempe');
 import * as utils from '../../proof/cryptoUtils';
 import eventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
@@ -109,8 +107,6 @@ class NodeApi {
 
       await this.messageApi.message(packet, publicKey);
     }
-
-    console.log(`starting voting with term: ${this.mokka.term} in ${Date.now() - startTime}`)
 
     await new Promise((res) => setTimeout(res, this.mokka.election.max));
 

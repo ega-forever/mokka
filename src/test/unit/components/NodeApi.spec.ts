@@ -28,7 +28,6 @@ describe('NodeApi tests', (ctx = {}) => {
         address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
         electionMax: 300,
         electionMin: 100,
-        gossipHeartbeat: 100,
         heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
         privateKey: ctx.keys[index].privateKey,
@@ -87,7 +86,7 @@ describe('NodeApi tests', (ctx = {}) => {
     expect(candidateNode.term).to.be.eq(3);
     await Promise.all([pr1, pr2, pr3, pr4]);
 
-    expect(candidateNode.term).to.be.eq(2);
+    expect(candidateNode.term).to.be.eq(3);
     await candidateNode.disconnect();
   });
 

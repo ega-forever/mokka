@@ -33,8 +33,6 @@ class VoteApi {
     const vote = new VoteModel(packet.data.nonce, this.mokka.election.max);
     this.mokka.setVote(vote);
 
-    // todo build sig
-    const start = Date.now();
     const voteSigs = buildVote(
       packet.data.nonce,
       packet.publicKey,
@@ -43,8 +41,6 @@ class VoteApi {
       this.mokka.privateKey,
       this.mokka.publicKey
     );
-
-    console.log(`built vote: ${Date.now() - start}`)
 
     const reply = this.messageApi.packet(messageTypes.VOTED, {
       combinedKeys: [...voteSigs.keys()],
@@ -96,7 +92,6 @@ class VoteApi {
       );
 
       if (!isValid) { // todo should be treated as error
-        console.log('state 2');
         this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided bad signature`);
         return;
       }
@@ -113,7 +108,6 @@ class VoteApi {
         this.mokka.vote.peerReplies.has(multiKey) && this.mokka.quorum(this.mokka.vote.peerReplies.get(multiKey).size)
       );
 
-    console.log(multiKeyInQuorum);
     if (!multiKeyInQuorum)
       return;
 

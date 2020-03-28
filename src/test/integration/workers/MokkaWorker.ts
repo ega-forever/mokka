@@ -8,12 +8,12 @@ let mokka: TCPMokka = null;
 
 const init = (params: any) => {
 
-  const logger = bunyan.createLogger({name: 'mokka.logger', level: 50});
+  const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
 
   mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].publicKey}`,
-    electionMax: 10000,
-    electionMin: 1000,
+    electionMax: 300,
+    electionMin: 100,
     heartbeat: 100,
     logger,
     privateKey: params.keys[params.index].privateKey,
@@ -29,7 +29,7 @@ const init = (params: any) => {
   });
 
   mokka.on(eventTypes.STATE, () => {
-    logger.info(`index #${params.index} state ${_.invert(states)[mokka.state]}`);
+    logger.info(`index #${params.index} state ${_.invert(states)[mokka.state]} with term ${mokka.term}`);
     process.send({type: 'state', args: [mokka.state, mokka.leaderPublicKey]});
   });
 

@@ -19,7 +19,7 @@ function getE(RX: Buffer, P, m: Buffer): BN {
     .update(
       Buffer.concat([
         RX,
-        pointToPublicKey(P, true),
+        pointToPublicKey(P),
         m
       ]))
     .digest('hex');
@@ -59,7 +59,7 @@ export const buildCombinedNonce = (
   const nonces = publicKeysHex.map((publicKey) => {
     const secretNonce = buildNonce(term, messageNonce, publicKey, pubKeyCombinedHex);
     const R = ec.g.mul(new BN(secretNonce, 16));
-    return pointToPublicKey(R, true);
+    return pointToPublicKey(R);
   });
 
   let nonceIsNegated = false;
@@ -74,7 +74,7 @@ export const buildCombinedNonce = (
     R = R.neg();
   }
 
-  return {nonce: pointToPublicKey(R, true).toString('hex'), nonceIsNegated};
+  return {nonce: pointToPublicKey(R).toString('hex'), nonceIsNegated};
 };
 
 export const buildMultiPublicKeyHash = (publicKeysHex: string[]): string => { // todo sort
@@ -97,7 +97,7 @@ export const buildMultiPublicKey = (orderedPublicKeysHex): string => { // todo s
     }
   }
 
-  return pointToPublicKey(X, true).toString('hex');
+  return pointToPublicKey(X).toString('hex');
 };
 
 const computeCoefficient = (publicKeyHashHex: string, index: number): string => {
@@ -165,10 +165,11 @@ export const partialSigVerify = (
   nonceIsNegated: boolean): boolean => {
 
   const secretNonce = buildNonce(term, messageNonce, pubKeyHex, pubKeyCombinedHex);
-  const nonce = pointToPublicKey(ec.g.mul(new BN(secretNonce, 16)), true);
+  const nonce = pointToPublicKey(ec.g.mul(new BN(secretNonce, 16)));
 
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
   const RX = R.getX().toBuffer();
+
   const e = getE(
     RX,
     pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')),
@@ -177,6 +178,7 @@ export const partialSigVerify = (
 
   const coefficient = computeCoefficient(pubKeyCombinedHashHex, index);
   const RI = pubKeyToPoint(nonce);
+
   let RP = getR(
     new BN(partialSigHex, 16),
     e.mul(new BN(coefficient, 16)).mod(ec.n),
@@ -201,8 +203,8 @@ export const partialSigCombine = (nonceCombinedHex: string, partialSigsHex: stri
 
 export const verify = (term: number, messageNonce: number, pubKeyHex: string, signatureHex: string): boolean => {
   const P = pubKeyToPoint(Buffer.from(pubKeyHex, 'hex'));
-  const r = new BN(signatureHex.slice(0, 32), 16);
-  const s = new BN(signatureHex.slice(32, 64), 16);
+  const r = new BN(Buffer.from(signatureHex, 'hex').slice(0, 32).toString('hex'), 16);
+  const s = new BN(Buffer.from(signatureHex, 'hex').slice(32, 64).toString('hex'), 16);
   const e = getE(r.toBuffer(), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
   const R = getR(s, e, P);
 
@@ -211,13 +213,12 @@ export const verify = (term: number, messageNonce: number, pubKeyHex: string, si
 
 export const pubKeyToPoint = (pubKey) => {
   const pubKeyEven = (pubKey[0] - 0x02) === 0;
-  // const x = pubKey.slice(1, 33).toString('hex');
   return ec.curve.pointFromX(pubKey.slice(1, 33).toString('hex'), !pubKeyEven);
 };
 
-const pointToPublicKey = (P, compressed: boolean): Buffer => {
+const pointToPublicKey = (P): Buffer => {
   const buffer = Buffer.allocUnsafe(1);
   // keep sign, if is odd
-  buffer.writeUInt8(compressed ? (P.getY().isEven() ? 0x02 : 0x03) : 0x04, 0);
+  buffer.writeUInt8(P.getY().isEven() ? 0x02 : 0x03, 0);
   return Buffer.concat([buffer, P.getX().toBuffer()]);
 };

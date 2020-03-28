@@ -31,7 +31,6 @@ describe('VoteApi tests', (ctx = {}) => {
         address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
         electionMax: 300,
         electionMin: 100,
-        gossipHeartbeat: 100,
         heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
         privateKey: ctx.keys[index].privateKey,
@@ -58,13 +57,13 @@ describe('VoteApi tests', (ctx = {}) => {
     const followerVoteApi = new VoteApi(followerNode);
 
     const packet = await candidateMessageApi.packet(MessageTypes.VOTE, {
-      share: '123'
+      nonce: Date.now()
     });
 
     const start = Date.now();
     const result = await followerVoteApi.vote(packet);
     // tslint:disable-next-line:no-unused-expression
-    expect(result[0].data.signature).to.not.be.undefined;
+    expect(result[0].data.signatures).to.not.be.undefined;
     expect(Date.now() - start).to.be.lt(10);
 
   });

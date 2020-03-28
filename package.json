@@ -5,8 +5,7 @@
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
-    "test": "mocha --timeout 180000 -r ts-node/register src/test/**/consensus.spec.ts",
-    "test1": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts src/test/**/**/*.spec.ts",
+    "test": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts src/test/**/**/*.spec.ts",
     "test_proof": "ts-node src/proof/index.ts",
     "test_proof2": "ts-node src/proof/index2.ts",
     "test_proof3": "ts-node src/proof/index3.ts",
