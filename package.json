@@ -1,17 +1,19 @@
 {
   "name": "mokka",
-  "version": "0.5.3",
+  "version": "1.0.0",
   "description": "",
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
     "test": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts src/test/**/**/*.spec.ts",
-    "test_proof": "ts-node src/proof/index.ts",
-    "test_proof2": "ts-node src/proof/index2.ts",
-    "test_proof3": "ts-node src/proof/index3.ts",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack",
-    "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"
+    "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web",
+
+    "run_1": "set INDEX=0 && ts-node src/cluster.ts",
+    "run_2": "set INDEX=1 && ts-node src/cluster.ts",
+    "run_3": "set INDEX=2 && ts-node src/cluster.ts"
+
   },
   "keywords": [
     "mokka",
@@ -20,23 +22,13 @@
     "raft",
     "distributed"
   ],
-  "main": "dist/components/consensus/main.js",
-  "types": "dist/components/consensus/main.d.ts",
+  "main": "dist/consensus/main.js",
+  "types": "dist/consensus/main.d.ts",
   "author": "zyev.egor@gmail.com",
   "license": "AGPLv3",
   "dependencies": {
-    "bcrypto": "^5.1.0",
-    "big-integer": "^1.6.44",
-    "bip-schnorr": "^0.3.0",
-    "ecurve": "^1.0.6",
-    "elliptic": "^6.5.2",
-    "encoding-down": "^3.0.1",
-    "levelup": "^3.1.1",
-    "memdown": "^3.0.0",
-    "paillier-bigint": "^2.0.0",
-    "secrets.js-grempe": "^1.1.0",
-    "tweetnacl": "^1.0.3",
-    "web3": "^1.2.6"
+    "bn.js": "^5.1.1",
+    "elliptic": "^6.5.2"
   },
   "devDependencies": {
     "@types/bluebird": "^3.5.26",
@@ -56,6 +48,7 @@
     "ts-loader": "^5.4.5",
     "ts-node": "^8.4.1",
     "tslint": "^5.15.0",
+    "bip-schnorr": "^0.3.0",
     "typescript": "^3.4.1",
     "webpack": "^4.42.0",
     "webpack-bundle-analyzer": "^3.3.2",

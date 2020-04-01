@@ -1,11 +1,11 @@
-import * as utils from '../../proof/cryptoUtils';
 import eventTypes from '../constants/EventTypes';
+import EventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {VoteModel} from '../models/VoteModel';
-import {compressPublicKeySecp256k1} from '../utils/keyPair';
+import * as utils from '../utils/cryptoUtils';
 import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
 
@@ -23,9 +23,7 @@ class NodeApi {
 
     const publicKey = multiaddr.match(/\w+$/).toString();
 
-    const shortPubKey = publicKey.length === 66 ? publicKey : compressPublicKeySecp256k1(publicKey);
-
-    if (this.mokka.publicKey === shortPubKey)
+    if (this.mokka.publicKey === publicKey)
       return;
 
     const node = new NodeModel(null, multiaddr, states.CHILD);
@@ -33,7 +31,7 @@ class NodeApi {
     node.write = this.mokka.write.bind(this.mokka);
     node.once('end', () => this.leave(node.publicKey));
 
-    this.mokka.nodes.set(shortPubKey, node);
+    this.mokka.nodes.set(publicKey, node);
     this.mokka.emit(eventTypes.NODE_JOIN, node);
     return node;
   }
@@ -53,7 +51,7 @@ class NodeApi {
     }
 
     const startTime = Date.now();
-    const vote = new VoteModel(startTime, this.mokka.election.max);
+    const vote = new VoteModel(startTime);
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
     for (const publicKeyCombined of this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.keys()) {
@@ -107,14 +105,29 @@ class NodeApi {
 
       await this.messageApi.message(packet, publicKey);
     }
+    this.mokka.vote.peerReplies.set(null, new Map<string, string>());
 
-    await new Promise((res) => setTimeout(res, this.mokka.election.max));
+    await new Promise((res) => {
+
+      const timeoutHandler = () => {
+        this.mokka.removeListener(EventTypes.STATE, emitHandler);
+        res();
+      };
+
+      const timeoutId = setTimeout(timeoutHandler, this.mokka.heartbeatCtrl.timeout());
+
+      const emitHandler = () => {
+        clearTimeout(timeoutId);
+        res();
+      };
+
+      this.mokka.once(EventTypes.STATE, emitHandler);
+    });
 
     if (this.mokka.state === states.CANDIDATE) {
       this.mokka.logger.info('change state back to FOLLOWER');
       this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
     }
-
   }
 
 }

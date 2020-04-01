@@ -1,13 +1,12 @@
-import crypto from 'crypto';
-import secrets = require('secrets.js-grempe');
+import EventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
+import * as utils from '../utils/cryptoUtils';
 import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
-import * as utils from '../../proof/cryptoUtils';
 
 class VoteApi {
 
@@ -19,18 +18,18 @@ class VoteApi {
     this.messageApi = new MessageApi(mokka);
   }
 
-  public async vote(packet: PacketModel): Promise<PacketModel[]> {
+  public async vote(packet: PacketModel): Promise<PacketModel | null> {
 
     if (!packet.data.nonce) {
       this.mokka.logger.trace(`[vote] peer ${packet.publicKey} hasn't provided a nonce`);
-      return [];
+      return this.messageApi.packet(messageTypes.VOTED);
     }
 
     if (this.mokka.term >= packet.term) {
-      return [];
+      return this.messageApi.packet(messageTypes.VOTED);
     }
 
-    const vote = new VoteModel(packet.data.nonce, this.mokka.election.max);
+    const vote = new VoteModel(packet.data.nonce);
     this.mokka.setVote(vote);
 
     const voteSigs = buildVote(
@@ -42,22 +41,25 @@ class VoteApi {
       this.mokka.publicKey
     );
 
-    const reply = this.messageApi.packet(messageTypes.VOTED, {
+    return this.messageApi.packet(messageTypes.VOTED, {
       combinedKeys: [...voteSigs.keys()],
       signatures: [...voteSigs.values()]
     });
-    return [reply];
   }
 
-  public async voted(packet: PacketModel): Promise<void> {
+  public async voted(packet: PacketModel): Promise<null> {
 
     if (states.CANDIDATE !== this.mokka.state) {
-      return;
+      return null;
     }
 
-    if (!packet.data.signatures) {
-      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} hasn't provided signatures`);
-      return;
+    if (!packet.data) {
+      this.mokka.vote.peerReplies.get(null).set(packet.publicKey, null);
+      if (this.mokka.quorum(this.mokka.vote.peerReplies.get(null).size)) {
+        this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
+      }
+
+      return null;
     }
 
     const isAnyUnknownKey = packet.data.combinedKeys.find((key) =>
@@ -66,7 +68,7 @@ class VoteApi {
 
     if (isAnyUnknownKey) {
       this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided unknown combinedPublicKey`);
-      return;
+      return null;
     }
 
     for (const multiPublicKey of this.mokka.vote.publicKeyToNonce.keys()) {
@@ -93,7 +95,7 @@ class VoteApi {
 
       if (!isValid) { // todo should be treated as error
         this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided bad signature`);
-        return;
+        return null;
       }
 
       if (!this.mokka.vote.peerReplies.has(multiPublicKey)) {
@@ -109,7 +111,7 @@ class VoteApi {
       );
 
     if (!multiKeyInQuorum)
-      return;
+      return null;
 
     const nonceCombined = this.mokka.vote.publicKeyToNonce.get(multiKeyInQuorum).nonce;
 
@@ -126,12 +128,7 @@ class VoteApi {
 
     const compacted = `${this.mokka.vote.nonce}:${multiKeyInQuorum}:${fullSignature}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.nonce);
-
-    this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeat);
-    for (const node of this.mokka.nodes.values()) {
-      const packet = this.messageApi.packet(messageTypes.ACK);
-      await this.messageApi.message(packet, node.publicKey);
-    }
+    return null;
   }
 }
 

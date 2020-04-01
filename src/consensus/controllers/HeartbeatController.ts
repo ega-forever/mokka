@@ -1,6 +1,7 @@
 import {MessageApi} from '../api/MessageApi';
 import {NodeApi} from '../api/NodeApi';
 import eventTypes from '../constants/EventTypes';
+import EventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -36,15 +37,15 @@ class HeartbeatController {
         continue;
       }
 
-      if (this.mokka.state !== states.LEADER || this.mokka.isProofTokenExpired()) {
+      if (this.mokka.state === states.CANDIDATE) {
+        await new Promise((res) => this.mokka.once(EventTypes.STATE, res));
+        continue;
+      }
+
+      if (this.mokka.state === states.FOLLOWER) {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
-
-        if (this.mokka.state !== states.LEADER) {
-          this.adjustmentDate = Date.now() + this.timeout();
-          continue;
-        }
       }
 
       for (const node of this.mokka.nodes.values()) {

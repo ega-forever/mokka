@@ -1,4 +1,4 @@
-import * as utils from '../../proof/cryptoUtils';
+import * as utils from './cryptoUtils';
 
 export const buildVote = (
   nonce: number,

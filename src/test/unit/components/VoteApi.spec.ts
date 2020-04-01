@@ -29,8 +29,6 @@ describe('VoteApi tests', (ctx = {}) => {
     for (let index = 0; index < 3; index++) {
       const instance = new TCPMokka({
         address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
-        electionMax: 300,
-        electionMin: 100,
         heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
         privateKey: ctx.keys[index].privateKey,
@@ -63,7 +61,7 @@ describe('VoteApi tests', (ctx = {}) => {
     const start = Date.now();
     const result = await followerVoteApi.vote(packet);
     // tslint:disable-next-line:no-unused-expression
-    expect(result[0].data.signatures).to.not.be.undefined;
+    expect(result.data.signatures).to.not.be.undefined;
     expect(Date.now() - start).to.be.lt(10);
 
   });

@@ -1,7 +1,6 @@
 import bunyan = require('bunyan');
-import {Mokka} from 'mokka/dist/components/consensus/main';
-import MokkaEvents from 'mokka/dist/components/shared/constants/EventTypes';
-import {StateModel} from 'mokka/dist/components/storage/models/StateModel';
+import MokkaEvents from 'mokka/dist/consensus/constants/EventTypes';
+import {Mokka} from 'mokka/dist/consensus/main';
 import TCPMokka from 'mokka/dist/implementation/TCP';
 import * as readline from 'readline';
 
@@ -39,7 +38,6 @@ const initMokka = async () => {
     address: `tcp://127.0.0.1:${startPort + index}/${keys[index].publicKey}`,
     electionMax: 300,
     electionMin: 100,
-    gossipHeartbeat: 200,
     heartbeat: 100,
     logger,
     privateKey: keys[index].secretKey
@@ -71,10 +69,6 @@ const askCommand = (rl, mokka) => {
       await addLog(mokka, args[1], args[2]);
     }
 
-    if (args[0] === 'add_logs') {
-      await addManyLogs(mokka, args[1]);
-    }
-
     if (args[0] === 'get_log') {
       await getLog(mokka, args[1]);
     }
@@ -96,12 +90,10 @@ const askCommand = (rl, mokka) => {
 
 // add new log
 const addLog = async (mokka, key, value) => {
-  await mokka.logApi.push(key, {value, nonce: Date.now()});
-};
 
-const addManyLogs = async (mokka, count) => {
-  for (let i = 0; i < count; i++)
-    await mokka.logApi.push('123', {value: Date.now(), nonce: Date.now()});
+
+
+  await mokka.logApi.push(key, {value, nonce: Date.now()});
 };
 
 // get log by index

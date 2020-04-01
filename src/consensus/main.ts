@@ -8,7 +8,6 @@ import {RequestProcessorService} from './services/RequestProcessorService';
 
 class Mokka extends NodeModel {
 
-  public election: { min: number, max: number };
   public heartbeat: number;
   public proofExpiration: number;
   public readonly logger: ILoggerInterface;
@@ -19,11 +18,6 @@ class Mokka extends NodeModel {
 
   constructor(options: ISettingsInterface) {
     super(options.privateKey, options.address);
-
-    this.election = {
-      max: options.electionMax || 300,
-      min: options.electionMin || 150
-    };
 
     this.heartbeat = options.heartbeat || 50;
     this.proofExpiration = options.proofExpiration;
@@ -51,19 +45,15 @@ class Mokka extends NodeModel {
     this.vote = vote;
   }
 
-  public async connect(): Promise<void> {
+  public connect(): void {
     this.calculateMultiPublicKeys();
 
-    this.heartbeatCtrl.setNextBeat(Math.round(Math.random() * this.election.max));
+    this.heartbeatCtrl.setNextBeat(this.heartbeatCtrl.timeout());
     this.heartbeatCtrl.watchBeat();
   }
 
   public async disconnect(): Promise<void> {
     await this.heartbeatCtrl.stopBeat();
-  }
-
-  public isProofTokenExpired(): boolean {
-    return this.proofExpiration && this.getProofMintedTime() + this.proofExpiration < Date.now();
   }
 
   public async emitPacket(packet: Buffer) {

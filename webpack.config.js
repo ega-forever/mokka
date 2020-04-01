@@ -2,7 +2,7 @@ const path = require('path');
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 module.exports = {
-  entry: './src/components/consensus/main.ts',
+  entry: './src/consensus/main.ts',
   module: {
     rules: [
       {

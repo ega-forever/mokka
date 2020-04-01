@@ -22,10 +22,6 @@ class PacketModel {
     this.proof = proof;
   }
 
-  public compact() {
-    // todo remove peer.publicKey
-  }
-
 }
 
 export {PacketModel};
