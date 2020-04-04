@@ -1,8 +1,19 @@
 import bunyan = require('bunyan');
 import MokkaEvents from 'mokka/dist/consensus/constants/EventTypes';
-import {Mokka} from 'mokka/dist/consensus/main';
+import MessageTypes from 'mokka/dist/consensus/constants/MessageTypes';
+import NodeStates from 'mokka/dist/consensus/constants/NodeStates';
+import {PacketModel} from 'mokka/dist/consensus/models/PacketModel';
 import TCPMokka from 'mokka/dist/implementation/TCP';
 import * as readline from 'readline';
+
+class ExtendedPacketModel extends PacketModel {
+  public logIndex: number;
+  public log: {
+    index: number,
+    key: string,
+    value: string
+  };
+}
 
 // our generated key pairs
 const keys = [
@@ -20,6 +31,9 @@ const keys = [
   }
 ];
 
+const logsStorage: Array<{ key: string, value: string }> = [];
+const knownPeersState = new Map<string, number>();
+
 const startPort = 2000;
 
 // init mokka instance, bootstrap other nodes, and call the askCommand
@@ -34,20 +48,55 @@ const initMokka = async () => {
 
   const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
 
+  const reqMiddleware = async (packet: ExtendedPacketModel): Promise<ExtendedPacketModel> => {
+    knownPeersState.set(packet.publicKey, packet.logIndex);
+
+    if (
+      packet.state === NodeStates.LEADER &&
+      packet.type === MessageTypes.ACK &&
+      packet.data &&
+      packet.logIndex > logsStorage.length) {
+      logsStorage.push(packet.data);
+      // @ts-ignore
+      const replyPacket: ExtendedPacketModel = mokka.messageApi.packet(16);
+      replyPacket.logIndex = logsStorage.length;
+      await mokka.messageApi.message(replyPacket, packet.publicKey);
+    }
+
+    return packet;
+  };
+
+  const resMiddleware = async (packet: ExtendedPacketModel): Promise<ExtendedPacketModel> => {
+    packet.logIndex = logsStorage.length;
+    const peerIndex = knownPeersState.get(packet.publicKey) || 0;
+
+    if (mokka.state === NodeStates.LEADER && packet.type === MessageTypes.ACK && peerIndex < logsStorage.length) {
+      packet.data = logsStorage[peerIndex];
+    }
+
+    // provide current index
+    // if leader then also send missed logs to follower with ack message
+
+    return packet;
+  };
+
   const mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${startPort + index}/${keys[index].publicKey}`,
-    electionMax: 300,
-    electionMin: 100,
-    heartbeat: 100,
+    heartbeat: 200,
     logger,
-    privateKey: keys[index].secretKey
+    privateKey: keys[index].secretKey,
+    proofExpiration: 60000,
+    reqMiddleware,
+    resMiddleware
   });
-  mokka.connect();
   mokka.on(MokkaEvents.STATE, () => {
     // logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
   });
   for (const peer of uris)
     mokka.nodeApi.join(peer);
+
+  mokka.connect();
+
   mokka.on(MokkaEvents.ERROR, (err) => {
     logger.error(err);
   });
@@ -66,7 +115,7 @@ const askCommand = (rl, mokka) => {
     const args = command.split(' ');
 
     if (args[0] === 'add_log') {
-      await addLog(mokka, args[1], args[2]);
+      addLog(mokka, args[1], args[2]);
     }
 
     if (args[0] === 'get_log') {
@@ -76,14 +125,6 @@ const askCommand = (rl, mokka) => {
     if (args[0] === 'info')
       await getInfo(mokka);
 
-    if (args[0] === 'get_nodes') {
-      await getNodes(mokka);
-    }
-
-    if (args[0] === 'reset_node') {
-      await resetNode(mokka, args[1]);
-    }
-
     askCommand(rl, mokka);
   });
 };
@@ -91,35 +132,23 @@ const askCommand = (rl, mokka) => {
 // add new log
 const addLog = async (mokka, key, value) => {
 
+  if (mokka.state !== NodeStates.LEADER) {
+    return console.log('i am not a leader');
+  }
 
-
-  await mokka.logApi.push(key, {value, nonce: Date.now()});
+  logsStorage.push({key, value});
 };
 
 // get log by index
+
 const getLog = async (mokka, index) => {
-  const entry = await mokka.getDb().getEntry().get(parseInt(index, 10));
-  mokka.logger.info(entry);
+  mokka.logger.info(logsStorage[index]);
 };
 
 // get info of current instance
+
 const getInfo = async (mokka) => {
-  const info = await mokka.getDb().getState().getInfo();
-  mokka.logger.info(info);
-  const info2 = mokka.getLastLogState();
-  console.log({...info2, state: mokka.state});
-};
-
-const getNodes = async (mokka: Mokka) => {
-  const keys = Array.from(mokka.nodes.keys());
-  for (let index = 0; index < mokka.nodes.size; index++) {
-    console.log(`node ${index} / ${mokka.nodes.get(keys[index]).address} with state ${mokka.nodes.get(keys[index]).getLastLogState().index}`);
-  }
-};
-
-const resetNode = async (mokka: Mokka, index) => {
-  const keys = Array.from(mokka.nodes.keys());
-  mokka.nodes.get(keys[index]).setLastLogState(new StateModel());
+  console.log({index: logsStorage.length, peersState: knownPeersState});
 };
 
 initMokka();
