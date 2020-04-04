@@ -28,6 +28,12 @@ class VoteApi {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
+    const isCustomRulePassed = await this.mokka.customVoteRule(packet);
+
+    if (!isCustomRulePassed) {
+      return this.messageApi.packet(messageTypes.VOTED);
+    }
+
     const vote = new VoteModel(packet.data.nonce);
     this.mokka.setVote(vote);
 
@@ -53,9 +59,11 @@ class VoteApi {
     }
 
     if (!packet.data) {
-      this.mokka.vote.peerReplies.get(null).set(packet.publicKey, null);
-      if (this.mokka.quorum(this.mokka.vote.peerReplies.get(null).size)) {
-        this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
+      if (this.mokka.vote.peerReplies.has(null)) {
+        this.mokka.vote.peerReplies.get(null).set(packet.publicKey, null);
+        if (this.mokka.quorum(this.mokka.vote.peerReplies.get(null).size)) {
+          this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
+        }
       }
 
       return null;
@@ -150,7 +158,12 @@ class VoteApi {
         return null;
       }
 
-      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof, parseInt(splitPoof[0], 10));
+      this.mokka.setState(
+        states.FOLLOWER,
+        packet.term,
+        packet.publicKey,
+        packet.proof,
+        parseInt(splitPoof[0], 10));
       return packet;
     }
 

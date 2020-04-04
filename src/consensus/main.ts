@@ -1,3 +1,4 @@
+import {MessageApi} from './api/MessageApi';
 import {NodeApi} from './api/NodeApi';
 import {HeartbeatController} from './controllers/HeartbeatController';
 import {ILoggerInterface} from './interfaces/ILoggerInterface';
@@ -11,12 +12,14 @@ class Mokka extends NodeModel {
 
   public heartbeat: number;
   public proofExpiration: number;
-  public readonly logger: ILoggerInterface;
-  public vote: VoteModel;
-  public readonly heartbeatCtrl: HeartbeatController;
   public readonly nodeApi: NodeApi;
+  public readonly messageApi: MessageApi;
+  public readonly heartbeatCtrl: HeartbeatController;
   public readonly reqMiddleware: (packet: PacketModel) => Promise<PacketModel>;
   public readonly resMiddleware: (packet: PacketModel) => Promise<PacketModel>;
+  public readonly customVoteRule: (packet: PacketModel) => Promise<boolean>;
+  public vote: VoteModel;
+  public readonly logger: ILoggerInterface;
   private readonly requestProcessorService: RequestProcessorService;
 
   constructor(options: ISettingsInterface) {
@@ -39,9 +42,13 @@ class Mokka extends NodeModel {
     this.resMiddleware = options.resMiddleware ? options.resMiddleware :
       async (packet: PacketModel) => packet;
 
+    this.customVoteRule = options.customVoteRule ? options.customVoteRule :
+      async (packet: PacketModel) => true;
+
     this.heartbeatCtrl = new HeartbeatController(this);
     this.requestProcessorService = new RequestProcessorService(this);
     this.nodeApi = new NodeApi(this);
+    this.messageApi = new MessageApi(this);
   }
 
   public quorum(responses: number) {
@@ -66,7 +73,8 @@ class Mokka extends NodeModel {
   }
 
   public async emitPacket(packet: Buffer) {
-    const parsedPacket = JSON.parse(packet.toString());
+    let parsedPacket = this.messageApi.decodePacket(packet);
+    parsedPacket = await this.reqMiddleware(parsedPacket);
     await this.requestProcessorService.process(parsedPacket);
   }
 

@@ -1,10 +1,9 @@
 import {MessageApi} from '../api/MessageApi';
+import {NodeApi} from '../api/NodeApi';
 import {VoteApi} from '../api/VoteApi';
 import messageTypes from '../constants/MessageTypes';
-import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
-import {NodeApi} from '../api/NodeApi';
 
 class RequestProcessorService {
 
@@ -23,22 +22,16 @@ class RequestProcessorService {
     this.actionMap = new Map<number, Array<(packet: PacketModel) => Promise<PacketModel>>>();
 
     this.actionMap.set(messageTypes.VOTE, [
-      this.mokka.reqMiddleware,
-      this.voteApi.vote.bind(this.voteApi),
-      this.mokka.resMiddleware
+      this.voteApi.vote.bind(this.voteApi)
     ]);
 
     this.actionMap.set(messageTypes.VOTED, [
-      this.mokka.reqMiddleware,
-      this.voteApi.voted.bind(this.voteApi),
-      this.mokka.resMiddleware
+      this.voteApi.voted.bind(this.voteApi)
     ]);
 
     this.actionMap.set(messageTypes.ACK, [
-      this.mokka.reqMiddleware,
       this.voteApi.validateAndApplyLeader.bind(this.voteApi),
-      this.nodeApi.pingFromLeader.bind(this.nodeApi),
-      this.mokka.resMiddleware
+      this.nodeApi.pingFromLeader.bind(this.nodeApi)
     ]);
   }
 
