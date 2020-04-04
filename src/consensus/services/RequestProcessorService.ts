@@ -1,40 +1,45 @@
 import {MessageApi} from '../api/MessageApi';
 import {VoteApi} from '../api/VoteApi';
-import eventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
-import * as utils from '../utils/cryptoUtils';
+import {NodeApi} from '../api/NodeApi';
 
 class RequestProcessorService {
 
   private voteApi: VoteApi;
   private mokka: Mokka;
   private messageApi: MessageApi;
+  private nodeApi: NodeApi;
 
-  private readonly actionMap: Map<number, (packet: PacketModel) => Promise<PacketModel>>;
+  private readonly actionMap: Map<number, Array<(packet: PacketModel) => Promise<PacketModel>>>;
 
   constructor(mokka: Mokka) {
     this.voteApi = new VoteApi(mokka);
     this.messageApi = new MessageApi(mokka);
+    this.nodeApi = new NodeApi(mokka);
     this.mokka = mokka;
-    this.actionMap = new Map<number, (packet: PacketModel) => Promise<PacketModel>>();
+    this.actionMap = new Map<number, Array<(packet: PacketModel) => Promise<PacketModel>>>();
 
-    // todo may be introduce middleware for each action
-    this.actionMap.set(messageTypes.VOTE, this.voteApi.vote.bind(this.voteApi));
-    this.actionMap.set(messageTypes.VOTED, this.voteApi.voted.bind(this.voteApi));
-    this.actionMap.set(messageTypes.ACK, (packet: PacketModel) => {
-      if (this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
-        this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeatCtrl.timeout());
-      }
-      return null;
-    });
-    this.actionMap.set(messageTypes.ERROR, (packet: PacketModel) => {
-      this.mokka.emit(eventTypes.ERROR, packet.data);
-      return null;
-    });
-    // todo set map for ack and error
+    this.actionMap.set(messageTypes.VOTE, [
+      this.mokka.reqMiddleware,
+      this.voteApi.vote.bind(this.voteApi),
+      this.mokka.resMiddleware
+    ]);
+
+    this.actionMap.set(messageTypes.VOTED, [
+      this.mokka.reqMiddleware,
+      this.voteApi.voted.bind(this.voteApi),
+      this.mokka.resMiddleware
+    ]);
+
+    this.actionMap.set(messageTypes.ACK, [
+      this.mokka.reqMiddleware,
+      this.voteApi.validateAndApplyLeader.bind(this.voteApi),
+      this.nodeApi.pingFromLeader.bind(this.nodeApi),
+      this.mokka.resMiddleware
+    ]);
   }
 
   public async process(packet: PacketModel) {
@@ -44,43 +49,14 @@ class RequestProcessorService {
     if (!node || !this.actionMap.has(packet.type))
       return;
 
-    if (!this.validateAuth(packet)) {
-      return;
+    let reply: PacketModel | null | false = false;
+
+    for (const action of this.actionMap.get(packet.type)) {
+      reply = await action(reply === false ? packet : reply);
     }
 
-    this.mokka.emit(`${packet.publicKey}:${packet.type}`, packet.data);
-
-    const data: PacketModel | null = await this.actionMap.get(packet.type)(packet);
-
-    if (data)
-      await this.messageApi.message(data, packet.publicKey);
-  }
-
-  private validateAuth(packet: PacketModel): boolean {
-
-    if (
-      packet.state === states.LEADER &&
-      this.mokka.proof === packet.proof &&
-      this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now()
-    ) {
-      this.mokka.setState(this.mokka.state, this.mokka.term, this.mokka.leaderPublicKey);
-      return false;
-    }
-
-    if (packet.state === states.LEADER && this.mokka.proof !== packet.proof) {
-
-      const splittedPoof = packet.proof.split(':');
-      const isValid = utils.verify(packet.term, parseInt(splittedPoof[0], 10), splittedPoof[1], splittedPoof[2]);
-
-      if (!isValid) {
-        return false;
-      }
-
-      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof, parseInt(splittedPoof[0], 10));
-      return true;
-    }
-
-    return true;
+    if (reply)
+      await this.messageApi.message(reply, packet.publicKey);
   }
 
 }

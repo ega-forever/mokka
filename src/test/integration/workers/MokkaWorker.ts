@@ -2,6 +2,7 @@ import * as bunyan from 'bunyan';
 import * as _ from 'lodash';
 import eventTypes from '../../../consensus/constants/EventTypes';
 import states from '../../../consensus/constants/NodeStates';
+import {PacketModel} from '../../../consensus/models/PacketModel';
 import TCPMokka from '../../../implementation/TCP';
 
 let mokka: TCPMokka = null;
@@ -12,10 +13,13 @@ const init = (params: any) => {
 
   mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].publicKey}`,
-    heartbeat: 100,
+    heartbeat: 200,
     logger,
     privateKey: params.keys[params.index].privateKey,
-    proofExpiration: 5000
+    proofExpiration: 5000,
+    reqMiddleware: async (packet: PacketModel) => {
+      return packet;
+    }
   });
 
   for (let i = 0; i < params.keys.length; i++)

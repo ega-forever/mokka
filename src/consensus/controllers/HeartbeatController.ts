@@ -63,7 +63,7 @@ class HeartbeatController {
   }
 
   public timeout() {
-    return this.mokka.heartbeat * 1.2 + Math.round((this.mokka.heartbeat * 0.5) * Math.random());
+    return this.mokka.heartbeat + Math.round(this.mokka.heartbeat * Math.random());
   }
 
 }

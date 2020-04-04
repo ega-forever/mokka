@@ -1,4 +1,3 @@
-import EventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
@@ -18,7 +17,7 @@ class VoteApi {
     this.messageApi = new MessageApi(mokka);
   }
 
-  public async vote(packet: PacketModel): Promise<PacketModel | null> {
+  public async vote(packet: PacketModel): Promise<PacketModel> {
 
     if (!packet.data.nonce) {
       this.mokka.logger.trace(`[vote] peer ${packet.publicKey} hasn't provided a nonce`);
@@ -130,6 +129,34 @@ class VoteApi {
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.nonce);
     return null;
   }
+
+  public async validateAndApplyLeader(packet: PacketModel): Promise<PacketModel | null> {
+
+    if (
+      !packet.proof || (
+      this.mokka.proof &&
+      this.mokka.proof === packet.proof &&
+      this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now())
+    ) {
+      return null;
+    }
+
+    if (this.mokka.proof !== packet.proof) {
+
+      const splitPoof = packet.proof.split(':');
+      const isValid = utils.verify(packet.term, parseInt(splitPoof[0], 10), splitPoof[1], splitPoof[2]);
+
+      if (!isValid) {
+        return null;
+      }
+
+      this.mokka.setState(states.FOLLOWER, packet.term, packet.publicKey, packet.proof, parseInt(splitPoof[0], 10));
+      return packet;
+    }
+
+    return packet;
+  }
+
 }
 
 export {VoteApi};

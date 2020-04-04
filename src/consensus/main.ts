@@ -3,6 +3,7 @@ import {HeartbeatController} from './controllers/HeartbeatController';
 import {ILoggerInterface} from './interfaces/ILoggerInterface';
 import {ISettingsInterface} from './interfaces/ISettingsInterface';
 import {NodeModel} from './models/NodeModel';
+import {PacketModel} from './models/PacketModel';
 import {VoteModel} from './models/VoteModel';
 import {RequestProcessorService} from './services/RequestProcessorService';
 
@@ -14,6 +15,8 @@ class Mokka extends NodeModel {
   public vote: VoteModel;
   public readonly heartbeatCtrl: HeartbeatController;
   public readonly nodeApi: NodeApi;
+  public readonly reqMiddleware: (packet: PacketModel) => Promise<PacketModel>;
+  public readonly resMiddleware: (packet: PacketModel) => Promise<PacketModel>;
   private readonly requestProcessorService: RequestProcessorService;
 
   constructor(options: ISettingsInterface) {
@@ -29,6 +32,12 @@ class Mokka extends NodeModel {
       // tslint:disable-next-line
       trace: console.log
     };
+
+    this.reqMiddleware = options.reqMiddleware ? options.reqMiddleware :
+      async (packet: PacketModel) => packet;
+
+    this.resMiddleware = options.resMiddleware ? options.resMiddleware :
+      async (packet: PacketModel) => packet;
 
     this.heartbeatCtrl = new HeartbeatController(this);
     this.requestProcessorService = new RequestProcessorService(this);

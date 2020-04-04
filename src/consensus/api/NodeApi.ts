@@ -4,6 +4,7 @@ import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
+import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
 import {buildVote} from '../utils/voteSig';
@@ -128,6 +129,13 @@ class NodeApi {
       this.mokka.logger.info('change state back to FOLLOWER');
       this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
     }
+  }
+
+  public async pingFromLeader(packet: PacketModel | null): Promise<PacketModel | null> {
+    if (packet && this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
+      this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeatCtrl.timeout());
+    }
+    return null;
   }
 
 }

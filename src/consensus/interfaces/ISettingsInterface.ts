@@ -1,4 +1,3 @@
-import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
 
 export interface ISettingsInterface {
@@ -6,7 +5,8 @@ export interface ISettingsInterface {
   address: string;
   heartbeat: number;
   proofExpiration: number;
-  commandMiddleware?: (packet: PacketModel, node: NodeModel) => Promise<PacketModel[]>;
+  reqMiddleware?: (packet: PacketModel) => Promise<PacketModel>;
+  resMiddleware?: (packet: PacketModel) => Promise<PacketModel>;
   logger: {
     error: () => void,
     info: () => void,
