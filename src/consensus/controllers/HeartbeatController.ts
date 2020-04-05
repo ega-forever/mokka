@@ -39,6 +39,7 @@ class HeartbeatController {
 
       if (this.mokka.state === states.CANDIDATE) {
         await new Promise((res) => this.mokka.once(EventTypes.STATE, res));
+        this.setNextBeat(this.timeout() * (3 +  Math.round(2 * Math.random()) )); // should be 3-5x
         continue;
       }
 
@@ -63,7 +64,7 @@ class HeartbeatController {
   }
 
   public timeout() {
-    return this.mokka.heartbeat + Math.round(this.mokka.heartbeat * Math.random());
+    return this.mokka.heartbeat + Math.round(this.mokka.heartbeat * Math.random() * 0.5);
   }
 
 }

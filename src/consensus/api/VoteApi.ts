@@ -6,6 +6,7 @@ import {VoteModel} from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
 import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
+import NodeStates from '../constants/NodeStates';
 
 class VoteApi {
 
@@ -24,7 +25,7 @@ class VoteApi {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
-    if (this.mokka.term >= packet.term) {
+    if (this.mokka.state === NodeStates.CANDIDATE || this.mokka.term >= packet.term) {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
@@ -36,6 +37,8 @@ class VoteApi {
 
     const vote = new VoteModel(packet.data.nonce);
     this.mokka.setVote(vote);
+
+    this.mokka.setState(this.mokka.state, this.mokka.term, this.mokka.leaderPublicKey);
 
     const voteSigs = buildVote(
       packet.data.nonce,
@@ -141,6 +144,7 @@ class VoteApi {
   public async validateAndApplyLeader(packet: PacketModel): Promise<PacketModel | null> {
 
     if (
+      packet.term < this.mokka.term ||
       !packet.proof || (
       this.mokka.proof &&
       this.mokka.proof === packet.proof &&

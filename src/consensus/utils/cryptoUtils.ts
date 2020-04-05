@@ -139,7 +139,7 @@ export const partialSign = (
 
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
 
-  const RX = R.getX().toBuffer();
+  const RX = R.getX().toArrayLike(Buffer);
   const e = getE(
     RX,
     pubKeyToPoint(Buffer.from(pubKeyCombinedHex, 'hex')),
@@ -168,7 +168,7 @@ export const partialSigVerify = (
   const nonce = pointToPublicKey(ec.g.mul(new BN(secretNonce, 16)));
 
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
-  const RX = R.getX().toBuffer();
+  const RX = R.getX().toArrayLike(Buffer);
 
   const e = getE(
     RX,
@@ -193,7 +193,7 @@ export const partialSigVerify = (
 
 export const partialSigCombine = (nonceCombinedHex: string, partialSigsHex: string[]): string => {
   const R = pubKeyToPoint(Buffer.from(nonceCombinedHex, 'hex'));
-  const RX = R.getX().toBuffer();
+  const RX = R.getX().toArrayLike(Buffer);
   let s = new BN(partialSigsHex[0], 16);
   for (let i = 1; i < partialSigsHex.length; i++) {
     s = s.add(new BN(partialSigsHex[i], 16)).mod(ec.n);
@@ -205,7 +205,7 @@ export const verify = (term: number, messageNonce: number, pubKeyHex: string, si
   const P = pubKeyToPoint(Buffer.from(pubKeyHex, 'hex'));
   const r = new BN(Buffer.from(signatureHex, 'hex').slice(0, 32).toString('hex'), 16);
   const s = new BN(Buffer.from(signatureHex, 'hex').slice(32, 64).toString('hex'), 16);
-  const e = getE(r.toBuffer(), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
+  const e = getE(r.toArrayLike(Buffer), P, Buffer.from(`${term}:${messageNonce}`.padEnd(32, '0')));
   const R = getR(s, e, P);
 
   return !(R.isInfinity() || jacobi(R.getY()) !== 1 || !R.getX().eq(r));
@@ -220,5 +220,5 @@ const pointToPublicKey = (P): Buffer => {
   const buffer = Buffer.allocUnsafe(1);
   // keep sign, if is odd
   buffer.writeUInt8(P.getY().isEven() ? 0x02 : 0x03, 0);
-  return Buffer.concat([buffer, P.getX().toBuffer()]);
+  return Buffer.concat([buffer, P.getX().toArrayLike(Buffer)]);
 };
