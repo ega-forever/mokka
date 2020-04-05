@@ -51,7 +51,7 @@ Arguments:
 
 Add new peer node by uri
 
-### await mokka.connect()
+### await mokka.connect(): Promise<void>
 
 Start consensus. Should be called after all nodes has been added.
 
@@ -117,4 +117,4 @@ However, you still can implement your own protocol.
 
 # Copyright
 
-Copyright (c) 2018-2019 Egor Zuev
+Copyright (c) 2018-2020 Egor Zuev
