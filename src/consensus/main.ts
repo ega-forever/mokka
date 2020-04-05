@@ -16,7 +16,7 @@ class Mokka extends NodeModel {
   public readonly messageApi: MessageApi;
   public readonly heartbeatCtrl: HeartbeatController;
   public readonly reqMiddleware: (packet: PacketModel) => Promise<PacketModel>;
-  public readonly resMiddleware: (packet: PacketModel) => Promise<PacketModel>;
+  public readonly resMiddleware: (packet: PacketModel, peerPublicKey: string) => Promise<PacketModel>;
   public readonly customVoteRule: (packet: PacketModel) => Promise<boolean>;
   public vote: VoteModel;
   public readonly logger: ILoggerInterface;

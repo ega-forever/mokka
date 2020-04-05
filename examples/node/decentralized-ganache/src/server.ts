@@ -3,8 +3,11 @@ import detect = require('detect-port');
 import ganache from 'ganache-core';
 import Tx from 'ganache-core/lib/utils/transaction';
 import Block from 'ganache-core/node_modules/ethereumjs-block';
-import * as MokkaStates from 'mokka/dist/components/consensus/constants/NodeStates';
-import * as MokkaEvents from 'mokka/dist/components/shared/constants/EventTypes';
+import * as MokkaEvents from 'mokka/dist/consensus/constants/EventTypes';
+import MessageTypes from 'mokka/dist/consensus/constants/MessageTypes';
+import * as MokkaStates from 'mokka/dist/consensus/constants/NodeStates';
+import NodeStates from 'mokka/dist/consensus/constants/NodeStates';
+import {PacketModel} from 'mokka/dist/consensus/models/PacketModel';
 import TCPMokka from 'mokka/dist/implementation/TCP';
 import semaphore = require('semaphore');
 import Web3 = require('web3');
@@ -12,6 +15,13 @@ import config from './config';
 
 const logger = bunyan.createLogger({name: 'mokka.logger', level: 60});
 const sem = semaphore(1);
+
+const logsStorage: Array<{ key: string, value: string }> = [];
+const knownPeersState = new Map<string, number>();
+
+class ExtendedPacketModel extends PacketModel {
+  public logIndex: number;
+}
 
 const startGanache = async (node) => {
 
@@ -37,32 +47,89 @@ const startGanache = async (node) => {
   return server;
 };
 
-const startMokka = async (node) => {
+const startMokka = async (node, server) => {
+
+  // @ts-ignore
+  const web3 = new Web3(server.provider);
+
+  const reqMiddleware = async (packet: ExtendedPacketModel): Promise<ExtendedPacketModel> => {
+    knownPeersState.set(packet.publicKey, packet.logIndex);
+
+    if (
+      packet.state === NodeStates.LEADER &&
+      packet.type === MessageTypes.ACK &&
+      packet.data &&
+      packet.logIndex > logsStorage.length) {
+
+      sem.take(async () => {
+        const block = new Block(Buffer.from(packet.data.value, 'hex'));
+        block.transactions = block.transactions.map((tx) => new Tx(tx));
+        // @ts-ignore
+        const replyPacket: ExtendedPacketModel = mokka.messageApi.packet(16);
+
+        const savedBlock = await web3.eth.getBlock(packet.data.index);
+
+        if (savedBlock) {
+          replyPacket.logIndex = logsStorage.length;
+          await mokka.messageApi.message(replyPacket, packet.publicKey);
+          return sem.leave();
+        }
+
+        await new Promise((res, rej) => {
+          server.provider.manager.state.blockchain.processBlock(
+            server.provider.manager.state.blockchain.vm,
+            block,
+            true,
+            (err, data) => err ? rej(err) : res(data)
+          );
+        });
+
+        logger.info(`new block added ${block.hash().toString('hex')}`);
+
+        logsStorage.push(packet.data);
+        replyPacket.logIndex = logsStorage.length;
+        await mokka.messageApi.message(replyPacket, packet.publicKey);
+        sem.leave();
+      });
+    }
+
+    return packet;
+  };
+
+  const resMiddleware = async (packet: ExtendedPacketModel, peerPublicKey: string): Promise<ExtendedPacketModel> => {
+    packet.logIndex = logsStorage.length;
+    const peerIndex = knownPeersState.get(peerPublicKey) || 0;
+
+    if (mokka.state === NodeStates.LEADER && packet.type === MessageTypes.ACK && peerIndex < logsStorage.length) {
+      packet.data = {...logsStorage[peerIndex], index: peerIndex + 1};
+    }
+
+    return packet;
+  };
+
+  const customVoteRule = async (packet: ExtendedPacketModel): Promise<boolean> => {
+    return packet.logIndex >= logsStorage.length;
+  };
 
   const mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${node.port}/${node.publicKey}`,
-    electionMax: 300,
-    electionMin: 100,
-    gossipHeartbeat: 100,
-    heartbeat: 50,
+    customVoteRule,
+    heartbeat: 200,
     logger,
     privateKey: node.secretKey,
-    proofExpiration: 30000
+    proofExpiration: 30000,
+    reqMiddleware,
+    resMiddleware
   });
-  await mokka.connect();
   mokka.on(MokkaEvents.default.STATE, () => {
     logger.info(`changed state ${mokka.state} with term ${mokka.term}`);
   });
 
-  mokka.on(MokkaEvents.default.ERROR, (err) => {
-    // logger.error(err);
-  });
-
   config.nodes.filter((nodec) => nodec.publicKey !== node.publicKey).forEach((nodec) => {
     mokka.nodeApi.join(`tcp://127.0.0.1:${nodec.port}/${nodec.publicKey}`);
-
   });
 
+  await mokka.connect();
   return mokka;
 };
 
@@ -81,10 +148,8 @@ const init = async () => {
 
   const node = config.nodes[index];
 
-  const mokka = await startMokka(node);
   const server = await startGanache(node);
-  // @ts-ignore
-  const web3 = new Web3(server.provider);
+  const mokka = await startMokka(node, server);
 
   server.provider.engine.on('rawBlock', async (blockJSON) => {
 
@@ -95,40 +160,7 @@ const init = async () => {
     if (mokka.state !== MokkaStates.default.LEADER)
       return;
 
-    await mokka.logApi.push(blockJSON.hash, {value: block.serialize().toString('hex'), nonce: Date.now()});
-  });
-
-  mokka.on(MokkaEvents.default.LOG, (index) => {
-
-    if (mokka.state === MokkaStates.default.LEADER)
-      return;
-
-    sem.take(async () => {
-      const {log} = await mokka.getDb().getEntry().get(index);
-      const block = new Block(Buffer.from(log.value.value, 'hex'));
-      block.transactions = block.transactions.map((tx) => new Tx(tx));
-
-
-      const savedBlock = await web3.eth.getBlock(index);
-
-      if (savedBlock) {
-        return sem.leave();
-      }
-
-      await new Promise((res, rej) => {
-        server.provider.manager.state.blockchain.processBlock(
-          server.provider.manager.state.blockchain.vm,
-          block,
-          true,
-          (err, data) => err ? rej(err) : res(data)
-        );
-      });
-
-      logger.info(`new block added ${block.hash().toString('hex')}`);
-
-      sem.leave();
-    });
-
+    logsStorage.push({key: blockJSON.hash, value: block.serialize().toString('hex')});
   });
 
   const bound = server.provider.send;

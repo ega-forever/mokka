@@ -8,12 +8,7 @@
     "test": "mocha --timeout 180000 -r ts-node/register src/test/**/*.spec.ts src/test/**/**/*.spec.ts",
     "lint": "tslint --fix --project tsconfig.json",
     "build_web": "webpack",
-    "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web",
-
-    "run_1": "set INDEX=0 && ts-node src/cluster.ts",
-    "run_2": "set INDEX=1 && ts-node src/cluster.ts",
-    "run_3": "set INDEX=2 && ts-node src/cluster.ts"
-
+    "build_dist": "rm -rf dist && npm run tsc:build && npm run build_web"
   },
   "keywords": [
     "mokka",

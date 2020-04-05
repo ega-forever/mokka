@@ -10,7 +10,7 @@ class MessageApi {
   }
 
   public async message(packet: PacketModel, peerPublicKey: string) {
-    packet = await this.mokka.resMiddleware(packet);
+    packet = await this.mokka.resMiddleware(packet, peerPublicKey);
     const node = this.mokka.nodes.get(peerPublicKey);
     await node.write(node.address, Buffer.from(JSON.stringify(packet)));
   }

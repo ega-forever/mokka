@@ -8,11 +8,6 @@ import * as readline from 'readline';
 
 class ExtendedPacketModel extends PacketModel {
   public logIndex: number;
-  public log: {
-    index: number,
-    key: string,
-    value: string
-  };
 }
 
 // our generated key pairs
@@ -66,9 +61,9 @@ const initMokka = async () => {
     return packet;
   };
 
-  const resMiddleware = async (packet: ExtendedPacketModel): Promise<ExtendedPacketModel> => {
+  const resMiddleware = async (packet: ExtendedPacketModel, peerPublicKey: string): Promise<ExtendedPacketModel> => {
     packet.logIndex = logsStorage.length;
-    const peerIndex = knownPeersState.get(packet.publicKey) || 0;
+    const peerIndex = knownPeersState.get(peerPublicKey) || 0;
 
     if (mokka.state === NodeStates.LEADER && packet.type === MessageTypes.ACK && peerIndex < logsStorage.length) {
       packet.data = logsStorage[peerIndex];
@@ -99,9 +94,6 @@ const initMokka = async () => {
 
   mokka.connect();
 
-  mokka.on(MokkaEvents.ERROR, (err) => {
-    logger.error(err);
-  });
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout

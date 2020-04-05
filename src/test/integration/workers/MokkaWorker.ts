@@ -26,10 +26,6 @@ const init = (params: any) => {
     if (i !== params.index)
       mokka.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${params.keys[i].publicKey}`);
 
-  mokka.on(eventTypes.ERROR, (err) => {
-    logger.error(`index #${params.index} ${err}`);
-  });
-
   mokka.on(eventTypes.STATE, () => {
     logger.info(`index #${params.index} state ${_.invert(states)[mokka.state]} with term ${mokka.term}`);
     process.send({type: 'state', args: [mokka.state, mokka.leaderPublicKey]});
