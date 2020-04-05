@@ -74,14 +74,16 @@ const initMokka = async () => {
       packet.data = logsStorage[peerIndex];
     }
 
-    // provide current index
-    // if leader then also send missed logs to follower with ack message
-
     return packet;
+  };
+
+  const customVoteRule = async (packet: ExtendedPacketModel): Promise<boolean> => {
+    return packet.logIndex >= logsStorage.length;
   };
 
   const mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${startPort + index}/${keys[index].publicKey}`,
+    customVoteRule,
     heartbeat: 200,
     logger,
     privateKey: keys[index].secretKey,
