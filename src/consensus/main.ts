@@ -12,6 +12,7 @@ class Mokka extends NodeModel {
 
   public heartbeat: number;
   public proofExpiration: number;
+  public electionTimeout: number;
   public readonly nodeApi: NodeApi;
   public readonly messageApi: MessageApi;
   public readonly heartbeatCtrl: HeartbeatController;
@@ -25,7 +26,8 @@ class Mokka extends NodeModel {
   constructor(options: ISettingsInterface) {
     super(options.privateKey, options.address);
 
-    this.heartbeat = options.heartbeat || 50;
+    this.heartbeat = options.heartbeat;
+    this.electionTimeout = options.electionTimeout;
     this.proofExpiration = options.proofExpiration;
     this.logger = options.logger || {
       // tslint:disable-next-line

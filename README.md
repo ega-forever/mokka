@@ -40,6 +40,7 @@ Arguments:
 * `address` (string):  an address in custom format. The only rule is that address should include the public key in the end
  (example: `"tcp://127.0.0.1:2003/03fec1b3d32dbb0641877f65b4e77ba8466f37ab948c0b4780e4ed191be411d694"`)
 * `heartbeat` (integer): leader heartbeat timeout
+* `electionTimeout` (integer): candidate election timeout (i.e. vote round)
 * `customVoteRule` (func): additional voting rule
 * `reqMiddleware` (func): request middleware (will be triggered on every new packet received)
 * `resMiddleware` (func): response middleware (will be triggered on every new packet sent)

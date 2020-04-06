@@ -26,6 +26,7 @@ describe('NodeApi tests', (ctx = {}) => {
     for (let index = 0; index < 3; index++) {
       const instance = new TCPMokka({
         address: `tcp://127.0.0.1:2000/${ctx.keys[index].publicKey}`,
+        electionTimeout: 300,
         heartbeat: 50,
         logger: bunyan.createLogger({name: 'mokka.logger', level: 60}),
         privateKey: ctx.keys[index].privateKey,

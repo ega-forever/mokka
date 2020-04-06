@@ -1,12 +1,12 @@
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
+import NodeStates from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
 import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
-import NodeStates from '../constants/NodeStates';
 
 class VoteApi {
 
@@ -61,10 +61,17 @@ class VoteApi {
       return null;
     }
 
+    // todo
+
     if (!packet.data) {
       if (this.mokka.vote.peerReplies.has(null)) {
         this.mokka.vote.peerReplies.get(null).set(packet.publicKey, null);
-        if (this.mokka.quorum(this.mokka.vote.peerReplies.get(null).size)) {
+        if (
+          this.mokka.quorum(this.mokka.vote.peerReplies.get(null).size) ||
+          ((this.mokka.nodes.size + 1) % 2 === 0 &&
+            (this.mokka.nodes.size + 1) / 2 === this.mokka.vote.peerReplies.get(null).size
+          )
+        ) {
           this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
         }
       }

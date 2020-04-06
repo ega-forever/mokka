@@ -219,6 +219,7 @@ const startMokka = async (node, server) => {
   const mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${node.port}/${node.publicKey}`,
     customVoteRule,
+    electionTimeout: 300,
     heartbeat: 200,
     logger,
     privateKey: node.secretKey,

@@ -37,16 +37,12 @@ class HeartbeatController {
         continue;
       }
 
-      if (this.mokka.state === states.CANDIDATE) {
-        await new Promise((res) => this.mokka.once(EventTypes.STATE, res));
-        this.setNextBeat(this.timeout() * (3 +  Math.round(2 * Math.random()) )); // should be 3-5x
-        continue;
-      }
-
       if (this.mokka.state === states.FOLLOWER) {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
+        this.setNextBeat(this.mokka.electionTimeout * (3 + Math.round(2 * Math.random()))); // should be 3-5x
+        continue;
       }
 
       for (const node of this.mokka.nodes.values()) {

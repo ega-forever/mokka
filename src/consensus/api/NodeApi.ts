@@ -115,7 +115,7 @@ class NodeApi {
         res();
       };
 
-      const timeoutId = setTimeout(timeoutHandler, this.mokka.heartbeatCtrl.timeout());
+      const timeoutId = setTimeout(timeoutHandler, this.mokka.electionTimeout);
 
       const emitHandler = () => {
         clearTimeout(timeoutId);
