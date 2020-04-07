@@ -25,7 +25,7 @@ class VoteApi {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
-    if (this.mokka.state === NodeStates.CANDIDATE || this.mokka.term >= packet.term) {
+    if (this.mokka.term >= packet.term) {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
@@ -35,11 +35,14 @@ class VoteApi {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
+    // todo check if valid peer
+
     const vote = new VoteModel(packet.data.nonce);
     this.mokka.setVote(vote);
 
-    this.mokka.setState(this.mokka.state, this.mokka.term, this.mokka.leaderPublicKey);
+    this.mokka.setState(NodeStates.FOLLOWER, packet.term, null);
 
+    const startBuildVote = Date.now();
     const voteSigs = buildVote(
       packet.data.nonce,
       packet.publicKey,
@@ -48,6 +51,7 @@ class VoteApi {
       this.mokka.privateKey,
       this.mokka.publicKey
     );
+    this.mokka.logger.trace(`built vote in ${Date.now() - startBuildVote}`);
 
     return this.messageApi.packet(messageTypes.VOTED, {
       combinedKeys: [...voteSigs.keys()],
@@ -60,8 +64,6 @@ class VoteApi {
     if (states.CANDIDATE !== this.mokka.state) {
       return null;
     }
-
-    // todo
 
     if (!packet.data) {
       if (this.mokka.vote.peerReplies.has(null)) {
@@ -98,6 +100,7 @@ class VoteApi {
 
       const signature = packet.data.signatures[packet.data.combinedKeys.indexOf(multiPublicKey)];
 
+      const startPartialSigVerificationTime = Date.now();
       const isValid = utils.partialSigVerify( // todo use current share
         this.mokka.term,
         this.mokka.vote.nonce,
@@ -109,6 +112,7 @@ class VoteApi {
         packet.publicKey,
         nonceData.nonceIsNegated
       );
+      this.mokka.logger.trace(`verified partial signature in ${Date.now() - startPartialSigVerificationTime}`);
 
       if (!isValid) { // todo should be treated as error
         this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided bad signature`);
@@ -132,11 +136,16 @@ class VoteApi {
 
     const nonceCombined = this.mokka.vote.publicKeyToNonce.get(multiKeyInQuorum).nonce;
 
+    const fullSigBuildTime = Date.now();
     const fullSignature = utils.partialSigCombine(
       nonceCombined,
       Array.from(this.mokka.vote.peerReplies.get(multiKeyInQuorum).values())
     );
+    this.mokka.logger.trace(`full signature has been built in ${Date.now() - fullSigBuildTime}`);
+
+    const fullSigVerificationTime = Date.now();
     const isValid = utils.verify(this.mokka.term, this.mokka.vote.nonce, multiKeyInQuorum, fullSignature);
+    this.mokka.logger.trace(`full signature has been verified in ${Date.now() - fullSigVerificationTime}`);
 
     if (!isValid) {
       this.mokka.setState(states.FOLLOWER, this.mokka.term, null);

@@ -5,6 +5,7 @@ import EventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import {Mokka} from '../main';
+import NodeStates from '../constants/NodeStates';
 
 class HeartbeatController {
 
@@ -41,7 +42,8 @@ class HeartbeatController {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
-        this.setNextBeat(this.mokka.electionTimeout * (3 + Math.round(2 * Math.random()))); // should be 3-5x
+        if (this.mokka.state === NodeStates.FOLLOWER)
+          this.setNextBeat(this.mokka.electionTimeout * (3 + Math.round(2 * Math.random())));
         continue;
       }
 

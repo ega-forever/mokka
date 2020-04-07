@@ -27,7 +27,7 @@ class NodeApi {
     if (this.mokka.publicKey === publicKey)
       return;
 
-    const node = new NodeModel(null, multiaddr, states.CHILD);
+    const node = new NodeModel(null, multiaddr, states.STOPPED);
 
     node.write = this.mokka.write.bind(this.mokka);
     node.once('end', () => this.leave(node.publicKey));
@@ -126,13 +126,12 @@ class NodeApi {
     });
 
     if (this.mokka.state === states.CANDIDATE) {
-      this.mokka.logger.info('change state back to FOLLOWER');
       this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
     }
   }
 
   public async pingFromLeader(packet: PacketModel | null): Promise<PacketModel | null> {
-    if (packet && this.mokka.state !== states.LEADER && packet.state === states.LEADER) {
+    if (packet && packet.state === states.LEADER) {
       this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeatCtrl.timeout());
     }
     return null;
