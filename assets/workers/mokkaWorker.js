@@ -1,5 +1,5 @@
 const window = self;
-const path = window.location.pathname.split(/(\/*.{0,}\/workers\/)/gm, 2).find(el=>el.length);
+const path = window.location.pathname.split(/(\/*.{0,}\/workers\/)/gm, 2).find(el => el.length);
 importScripts(`${path}web_bundle.js`);
 
 class BrowserMokka extends Mokka.Mokka {
@@ -8,7 +8,7 @@ class BrowserMokka extends Mokka.Mokka {
   }
 
   async write (address, packet) {
-    self.postMessage({type: 'packet', args: [address, packet]});
+    self.postMessage({type: 'packet', args: [address, packet], id: Date.now()});
   }
 
   connect () {
@@ -22,10 +22,9 @@ const init = (index, keys, settings) => {
 
   window.mokka = new BrowserMokka({
     address: `${index}/${keys[index].publicKey}`,
-    electionMax: settings.election.max,
-    electionMin: settings.election.min,
-    gossipHeartbeat: settings.gossip.heartbeat,
     heartbeat: settings.heartbeat,
+    electionTimeout: settings.electionTimeout,
+    proofExpiration: settings.sessionExpiration, // todo move to settings
     logger: {
       info: (text) => console.log(`worker#${index} ${text}`),
       error: (text) => console.log(`worker#${index} ${text}`),
@@ -40,13 +39,9 @@ const init = (index, keys, settings) => {
 
   window.mokka.connect();
 
-  window.mokka.on('error', (err) => {
-    console.log(err);
-  });
-
-  window.mokka.on('log', async (index)=>{
-    const info = await window.mokka.getDb().getState().getInfo();
-    self.postMessage({type: 'info', args: [info]});
+  window.mokka.on('state', () => {
+    window.mokka.logger.info(`state: ${window.mokka.state}`);
+    self.postMessage({type: 'info', args: [{state: window.mokka.state, term: window.mokka.term}]});
   });
 
 };
@@ -60,24 +55,8 @@ self.addEventListener('message', async function (e) {
     return init(...e.data.args);
 
   if (e.data.type === 'packet') {
-    const packet = new TextDecoder("utf-8").decode(new Uint8Array(e.data.args[0]));
-    window.mokka.emit('data', packet);
-  }
-
-  if (e.data.type === 'push') {
-    window.mokka.logApi.push(...e.data.args);
-    const info = await window.mokka.getDb().getState().getInfo();
-    self.postMessage({type: 'info', args: [info]});
-  }
-
-  if (e.data.type === 'info'){
-    const info = await window.mokka.getDb().getState().getInfo();
-    self.postMessage({type: 'info', args: [info]});
-  }
-
-  if(e.data.type === 'get_log'){
-    const log = await window.mokka.getDb().getEntry().get(e.data.args[0]);
-    self.postMessage({type: 'log', args: [log]});
+    const packet = new TextDecoder('utf-8').decode(new Uint8Array(e.data.args[0]));
+    window.mokka.emitPacket(packet);
   }
 
 }, false);
