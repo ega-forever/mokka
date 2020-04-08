@@ -1,11 +1,10 @@
 import {MessageApi} from '../api/MessageApi';
 import {NodeApi} from '../api/NodeApi';
 import eventTypes from '../constants/EventTypes';
-import EventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
-import {Mokka} from '../main';
 import NodeStates from '../constants/NodeStates';
+import {Mokka} from '../main';
 
 class HeartbeatController {
 
@@ -62,7 +61,7 @@ class HeartbeatController {
   }
 
   public timeout() {
-    return this.mokka.heartbeat + Math.round(this.mokka.heartbeat * Math.random() * 0.5);
+    return this.mokka.heartbeat * 1.5 + Math.round(this.mokka.heartbeat * Math.random());
   }
 
 }
