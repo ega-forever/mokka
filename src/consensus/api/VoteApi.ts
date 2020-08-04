@@ -172,6 +172,11 @@ class VoteApi {
     if (this.mokka.proof !== packet.proof) {
 
       const splitPoof = packet.proof.split(':');
+
+      if (!this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.has(splitPoof[1])) {
+        return null;
+      }
+
       const isValid = utils.verify(packet.term, parseInt(splitPoof[0], 10), splitPoof[1], splitPoof[2]);
 
       if (!isValid) {

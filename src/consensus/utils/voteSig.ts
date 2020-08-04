@@ -9,8 +9,6 @@ export const buildVote = (
   ownPublicKey: string
 ) => {
 
-  // assert(Date.now() - payload.nonce < this.voteSession.expireIn); // todo move to vote
-
   const multiPublicKeyToSigMap: Map<string, string> = new Map<string, string>();
 
   for (const publicKeyCombined of multiPublicKeyToPublicKeyHashAndPairsMap.keys()) {

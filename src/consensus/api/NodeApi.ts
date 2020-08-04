@@ -79,7 +79,7 @@ class NodeApi {
         term: this.mokka.term
       };
 
-      if (publicKey === this.mokka.publicKey) { // todo should work for all possible nonces
+      if (publicKey === this.mokka.publicKey) {
         const selfVote = buildVote(
           votePayload.nonce,
           votePayload.publicKey,

@@ -42,7 +42,7 @@ class HeartbeatController {
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
         if (this.mokka.state === NodeStates.FOLLOWER)
-          this.setNextBeat(this.mokka.electionTimeout * (3 + Math.round(2 * Math.random())));
+          this.setNextBeat(Math.round(this.mokka.electionTimeout * (1 + 2 * Math.random())));
         continue;
       }
 
