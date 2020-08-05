@@ -72,40 +72,39 @@ class NodeApi {
 
     this.mokka.setVote(vote);
 
-    for (const publicKey of [...this.mokka.nodes.keys(), this.mokka.publicKey]) {
-      const votePayload = {
-        nonce: startTime,
-        publicKey,
-        term: this.mokka.term
-      };
+    const votePayload = {
+      nonce: startTime,
+      publicKey: this.mokka.publicKey,
+      term: this.mokka.term
+    };
 
-      if (publicKey === this.mokka.publicKey) {
-        const selfVote = buildVote(
-          votePayload.nonce,
-          votePayload.publicKey,
-          votePayload.term,
-          this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap,
-          this.mokka.privateKey,
-          this.mokka.publicKey
-        );
-        for (const multiPublicKey of vote.publicKeyToNonce.keys()) {
-          if (!vote.peerReplies.has(multiPublicKey)) {
-            vote.peerReplies.set(multiPublicKey, new Map<string, string>());
-          }
-
-          if (selfVote.has(multiPublicKey)) {
-            vote.peerReplies.get(multiPublicKey).set(publicKey, selfVote.get(multiPublicKey));
-          }
-        }
-        continue;
+    const selfVote = buildVote(
+      votePayload.nonce,
+      votePayload.publicKey,
+      votePayload.term,
+      this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap,
+      this.mokka.privateKey,
+      this.mokka.publicKey
+    );
+    for (const multiPublicKey of vote.publicKeyToNonce.keys()) {
+      if (!vote.peerReplies.has(multiPublicKey)) {
+        vote.peerReplies.set(multiPublicKey, new Map<string, string>());
       }
 
-      const packet = this.messageApi.packet(messageTypes.VOTE, {
-        nonce: startTime
-      });
-
-      await this.messageApi.message(packet, publicKey);
+      if (selfVote.has(multiPublicKey)) {
+        vote.peerReplies.get(multiPublicKey).set(this.mokka.publicKey, selfVote.get(multiPublicKey));
+      }
     }
+
+    const packet = this.messageApi.packet(messageTypes.VOTE, {
+      nonce: startTime
+    });
+
+    await Promise.all(
+      [...this.mokka.nodes.values()].map((node) =>
+        this.messageApi.message(packet, node.publicKey)
+      ));
+
     this.mokka.vote.peerReplies.set(null, new Map<string, string>());
 
     await new Promise((res) => {
@@ -132,6 +131,7 @@ class NodeApi {
 
   public async pingFromLeader(packet: PacketModel | null): Promise<PacketModel | null> {
     if (packet && packet.state === states.LEADER) {
+      this.mokka.logger.trace(`accepted ack`);
       this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeatCtrl.timeout());
     }
     return null;

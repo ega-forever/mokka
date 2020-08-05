@@ -1,17 +1,23 @@
+import assert from 'assert';
 import Promise from 'bluebird';
-import {expect} from 'chai';
 import {fork} from 'child_process';
 import crypto from 'crypto';
+import * as _ from 'lodash';
 import * as path from 'path';
 import NodeStates from '../../../consensus/constants/NodeStates';
 
-export function testSuite(ctx: any = {}, nodesCount: number = 0) {
+export function testSuite(ctx: any = {}, nodesCount: number = 0, mokkaType: string = 'TCP') {
 
   beforeEach(async () => {
 
     const mokkas: any = [];
 
     ctx.keys = [];
+    ctx.settings = {
+      electionTimeout: 1000,
+      heartbeat: 300,
+      proofExpiration: 5000
+    };
 
     for (let i = 0; i < nodesCount; i++) {
       const node = crypto.createECDH('secp256k1');
@@ -28,8 +34,13 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
       });
     }
 
+    const mokkaTypes = {
+      RPC: 'MokkaRPCWorker.ts',
+      TCP: 'MokkaTCPWorker.ts'
+    };
+
     for (let index = 0; index < ctx.keys.length; index++) {
-      const instance = fork(path.join(__dirname, '../workers/MokkaWorker.ts'), [], {
+      const instance = fork(path.join(__dirname, `../workers/${mokkaTypes[mokkaType]}`), [], {
         execArgv: ['-r', 'ts-node/register']
       });
       mokkas.push(instance);
@@ -37,7 +48,8 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
         args: [
           {
             index,
-            keys: ctx.keys
+            keys: ctx.keys,
+            settings: ctx.settings
           }
         ],
         type: 'init'
@@ -77,11 +89,11 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
 
           if (msg.args[0] === NodeStates.LEADER) {
             leaderPubKey = msg.args[1];
-            return res(msg.args[0]);
+            return res({state: msg.args[0], publicKey: leaderPubKey, term: msg.args[2], index: msg.args[3]});
           }
 
           if (msg.args[1] === leaderPubKey) {
-            return res(msg.args[0]);
+            return res({state: msg.args[0], publicKey: leaderPubKey, term: msg.args[2], index: msg.args[3]});
           }
 
         });
@@ -89,8 +101,36 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0) {
       promises.push(promise);
     }
 
-    const result = await Promise.all(promises);
-    expect(result.filter((r) => r === NodeStates.LEADER).length === 1);
+    // tslint:disable-next-line:max-line-length
+    const result: Array<{ state: number, publicKey: string, term: number, index: number }> = await Promise.all(promises);
+    const leaderEventMap = result.reduce((acc, val) => {
+
+      if (val.state !== NodeStates.LEADER) {
+        return acc;
+      }
+
+      if (!acc.has(val.term)) {
+        acc.set(val.term, []);
+      }
+
+      acc.get(val.term).push(val.index);
+      return acc;
+    }, new Map<number, number[]>());
+
+    const maxTerm = _.max([...leaderEventMap.keys()]);
+    const leaderIndex = leaderEventMap.get(maxTerm)[0];
+    const timer = Date.now();
+
+    await new Promise((res) => {
+      ctx.mokkas[leaderIndex].on('message', (msg: any) => {
+        if (msg.type !== 'state' || (msg.args[0] === NodeStates.LEADER))
+          return;
+
+        res();
+      });
+    });
+
+    assert(Math.round(ctx.settings.proofExpiration / 2) <= Date.now() - timer);
   });
 
 }

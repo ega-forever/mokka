@@ -159,13 +159,15 @@ class VoteApi {
 
   public async validateAndApplyLeader(packet: PacketModel): Promise<PacketModel | null> {
 
-    if (
-      packet.term < this.mokka.term ||
-      !packet.proof || (
-      this.mokka.proof &&
+    if (packet.term < this.mokka.term || !packet.proof) {
+      this.mokka.logger.trace('no proof supplied or term is outdated');
+      return null;
+    }
+
+    if (this.mokka.proof &&
       this.mokka.proof === packet.proof &&
-      this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now())
-    ) {
+      this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now()) {
+      this.mokka.logger.trace('proof expired');
       return null;
     }
 
@@ -173,13 +175,17 @@ class VoteApi {
 
       const splitPoof = packet.proof.split(':');
 
-      if (!this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.has(splitPoof[1])) {
-        return null;
-      }
+      /* todo in case of 3 nodes, there will be only 2 pairs,
+        and in this pairs there is a chance, that there won't be current node*/
+      /*      if (!this.mokka.multiPublicKeyToPublicKeyHashAndPairsMap.has(splitPoof[1])) {
+              this.mokka.logger.trace(`multikey for proof not found`);
+              return null;
+            }*/
 
       const isValid = utils.verify(packet.term, parseInt(splitPoof[0], 10), splitPoof[1], splitPoof[2]);
 
       if (!isValid) {
+        this.mokka.logger.trace(`wrong proof supplied`);
         return null;
       }
 

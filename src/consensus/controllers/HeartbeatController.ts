@@ -41,22 +41,27 @@ class HeartbeatController {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
-        if (this.mokka.state === NodeStates.FOLLOWER)
+        if (this.mokka.state === NodeStates.FOLLOWER) {
           this.setNextBeat(Math.round(this.mokka.electionTimeout * (1 + 2 * Math.random())));
-        continue;
+          continue;
+        }
       }
 
-      for (const node of this.mokka.nodes.values()) {
-        const packet = this.messageApi.packet(messageTypes.ACK);
-        await this.messageApi.message(packet, node.publicKey);
-      }
+      this.mokka.logger.trace(`sending ack signal to peers`);
+      const packet = this.messageApi.packet(messageTypes.ACK);
+      await Promise.all(
+        [...this.mokka.nodes.values()].map((node) =>
+          this.messageApi.message(packet, node.publicKey)
+        ));
 
+      this.mokka.logger.trace(`sent ack signal to peers`);
       this.adjustmentDate = Date.now() + this.mokka.heartbeat;
     }
 
   }
 
   public setNextBeat(duration: number) {
+    this.mokka.logger.trace(`set next beat in ${duration}`);
     this.adjustmentDate = Date.now() + duration;
   }
 

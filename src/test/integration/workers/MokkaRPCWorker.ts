@@ -3,21 +3,23 @@ import * as _ from 'lodash';
 import eventTypes from '../../../consensus/constants/EventTypes';
 import states from '../../../consensus/constants/NodeStates';
 import {PacketModel} from '../../../consensus/models/PacketModel';
-import TCPMokka from '../../../implementation/TCP';
+import RPCMokka from '../../../implementation/RPC';
 
-let mokka: TCPMokka = null;
+let mokka: RPCMokka = null;
 
 const init = (params: any) => {
 
-  const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
+  const logger = bunyan.createLogger({name: `mokka.logger[${params.index}]`, level: 10});
 
-  mokka = new TCPMokka({
-    address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].publicKey}`,
-    electionTimeout: 300,
-    heartbeat: 100,
+  logger.trace(`params ${JSON.stringify(params)}`);
+
+  mokka = new RPCMokka({
+    address: `http://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].publicKey}`,
+    electionTimeout: params.settings.electionTimeout,
+    heartbeat: params.settings.heartbeat,
     logger,
     privateKey: params.keys[params.index].privateKey,
-    proofExpiration: 5000,
+    proofExpiration: params.settings.proofExpiration,
     reqMiddleware: async (packet: PacketModel) => {
       return packet;
     }
@@ -25,11 +27,15 @@ const init = (params: any) => {
 
   for (let i = 0; i < params.keys.length; i++)
     if (i !== params.index)
-      mokka.nodeApi.join(`tcp://127.0.0.1:${2000 + i}/${params.keys[i].publicKey}`);
+      mokka.nodeApi.join(`http://127.0.0.1:${2000 + i}/${params.keys[i].publicKey}`);
 
   mokka.on(eventTypes.STATE, () => {
     logger.info(`index #${params.index} state ${_.invert(states)[mokka.state]} with term ${mokka.term}`);
-    process.send({type: 'state', args: [mokka.state, mokka.leaderPublicKey]});
+    process.send({type: 'state', args: [mokka.state, mokka.leaderPublicKey, mokka.term, params.index]});
+  });
+
+  mokka.on(eventTypes.HEARTBEAT_TIMEOUT, () => {
+    logger.info(`index #${params.index} timeout with term ${mokka.term}`);
   });
 
 };
