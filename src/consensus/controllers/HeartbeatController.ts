@@ -37,7 +37,11 @@ class HeartbeatController {
         continue;
       }
 
-      if (this.mokka.state === states.FOLLOWER) {
+      if (
+        this.mokka.state === states.FOLLOWER ||
+        // tslint:disable-next-line:max-line-length
+        (this.mokka.state === states.LEADER && this.mokka.getProofMintedTime() + this.mokka.proofExpiration < Date.now())
+      ) {
         this.mokka.emit(eventTypes.HEARTBEAT_TIMEOUT);
         this.mokka.setState(states.FOLLOWER, this.mokka.term, null, null);
         await this.nodeApi.promote();
@@ -48,11 +52,11 @@ class HeartbeatController {
       }
 
       this.mokka.logger.trace(`sending ack signal to peers`);
-      const packet = this.messageApi.packet(messageTypes.ACK);
       await Promise.all(
-        [...this.mokka.nodes.values()].map((node) =>
-          this.messageApi.message(packet, node.publicKey)
-        ));
+        [...this.mokka.nodes.values()].map((node) => {
+          const packet = this.messageApi.packet(messageTypes.ACK);
+          return this.messageApi.message(packet, node.publicKey);
+        }));
 
       this.mokka.logger.trace(`sent ack signal to peers`);
       this.adjustmentDate = Date.now() + this.mokka.heartbeat;

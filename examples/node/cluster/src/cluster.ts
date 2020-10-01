@@ -8,6 +8,7 @@ import * as readline from 'readline';
 
 class ExtendedPacketModel extends PacketModel {
   public logIndex: number;
+  public log: { key: string, value: string, index: number };
 }
 
 // our generated key pairs
@@ -26,7 +27,7 @@ const keys = [
   }
 ];
 
-const logsStorage: Array<{ key: string, value: string }> = [];
+const logsStorage: Array<{ key: string, value: string, index: number }> = [];
 const knownPeersState = new Map<string, number>();
 
 const startPort = 2000;
@@ -41,20 +42,21 @@ const initMokka = async () => {
     uris.push(`tcp://127.0.0.1:${startPort + index1}/${keys[index1].publicKey}`);
   }
 
-  const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
+  const logger = bunyan.createLogger({name: 'mokka.logger', level: 10});
 
   const reqMiddleware = async (packet: ExtendedPacketModel): Promise<ExtendedPacketModel> => {
     knownPeersState.set(packet.publicKey, packet.logIndex);
+    const lastIndex = logsStorage[logsStorage.length - 1] ? logsStorage[logsStorage.length - 1].index : 0;
 
     if (
       packet.state === NodeStates.LEADER &&
       packet.type === MessageTypes.ACK &&
-      packet.data &&
-      packet.logIndex > logsStorage.length) {
-      logsStorage.push(packet.data);
+      packet.log &&
+      packet.log.index > lastIndex) {
+      logsStorage.push(packet.log);
       // @ts-ignore
       const replyPacket: ExtendedPacketModel = mokka.messageApi.packet(16);
-      replyPacket.logIndex = logsStorage.length;
+      replyPacket.logIndex = packet.log.index;
       await mokka.messageApi.message(replyPacket, packet.publicKey);
     }
 
@@ -62,18 +64,19 @@ const initMokka = async () => {
   };
 
   const resMiddleware = async (packet: ExtendedPacketModel, peerPublicKey: string): Promise<ExtendedPacketModel> => {
-    packet.logIndex = logsStorage.length;
+    packet.logIndex = logsStorage.length ? logsStorage[logsStorage.length - 1].index : 0;
     const peerIndex = knownPeersState.get(peerPublicKey) || 0;
 
-    if (mokka.state === NodeStates.LEADER && packet.type === MessageTypes.ACK && peerIndex < logsStorage.length) {
-      packet.data = logsStorage[peerIndex];
+    if (mokka.state === NodeStates.LEADER && packet.type === MessageTypes.ACK && peerIndex < packet.logIndex) {
+      packet.log = logsStorage.find((item) => item.index === peerIndex + 1);
     }
 
     return packet;
   };
 
   const customVoteRule = async (packet: ExtendedPacketModel): Promise<boolean> => {
-    return packet.logIndex >= logsStorage.length;
+    const lastIndex = logsStorage[logsStorage.length - 1] ? logsStorage[logsStorage.length - 1].index : 0;
+    return packet.logIndex >= lastIndex;
   };
 
   const mokka = new TCPMokka({
@@ -83,7 +86,7 @@ const initMokka = async () => {
     heartbeat: 200,
     logger,
     privateKey: keys[index].secretKey,
-    proofExpiration: 60000,
+    proofExpiration: 20000,
     reqMiddleware,
     resMiddleware
   });
@@ -131,13 +134,13 @@ const addLog = async (mokka, key, value) => {
     return console.log('i am not a leader');
   }
 
-  logsStorage.push({key, value});
+  logsStorage.push({key, value, index: logsStorage.length + 1});
 };
 
 // get log by index
 
 const getLog = async (mokka, index) => {
-  mokka.logger.info(logsStorage[index]);
+  mokka.logger.info(logsStorage.find((item) => item.index === index));
 };
 
 // get info of current instance
