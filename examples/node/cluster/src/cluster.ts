@@ -42,7 +42,7 @@ const initMokka = async () => {
     uris.push(`tcp://127.0.0.1:${startPort + index1}/${keys[index1].publicKey}`);
   }
 
-  const logger = bunyan.createLogger({name: 'mokka.logger', level: 10});
+  const logger = bunyan.createLogger({name: 'mokka.logger', level: 30});
 
   const reqMiddleware = async (packet: ExtendedPacketModel): Promise<ExtendedPacketModel> => {
     knownPeersState.set(packet.publicKey, packet.logIndex);
@@ -140,7 +140,7 @@ const addLog = async (mokka, key, value) => {
 // get log by index
 
 const getLog = async (mokka, index) => {
-  mokka.logger.info(logsStorage.find((item) => item.index === index));
+  mokka.logger.info(logsStorage.find((item) => item.index === parseInt(index, 10)));
 };
 
 // get info of current instance
