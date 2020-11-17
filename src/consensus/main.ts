@@ -64,8 +64,6 @@ class Mokka extends NodeModel {
   }
 
   public connect(): void {
-    this.calculateMultiPublicKeys();
-
     this.heartbeatCtrl.setNextBeat(this.heartbeatCtrl.timeout());
     this.heartbeatCtrl.watchBeat();
   }

@@ -29,7 +29,6 @@ class NodeModel extends EventEmitter {
   public readonly privateKey: string;
   public readonly publicKey: string;
   public readonly nodes: Map<string, NodeModel> = new Map<string, NodeModel>();
-  public readonly multiPublicKeyToPublicKeyHashAndPairsMap: Map<string, { hash: string, pairs: string[] }>;
 
   private _state: number;
   private _term: number = 0;
@@ -48,7 +47,6 @@ class NodeModel extends EventEmitter {
     this.publicKey = multiaddr.match(/\w+$/).toString();
     this._state = state;
     this.nodeAddress = multiaddr.split(/\w+$/)[0].replace(/\/$/, '');
-    this.multiPublicKeyToPublicKeyHashAndPairsMap = new Map<string, { hash: string, pairs: string[] }>();
   }
 
   public majority() {
@@ -75,26 +73,6 @@ class NodeModel extends EventEmitter {
 
   public getProofMintedTime(): number {
     return this._proofMintedTime;
-  }
-
-  public calculateMultiPublicKeys() {
-    const sortedPublicKeys = [...this.nodes.keys(), this.publicKey].sort();
-
-    const combinations = getCombinations(sortedPublicKeys, this.majority());
-    for (const combination of combinations) {
-
-      if (!combination.includes(this.publicKey)) {
-        continue;
-      }
-
-      const pubKeyHash = utils.buildMultiPublicKeyHash(combination);
-      const pubKeyCombined = utils.buildMultiPublicKey(combination);
-
-      this.multiPublicKeyToPublicKeyHashAndPairsMap.set(pubKeyCombined, {
-        hash: pubKeyHash,
-        pairs: combination
-      });
-    }
   }
 
 }
