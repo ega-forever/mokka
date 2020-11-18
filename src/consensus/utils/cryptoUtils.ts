@@ -65,8 +65,6 @@ export const partialSignatureVerify = (
   ai: string,
   e: string): boolean => {
 
-  console.log('my sig: ', partialSignature);
-
   const spG = ec.g.mul(partialSignature);
   const check = pubKeyToPoint(Buffer.from(publicKeyX, 'hex')).mul(e).mul(ai);
 
