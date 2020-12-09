@@ -72,7 +72,7 @@ class NodeApi {
       }
 
       const packet = this.messageApi.packet(messageTypes.VOTE, {
-        xCoef: share[0],
+        nonce,
         y: share[1]
       });
 

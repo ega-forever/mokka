@@ -14,9 +14,7 @@ export const split = (
   needed: number,
   publicKeys: string[]) => {
 
-  const secret = crypto.createHash('sha256')
-    .update(`${term}:${nonce}:${candidatePublicKey}`)
-    .digest('hex');
+  const secret = buildSecret(term, nonce, candidatePublicKey);
 
   const coef = [new BN(secret, 16)];
   const shares = [];
@@ -32,9 +30,7 @@ export const split = (
   for (const publicKey of publicKeys) {
     let y = coef[0];
 
-    const xCoefHex = crypto.createHash('sha256')
-      .update(`${term}:${nonce}:${publicKey}:${candidatePublicKey}`)
-      .digest('hex');
+    const xCoefHex = buildXCoef(term, nonce, publicKey, candidatePublicKey);
 
     let xCoef = new BN(xCoefHex, 16);
     const xC = new BN(
@@ -59,7 +55,7 @@ export const split = (
   Gives the multiplicative inverse of k mod prime.
   In other words (k * modInverse(k)) % prime = 1 for all prime > k >= 1
 */
-export const modInverse = (k) => {
+const modInverse = (k) => {
   k = k.mod(prime);
   const isKNeg = k.lt(new BN(0));
   let r = new BN(prime).egcd(new BN(isKNeg ? k.mul(new BN(-1)) : k)).b;
@@ -71,7 +67,7 @@ export const modInverse = (k) => {
   return r.add(prime).mod(prime);
 };
 
-export const join = (shares: Array<{x: string, y: string}>): string => {
+export const join = (shares: Array<{ x: string, y: string }>): string => {
   let accum = new BN(0);
   for (let k = 0; k < shares.length; k++) {
     /* Multiply the numerator across the top and denominators across the bottom to do Lagrange's interpolation
@@ -122,6 +118,23 @@ export const buildMultiSig = (signatures: string[]) => {
   return multiSignature.mod(prime).toString('hex');
 };
 
+export const buildXCoef = (
+  term: number,
+  nonce: number,
+  publicKey: string,
+  candidatePublicKey: string
+): string => {
+  return crypto.createHash('sha256')
+    .update(`${term}:${nonce}:${publicKey}:${candidatePublicKey}`)
+    .digest('hex');
+};
+
+export const buildSecret = (term: number, nonce: number, candidatePublicKey: string): string => {
+  return crypto.createHash('sha256')
+    .update(`${term}:${nonce}:${candidatePublicKey}`)
+    .digest('hex');
+};
+
 export const validateMultiSig = (
   multisig: string,
   ownerPublicKey,
@@ -137,10 +150,7 @@ export const validateMultiSig = (
   let xCes = null;
 
   for (const publicKey of publicKeys) {
-    const xCoefHex = crypto.createHash('sha256')
-      .update(`${term}:${nonce}:${publicKey}:${ownerPublicKey}`)
-      .digest('hex');
-
+    const xCoefHex = buildXCoef(term, nonce, publicKey, ownerPublicKey);
     const xC = pubKeyToPoint(Buffer.from(publicKey, 'hex')).mul(new BN(xCoefHex, 16));
     xCes = xCes ? xCes.add(xC) : xC;
   }

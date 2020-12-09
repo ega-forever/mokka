@@ -40,7 +40,9 @@ class VoteApi {
     this.mokka.setState(NodeStates.FOLLOWER, packet.term, null);
 
     const startBuildVote = Date.now();
-    const signature = esss.sign(this.mokka.privateKey, packet.data.xCoef);
+
+    const xCoef = esss.buildXCoef(this.mokka.term, packet.data.nonce, this.mokka.publicKey, packet.publicKey);
+    const signature = esss.sign(this.mokka.privateKey, xCoef);
 
     this.mokka.logger.trace(`built vote in ${Date.now() - startBuildVote}`);
 
@@ -66,10 +68,7 @@ class VoteApi {
       return null;
     }
 
-    const r = crypto.createHash('sha256')
-      .update(`${this.mokka.term}:${this.mokka.vote.nonce}:${this.mokka.publicKey}`)
-      .digest('hex');
-
+    const r = esss.buildSecret(this.mokka.term, this.mokka.vote.nonce, this.mokka.publicKey);
     const secret = esss.join([...this.mokka.vote.peerReplies.values()]);
 
     if (secret !== r) {
