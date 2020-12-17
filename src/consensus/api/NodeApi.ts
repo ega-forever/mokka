@@ -6,7 +6,7 @@ import {Mokka} from '../main';
 import {NodeModel} from '../models/NodeModel';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
-import * as esss from '../utils/esssUtils';
+import * as cryptoUtils from '../utils/cryptoUtils';
 import {MessageApi} from './MessageApi';
 
 class NodeApi {
@@ -51,29 +51,20 @@ class NodeApi {
     }
 
     const nonce = Date.now();
-    const vote = new VoteModel(nonce);
+    const secret = cryptoUtils.buildSecret(this.mokka.term + 1, this.mokka.majority(), nonce, this.mokka.publicKey);
+    const vote = new VoteModel(nonce, secret);
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
-    const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-
-    const sh = esss.split(this.mokka.publicKey, this.mokka.term, nonce, this.mokka.majority(), sortedPublicKeys);
-
-    for (let i = 0; i < sh.length; i++) {
-      const share = sh[i];
-      const publicKey = sortedPublicKeys[i];
+    for (const publicKey of [...this.mokka.nodes.keys(), this.mokka.publicKey]) {
 
       if (publicKey === this.mokka.publicKey) {
-        const signature = esss.sign(this.mokka.privateKey, share[0]);
-        vote.peerReplies.set(publicKey, {
-          x: signature,
-          y: share[1]
-        });
+        const signature = cryptoUtils.sign(this.mokka.privateKey, secret);
+        vote.peerReplies.set(publicKey, signature);
         continue;
       }
 
       const packet = this.messageApi.packet(messageTypes.VOTE, {
-        nonce,
-        y: share[1]
+        nonce
       });
 
       await this.messageApi.message(packet, publicKey);

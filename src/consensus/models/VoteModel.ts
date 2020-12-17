@@ -1,16 +1,19 @@
 class VoteModel {
 
   private readonly messageNonce: number;
-  private readonly replies: Map<string, {x: string, y: string}>;
+  private readonly messageSecret: string;
+  private readonly replies: Map<string, string>;
 
   constructor(
-    messageNonce: number
+    messageNonce: number,
+    secret: string
   ) {
     this.messageNonce = messageNonce;
-    this.replies = new Map<string, {x: string, y: string}>();
+    this.replies = new Map<string, string>();
+    this.messageSecret = secret;
   }
 
-  get peerReplies(): Map<string, {x: string, y: string}> {
+  get peerReplies(): Map<string, string> {
     return this.replies;
   }
 
@@ -18,6 +21,9 @@ class VoteModel {
     return this.messageNonce;
   }
 
+  get secret(): string {
+    return this.messageSecret;
+  }
 }
 
 export {VoteModel};

@@ -5,7 +5,7 @@ import NodeStates from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
-import * as esss from '../utils/esssUtils';
+import * as cryptoUtils from '../utils/cryptoUtils';
 import {MessageApi} from './MessageApi';
 
 class VoteApi {
@@ -34,22 +34,18 @@ class VoteApi {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
-    const vote = new VoteModel(packet.data.nonce);
+    const secret = cryptoUtils.buildSecret(packet.term, this.mokka.majority(), packet.data.nonce, packet.publicKey);
+    const vote = new VoteModel(packet.data.nonce, secret);
     this.mokka.setVote(vote);
 
     this.mokka.setState(NodeStates.FOLLOWER, packet.term, null);
 
     const startBuildVote = Date.now();
 
-    const xCoef = esss.buildXCoef(this.mokka.term, packet.data.nonce, this.mokka.publicKey, packet.publicKey);
-    const signature = esss.sign(this.mokka.privateKey, xCoef);
-
+    const signature = cryptoUtils.sign(this.mokka.privateKey, secret);
     this.mokka.logger.trace(`built vote in ${Date.now() - startBuildVote}`);
 
-    return this.messageApi.packet(messageTypes.VOTED, {
-      x: signature,
-      y: packet.data.y
-    });
+    return this.messageApi.packet(messageTypes.VOTED, {signature});
   }
 
   public async voted(packet: PacketModel): Promise<null> {
@@ -62,30 +58,38 @@ class VoteApi {
       return null;
     }
 
-    this.mokka.vote.peerReplies.set(packet.publicKey, packet.data);
+    this.mokka.vote.peerReplies.set(packet.publicKey, packet.data.signature);
 
     if (!this.mokka.quorum(this.mokka.vote.peerReplies.size)) {
       return null;
     }
 
-    const r = esss.buildSecret(this.mokka.term, this.mokka.vote.nonce, this.mokka.publicKey);
-    const secret = esss.join([...this.mokka.vote.peerReplies.values()]);
+    const isSignatureValid = cryptoUtils.partialValidateMultiSig(
+      this.mokka.vote.secret,
+      packet.publicKey,
+      packet.data.signature
+    );
 
-    if (secret !== r) {
+    if (!isSignatureValid) {
       this.mokka.logger.trace('[voted] one of peers provided wrong signature');
       this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
       return null;
     }
 
     const fullSigBuildTime = Date.now();
-    const partialSignatures = [...this.mokka.vote.peerReplies.values()].map((i) => i.x);
-    const fullSignature = esss.buildMultiSig(partialSignatures);
-    this.mokka.logger.trace(`full signature has been built in ${Date.now() - fullSigBuildTime}`);
 
     const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-    const indexes = [...this.mokka.vote.peerReplies.keys()].map((publicKey) => sortedPublicKeys.indexOf(publicKey));
 
-    const compacted = `${indexes.join('x')}x${this.mokka.vote.nonce}x${fullSignature}`;
+    const usedPublicKeys = [...this.mokka.vote.peerReplies.keys()];
+    const usedPublicKeysIndexes = sortedPublicKeys
+      .map((publicKey, index) => [publicKey, index])
+      .filter((item) => usedPublicKeys.includes(item[0] as string))
+      .map((item) => item[1]) as number[];
+
+    const fullSignature = cryptoUtils.buildMultiSignature([...this.mokka.vote.peerReplies.values()]);
+    this.mokka.logger.trace(`full signature has been built in ${Date.now() - fullSigBuildTime}`);
+
+    const compacted = `${usedPublicKeysIndexes.join('x')}x${this.mokka.vote.nonce}x${fullSignature}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.nonce);
     return null;
   }
@@ -109,10 +113,25 @@ class VoteApi {
       const nonce = parseInt(splitPoof[splitPoof.length - 2], 10);
       const signature = splitPoof[splitPoof.length - 1];
       const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-      const involvedPublicKeys = splitPoof.slice(0, splitPoof.length - 2)
-        .map((i) => sortedPublicKeys[parseInt(i, 10)]);
+      const involvedPublicKeysIndexes = splitPoof.slice(0, splitPoof.length - 2).map((s) => parseInt(s, 10));
+      const notInvolvedPublicKeys = new Array(sortedPublicKeys.length)
+        .fill(0)
+        .map((_, i) => i)
+        .filter((i) => !involvedPublicKeysIndexes.includes(i))
+        .map((i) => sortedPublicKeys[i]);
+      const secret = cryptoUtils.buildSecret(
+        packet.term,
+        this.mokka.majority(),
+        nonce,
+        packet.publicKey
+      );
 
-      const isValid = esss.validateMultiSig(signature, packet.publicKey, involvedPublicKeys, this.mokka.term, nonce);
+      const isValid = cryptoUtils.validateMultiSig(
+        signature,
+        secret,
+        sortedPublicKeys,
+        notInvolvedPublicKeys
+      );
 
       if (!isValid) {
         this.mokka.logger.trace(`wrong proof supplied`);
