@@ -54,27 +54,23 @@ class NodeApi {
     }
 
     const nonce = Date.now();
-    const vote = new VoteModel(nonce);
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
+
     const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-    const combinations = getCombinations(sortedPublicKeys, this.mokka.majority());
+    const sharedPublicKeyFull = utils.buildSharedPublicKeyX(sortedPublicKeys, this.mokka.term, nonce, this.mokka.publicKey);
+    const vote = new VoteModel(nonce, sharedPublicKeyFull);
+
+    const combinations = getCombinations(sortedPublicKeys, this.mokka.majority()); // todo move calculation on peer add/remove
 
     for (const combination of combinations) {
 
-      const as = combination.map((X) => utils.buildCoefficientA(this.mokka.term, X));
-      const sharedPublicKeyX = utils.buildSharedPublicKeyX(combination, as);
-      const mHash = crypto.createHash('sha256')
-        .update(`${nonce}:${this.mokka.term}`)
-        .digest('hex');
-      const e = utils.buildE(sharedPublicKeyX, mHash);
+      if (!combination.includes(this.mokka.publicKey)) {
+        continue;
+      }
 
-      vote.publicKeyToNonce.set(sharedPublicKeyX, {
-        as,
-        combination,
-        e,
-        nonce
-      });
+      const sharedPublicKeyPartial = utils.buildSharedPublicKeyX(combination, this.mokka.term, nonce, sharedPublicKeyFull);
+      vote.publicKeyToCombinationMap.set(sharedPublicKeyPartial, combination);
     }
 
     this.mokka.setVote(vote);
@@ -86,33 +82,22 @@ class NodeApi {
     };
 
     const selfVote = buildVote(
-      votePayload.nonce,
-      votePayload.term,
-      votePayload.publicKey,
-      combinations,
-      this.mokka.privateKey,
-      this.mokka.publicKey
+        votePayload.nonce,
+        votePayload.term,
+        sharedPublicKeyFull,
+        this.mokka.privateKey
     );
-    for (const multiPublicKey of vote.publicKeyToNonce.keys()) {
-      if (!vote.peerReplies.has(multiPublicKey)) {
-        vote.peerReplies.set(multiPublicKey, new Map<string, string>());
-      }
 
-      if (selfVote.has(multiPublicKey)) {
-        vote.peerReplies.get(multiPublicKey).set(this.mokka.publicKey, selfVote.get(multiPublicKey));
-      }
-    }
+    vote.repliesPublicKeyToSignatureMap.set(this.mokka.publicKey, selfVote)
 
     const packet = this.messageApi.packet(messageTypes.VOTE, {
       nonce
     });
 
     await Promise.all(
-      [...this.mokka.nodes.values()].map((node) =>
-        this.messageApi.message(packet, node.publicKey)
-      ));
-
-    this.mokka.vote.peerReplies.set(null, new Map<string, string>());
+        [...this.mokka.nodes.values()].map((node) =>
+            this.messageApi.message(packet, node.publicKey)
+        ));
 
     await new Promise((res) => {
 

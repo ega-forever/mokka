@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import NodeStates from '../constants/NodeStates';
@@ -6,9 +5,9 @@ import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
-import {getCombinations} from '../utils/utils';
 import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
+import {getCombinations} from "../utils/utils";
 
 class VoteApi {
 
@@ -36,124 +35,89 @@ class VoteApi {
     if (!isCustomRulePassed) {
       return this.messageApi.packet(messageTypes.VOTED);
     }
+    const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
+    const sharedPublicKeyFull = utils.buildSharedPublicKeyX(
+      sortedPublicKeys,
+      packet.term,
+      packet.data.nonce,
+      packet.publicKey
+    );
 
-    const vote = new VoteModel(packet.data.nonce);
+    const vote = new VoteModel(packet.data.nonce, sharedPublicKeyFull);
     this.mokka.setVote(vote);
 
     this.mokka.setState(NodeStates.FOLLOWER, packet.term, null);
 
     const startBuildVote = Date.now();
-    const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-    const combinations = getCombinations(sortedPublicKeys, this.mokka.majority());
-    const voteSharedPublicKeyXSignaturesMap = buildVote(
+    const signature = buildVote(
       packet.data.nonce,
       packet.term,
-      packet.publicKey,
-      combinations,
-      this.mokka.privateKey,
-      this.mokka.publicKey
+      sharedPublicKeyFull,
+      this.mokka.privateKey
     );
     this.mokka.logger.trace(`built vote in ${Date.now() - startBuildVote}`);
 
     return this.messageApi.packet(messageTypes.VOTED, {
-      sharedPublicKeyXs: [...voteSharedPublicKeyXSignaturesMap.keys()],
-      signatures: [...voteSharedPublicKeyXSignaturesMap.values()]
+      signature
     });
   }
 
   public async voted(packet: PacketModel): Promise<null> {
 
-    if (states.CANDIDATE !== this.mokka.state) {
+    if (states.CANDIDATE !== this.mokka.state || !packet.data) {
       return null;
     }
 
-    if (!packet.data) {
-      if (this.mokka.vote.peerReplies.has(null)) {
-        this.mokka.vote.peerReplies.get(null).set(packet.publicKey, null);
-        if (
-          this.mokka.quorum(this.mokka.vote.peerReplies.get(null).size) ||
-          ((this.mokka.nodes.size + 1) % 2 === 0 &&
-            (this.mokka.nodes.size + 1) / 2 === this.mokka.vote.peerReplies.get(null).size
-          )
-        ) {
-          this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
-        }
-      }
-
-      return null;
-    }
-
-    const isAnyUnknownKey = packet.data.sharedPublicKeyXs.find((key) =>
-      ![...this.mokka.vote.publicKeyToNonce.keys()].includes(key)
+    const startPartialSigVerificationTime = Date.now();
+    const isValidPartialSignature = utils.partialSignatureVerify(
+      packet.data.signature,
+      packet.publicKey,
+      this.mokka.vote.nonce,
+      this.mokka.term,
+      this.mokka.vote.sharedPublicKey
     );
+    this.mokka.logger.trace(`verified partial signature in ${Date.now() - startPartialSigVerificationTime}`);
 
-    if (isAnyUnknownKey) {
-      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided unknown combinedPublicKey`);
+    if (!isValidPartialSignature) {
+      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided bad signature`);
       return null;
     }
 
-    for (const multiPublicKey of this.mokka.vote.publicKeyToNonce.keys()) {
-
-      if (!packet.data.sharedPublicKeyXs.includes(multiPublicKey)) {
-        continue;
-      }
-
-      const nonceData = this.mokka.vote.publicKeyToNonce.get(multiPublicKey);
-      const partialSignature = packet.data.signatures[packet.data.sharedPublicKeyXs.indexOf(multiPublicKey)];
-      const aIndex = nonceData.combination.indexOf(packet.publicKey);
-      const a = nonceData.as[aIndex];
-
-      const startPartialSigVerificationTime = Date.now();
-      const isValid = utils.partialSignatureVerify(
-        partialSignature,
-        packet.publicKey,
-        a,
-        nonceData.e
-      );
-      this.mokka.logger.trace(`verified partial signature in ${Date.now() - startPartialSigVerificationTime}`);
-
-      if (!isValid) {
-        this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided bad signature`);
-        return null;
-      }
-
-      if (!this.mokka.vote.peerReplies.has(multiPublicKey)) {
-        this.mokka.vote.peerReplies.set(multiPublicKey, new Map<string, string>());
-      }
-
-      this.mokka.vote.peerReplies.get(multiPublicKey).set(packet.publicKey, partialSignature);
+    if (!this.mokka.vote.repliesPublicKeyToSignatureMap.has(packet.publicKey)) {
+      this.mokka.vote.repliesPublicKeyToSignatureMap.set(packet.publicKey, packet.data.signature);
     }
 
-    const multiKeyInQuorum = Array.from(this.mokka.vote.peerReplies.keys())
-      .find((multiKey) =>
-        this.mokka.vote.peerReplies.has(multiKey) && this.mokka.quorum(this.mokka.vote.peerReplies.get(multiKey).size)
-      );
+    const isQuorumReached = this.mokka.quorum(this.mokka.vote.repliesPublicKeyToSignatureMap.size);
 
-    if (!multiKeyInQuorum)
+    if (!isQuorumReached)
       return null;
-
-    const nonceData = this.mokka.vote.publicKeyToNonce.get(multiKeyInQuorum);
 
     const fullSigBuildTime = Date.now();
     const fullSignature = utils.buildSharedSignature(
-      Array.from(this.mokka.vote.peerReplies.get(multiKeyInQuorum).values())
+      Array.from(this.mokka.vote.repliesPublicKeyToSignatureMap.values())
     );
     this.mokka.logger.trace(`full signature has been built in ${Date.now() - fullSigBuildTime}`);
+
+    const participantPublicKeys = Array.from(this.mokka.vote.repliesPublicKeyToSignatureMap.keys()).sort();
+    const sharedPublicKeyXs = Array.from(this.mokka.vote.publicKeyToCombinationMap.keys());
+
+    const sharedPublicKeyX = sharedPublicKeyXs.find(sharedPublicKey =>
+      this.mokka.vote.publicKeyToCombinationMap.get(sharedPublicKey).join('') === participantPublicKeys.join(''));
 
     const fullSigVerificationTime = Date.now();
     const isValid = utils.verify(
       fullSignature,
-      multiKeyInQuorum,
-      nonceData.e
+      sharedPublicKeyX
     );
     this.mokka.logger.trace(`full signature has been verified in ${Date.now() - fullSigVerificationTime}`);
 
     if (!isValid) {
+      this.mokka.logger.trace('invalid full signature');
       this.mokka.setState(states.FOLLOWER, this.mokka.term, null);
       return;
     }
 
-    const compacted = `${this.mokka.vote.nonce}:${multiKeyInQuorum}:${fullSignature}`;
+    const compacted = `${this.mokka.vote.nonce}:${sharedPublicKeyX}:${fullSignature}`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.nonce);
     return null;
   }
@@ -173,13 +137,38 @@ class VoteApi {
     }
 
     if (this.mokka.proof !== packet.proof) {
+      const startProofValidation = Date.now();
       const splitPoof = packet.proof.split(':');
-      const mHash = crypto.createHash('sha256')
-        .update(`${splitPoof[0]}:${packet.term}`)
-        .digest('hex');
-      const e = utils.buildE(splitPoof[1], mHash);
 
-      const isValid = utils.verify(splitPoof[2], splitPoof[1], e);
+      const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
+
+      const sharedPublicKeyFull = utils.buildSharedPublicKeyX(
+        sortedPublicKeys,
+        this.mokka.term,
+        splitPoof[0],
+        packet.publicKey
+      );
+
+      const combinations = getCombinations(sortedPublicKeys, this.mokka.majority()); // todo move calculation on peer add/remove
+      const publicKeyToCombinationMap = new Map<string, string[]>();
+
+
+      for (const combination of combinations) {
+        const sharedPublicKeyPartial = utils.buildSharedPublicKeyX(
+          combination,
+          packet.term,
+          splitPoof[0],
+          sharedPublicKeyFull
+        );
+        publicKeyToCombinationMap.set(sharedPublicKeyPartial, combination);
+      }
+
+      if (!publicKeyToCombinationMap.has(splitPoof[1])) {
+        this.mokka.logger.trace(`proof contains unknown public key`);
+        return null;
+      }
+
+      const isValid = utils.verify(splitPoof[2], splitPoof[1]);
 
       if (!isValid) {
         this.mokka.logger.trace(`wrong proof supplied`);
@@ -192,6 +181,7 @@ class VoteApi {
         packet.publicKey,
         packet.proof,
         parseInt(splitPoof[0], 10));
+      this.mokka.logger.trace(`proof validated in ${Date.now() - startProofValidation}`)
       return packet;
     }
 

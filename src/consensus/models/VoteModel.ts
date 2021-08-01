@@ -1,27 +1,18 @@
 class VoteModel {
 
-  private readonly messageNonce: number;
-  private readonly publicKeyToNonceMap: Map<string, { as: string[], combination: string[], e: string, nonce: number }>;
-  private readonly replies: Map<string, Map<string, string>>;
+  public readonly nonce: number;
+  public readonly sharedPublicKey: string;
+  public readonly publicKeyToCombinationMap: Map<string, string[]>;
+  public readonly repliesPublicKeyToSignatureMap: Map<string, string>;
 
   constructor(
-    messageNonce: number
+    nonce: number,
+    sharedPublicKey: string
   ) {
-    this.messageNonce = messageNonce;
-    this.publicKeyToNonceMap = new Map<string, { as: string[], combination: string[], e: string, nonce: number }>();
-    this.replies = new Map<string, Map<string, string>>();
-  }
-
-  get publicKeyToNonce(): Map<string, { as: string[], combination: string[], e: string, nonce: number }> {
-    return this.publicKeyToNonceMap;
-  }
-
-  get peerReplies(): Map<string, Map<string, string>> {
-    return this.replies;
-  }
-
-  get nonce(): number {
-    return this.messageNonce;
+    this.nonce = nonce;
+    this.sharedPublicKey = sharedPublicKey;
+    this.publicKeyToCombinationMap = new Map<string, string[]>();
+    this.repliesPublicKeyToSignatureMap = new Map<string, string>();
   }
 
 }

@@ -11,49 +11,50 @@ uniqueness to each session, as "m" may be the same. However, in our flow, "m" sh
 as it includes the term and timestamp of current vote session. As a result, the R nonce has been reduced.
  */
 
-/* e = HASH(X || mHash)  */
-export const buildE = (sharedPublicKeyX: string, mHash: string): string => {
+/* e = HASH(X || candidatePublicKey || )  */
+export const buildE = (sharedPublicKeyX: string, leaderPublicKey: string, mHash: string): string => {
   return crypto.createHash('sha256')
     .update(
       Buffer.concat([
         Buffer.from(sharedPublicKeyX, 'hex'),
+        Buffer.from(leaderPublicKey, 'hex'),
         Buffer.from(mHash.padEnd(32, '0'))
-      ]))
-    .digest('hex');
-};
-
-/* a1 = HASH(term || X1) */
-export const buildCoefficientA = (term: number, publicKeyX: string) => {
-  return crypto.createHash('sha256')
-    .update(
-      Buffer.concat([
-        Buffer.from(term.toString()),
-        Buffer.from(publicKeyX, 'hex')
       ]))
     .digest('hex');
 };
 
 /* X = X1 * a1 + X2 * a2 + ..Xn * an */
 export const buildSharedPublicKeyX = (
-  publicKeyXs: string[],
-  as: string[]
+  publicKeys: string[],
+  term: number,
+  nonce: number|string,
+  publicKey: string
 ) => {
+
+  const mHash = crypto.createHash('sha256')
+    .update(`${nonce}:${term}:${publicKey}`)
+    .digest('hex');
+
   let X = null;
-  for (let i = 0; i < publicKeyXs.length; i++) {
-    const XI = pubKeyToPoint(Buffer.from(publicKeyXs[i], 'hex')).mul(new BN(as[i], 16));
+  for (let i = 0; i < publicKeys.length; i++) {
+    const XI = pubKeyToPoint(Buffer.from(publicKeys[i], 'hex')).mul(new BN(mHash, 16));
     X = X === null ? XI : X.add(XI);
   }
 
   return pointToPublicKey(X).toString('hex');
 };
 
+
 /* let s1 = (R1 + k1 * a1 * e) mod n, where n - is a curve param
 * the "n" has been introduced to reduce the signature size
 * */
-export const buildPartialSignature = (privateKeyK: string, ai: string, e: string): string => {
+export const buildPartialSignature = (privateKeyK: string, term: number, nonce: number, sharedPublicKeyFull: string): string => {
+  const mHash = crypto.createHash('sha256')
+    .update(`${nonce}:${term}:${sharedPublicKeyFull}`)
+    .digest('hex');
+
   return new BN(privateKeyK, 16)
-    .mul(new BN(ai, 16))
-    .mul(new BN(e, 16))
+    .mul(new BN(mHash, 16))
     .mod(ec.n)
     .toString(16);
 };
@@ -61,13 +62,17 @@ export const buildPartialSignature = (privateKeyK: string, ai: string, e: string
 /* let s1 * G = k1 * a1 * e * G = k1 * a1 * G * e = X1 * a1 * e */
 export const partialSignatureVerify = (
   partialSignature: string,
-  publicKeyX: string,
-  ai: string,
-  e: string): boolean => {
+  publicKey: string,
+  nonce: number,
+  term: number,
+  sharedPublicKeyX: string): boolean => {
+
+  const mHash = crypto.createHash('sha256')
+    .update(`${nonce}:${term}:${sharedPublicKeyX}`)
+    .digest('hex');
 
   const spG = ec.g.mul(partialSignature);
-  const check = pubKeyToPoint(Buffer.from(publicKeyX, 'hex')).mul(e).mul(ai);
-
+  const check = pubKeyToPoint(Buffer.from(publicKey, 'hex')).mul(mHash);
   return pointToPublicKey(spG).toString('hex') === pointToPublicKey(check).toString('hex');
 };
 
@@ -83,9 +88,12 @@ export const buildSharedSignature = (partialSignatures: string[]): string => {
 };
 
 /* sG = X * e */
-export const verify = (signature: string, sharedPublicKeyX: string, e: string): boolean => {
+export const verify = (
+  signature: string,
+  sharedPublicKeyX: string): boolean => {
+
   const sg = ec.g.mul(signature);
-  const check = pubKeyToPoint(Buffer.from(sharedPublicKeyX, 'hex')).mul(e);
+  const check = pubKeyToPoint(Buffer.from(sharedPublicKeyX, 'hex'));
   return pointToPublicKey(sg).toString('hex') === pointToPublicKey(check).toString('hex');
 };
 

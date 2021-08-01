@@ -1,8 +1,6 @@
 import {EventEmitter} from 'events';
 import eventTypes from '../constants/EventTypes';
 import NodeStates from '../constants/NodeStates';
-import * as utils from '../utils/cryptoUtils';
-import {getCombinations} from '../utils/utils';
 
 class NodeModel extends EventEmitter {
 
