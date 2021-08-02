@@ -5,23 +5,35 @@ import {ec as EC} from 'elliptic';
 
 const ec = new EC('secp256k1');
 
-/*
-In original flow, the R nonce also takes place. The R has been introduced to bring
-uniqueness to each session, as "m" may be the same. However, in our flow, "m" should always be different,
-as it includes the term and timestamp of current vote session. As a result, the R nonce has been reduced.
- */
+export const buildPublicKeysRoot = (
+  publicKeys: string[]
+) => {
 
-/* e = HASH(X || candidatePublicKey || )  */
-export const buildE = (sharedPublicKeyX: string, leaderPublicKey: string, mHash: string): string => {
-  return crypto.createHash('sha256')
-    .update(
-      Buffer.concat([
-        Buffer.from(sharedPublicKeyX, 'hex'),
-        Buffer.from(leaderPublicKey, 'hex'),
-        Buffer.from(mHash.padEnd(32, '0'))
-      ]))
-    .digest('hex');
+  let X = null;
+  for (let i = 0; i < publicKeys.length; i++) {
+    const XI = pubKeyToPoint(Buffer.from(publicKeys[i], 'hex'));
+    X = X === null ? XI : X.add(XI);
+  }
+
+  return pointToPublicKey(X).toString('hex');
 };
+
+
+export const buildPublicKeysRootForTerm = (
+  publicKeysRoot: string,
+  term: number,
+  nonce: number|string,
+  candidatePublicKey: string
+) => {
+
+  const mHash = crypto.createHash('sha256')
+    .update(`${nonce}:${term}:${candidatePublicKey}`)
+    .digest('hex');
+
+  let X = pubKeyToPoint(Buffer.from(publicKeysRoot, 'hex')).mul(new BN(mHash, 16));
+  return pointToPublicKey(X).toString('hex');
+};
+
 
 /* X = X1 * a1 + X2 * a2 + ..Xn * an */
 export const buildSharedPublicKeyX = (

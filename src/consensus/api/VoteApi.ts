@@ -5,9 +5,7 @@ import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
-import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
-import {getCombinations} from "../utils/utils";
 
 class VoteApi {
 
@@ -35,25 +33,24 @@ class VoteApi {
     if (!isCustomRulePassed) {
       return this.messageApi.packet(messageTypes.VOTED);
     }
-    const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-    const sharedPublicKeyFull = utils.buildSharedPublicKeyX(
-      sortedPublicKeys,
+    const publicKeysRootForTerm = utils.buildPublicKeysRootForTerm(
+      this.mokka.publicKeysRoot,
       packet.term,
       packet.data.nonce,
       packet.publicKey
     );
 
-    const vote = new VoteModel(packet.data.nonce, sharedPublicKeyFull);
+    const vote = new VoteModel(packet.data.nonce, publicKeysRootForTerm);
     this.mokka.setVote(vote);
 
     this.mokka.setState(NodeStates.FOLLOWER, packet.term, null);
 
     const startBuildVote = Date.now();
-    const signature = buildVote(
-      packet.data.nonce,
+    const signature = utils.buildPartialSignature(
+      this.mokka.privateKey,
       packet.term,
-      sharedPublicKeyFull,
-      this.mokka.privateKey
+      packet.data.nonce,
+      publicKeysRootForTerm
     );
     this.mokka.logger.trace(`built vote in ${Date.now() - startBuildVote}`);
 
@@ -74,7 +71,7 @@ class VoteApi {
       packet.publicKey,
       this.mokka.vote.nonce,
       this.mokka.term,
-      this.mokka.vote.sharedPublicKey
+      this.mokka.vote.publicKeysRootForTerm
     );
     this.mokka.logger.trace(`verified partial signature in ${Date.now() - startPartialSigVerificationTime}`);
 
@@ -140,25 +137,21 @@ class VoteApi {
       const startProofValidation = Date.now();
       const splitPoof = packet.proof.split(':');
 
-      const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-
-      const sharedPublicKeyFull = utils.buildSharedPublicKeyX(
-        sortedPublicKeys,
+      const publicKeysRootForTerm = utils.buildPublicKeysRootForTerm(
+        this.mokka.publicKeysRoot,
         this.mokka.term,
         splitPoof[0],
         packet.publicKey
       );
 
-      const combinations = getCombinations(sortedPublicKeys, this.mokka.majority()); // todo move calculation on peer add/remove
       const publicKeyToCombinationMap = new Map<string, string[]>();
 
-
-      for (const combination of combinations) {
+      for (const combination of this.mokka.publicKeysCombinationsInQuorum) {
         const sharedPublicKeyPartial = utils.buildSharedPublicKeyX(
           combination,
           packet.term,
           splitPoof[0],
-          sharedPublicKeyFull
+          publicKeysRootForTerm
         );
         publicKeyToCombinationMap.set(sharedPublicKeyPartial, combination);
       }

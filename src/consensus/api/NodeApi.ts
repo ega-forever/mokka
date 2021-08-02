@@ -9,7 +9,6 @@ import {PacketModel} from '../models/PacketModel';
 import {VoteModel} from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
 import {getCombinations} from '../utils/utils';
-import {buildVote} from '../utils/voteSig';
 import {MessageApi} from './MessageApi';
 
 class NodeApi {
@@ -35,8 +34,16 @@ class NodeApi {
     node.once('end', () => this.leave(node.publicKey));
 
     this.mokka.nodes.set(publicKey, node);
+
+    this.buildPublicKeysRootAndCombinations();
     this.mokka.emit(eventTypes.NODE_JOIN, node);
     return node;
+  }
+
+  public buildPublicKeysRootAndCombinations() {
+    const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
+    this.mokka.publicKeysRoot = utils.buildPublicKeysRoot(sortedPublicKeys);
+    this.mokka.publicKeysCombinationsInQuorum = getCombinations(sortedPublicKeys, this.mokka.majority());
   }
 
   public leave(publicKey: string): void {
@@ -44,6 +51,7 @@ class NodeApi {
     const node = this.mokka.nodes.get(publicKey);
     this.mokka.nodes.delete(publicKey);
 
+    this.buildPublicKeysRootAndCombinations();
     this.mokka.emit(eventTypes.NODE_LEAVE, node);
   }
 
@@ -56,20 +64,25 @@ class NodeApi {
     const nonce = Date.now();
     this.mokka.setState(states.CANDIDATE, this.mokka.term + 1, '');
 
+    const publicKeysRootForTerm = utils.buildPublicKeysRootForTerm(
+      this.mokka.publicKeysRoot,
+      this.mokka.term,
+      nonce,
+      this.mokka.publicKey);
+    const vote = new VoteModel(nonce, publicKeysRootForTerm);
 
-    const sortedPublicKeys = [...this.mokka.nodes.keys(), this.mokka.publicKey].sort();
-    const sharedPublicKeyFull = utils.buildSharedPublicKeyX(sortedPublicKeys, this.mokka.term, nonce, this.mokka.publicKey);
-    const vote = new VoteModel(nonce, sharedPublicKeyFull);
-
-    const combinations = getCombinations(sortedPublicKeys, this.mokka.majority()); // todo move calculation on peer add/remove
-
-    for (const combination of combinations) {
+    for (const combination of this.mokka.publicKeysCombinationsInQuorum) {
 
       if (!combination.includes(this.mokka.publicKey)) {
         continue;
       }
 
-      const sharedPublicKeyPartial = utils.buildSharedPublicKeyX(combination, this.mokka.term, nonce, sharedPublicKeyFull);
+      const sharedPublicKeyPartial = utils.buildSharedPublicKeyX(
+        combination,
+        this.mokka.term,
+        nonce,
+        publicKeysRootForTerm
+      );
       vote.publicKeyToCombinationMap.set(sharedPublicKeyPartial, combination);
     }
 
@@ -81,23 +94,23 @@ class NodeApi {
       term: this.mokka.term
     };
 
-    const selfVote = buildVote(
-        votePayload.nonce,
-        votePayload.term,
-        sharedPublicKeyFull,
-        this.mokka.privateKey
+    const selfVoteSignature = utils.buildPartialSignature(
+      this.mokka.privateKey,
+      votePayload.term,
+      votePayload.nonce,
+      publicKeysRootForTerm
     );
 
-    vote.repliesPublicKeyToSignatureMap.set(this.mokka.publicKey, selfVote)
+    vote.repliesPublicKeyToSignatureMap.set(this.mokka.publicKey, selfVoteSignature)
 
     const packet = this.messageApi.packet(messageTypes.VOTE, {
       nonce
     });
 
     await Promise.all(
-        [...this.mokka.nodes.values()].map((node) =>
-            this.messageApi.message(packet, node.publicKey)
-        ));
+      [...this.mokka.nodes.values()].map((node) =>
+        this.messageApi.message(packet, node.publicKey)
+      ));
 
     await new Promise((res) => {
 
