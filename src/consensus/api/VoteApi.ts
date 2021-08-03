@@ -1,11 +1,11 @@
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import NodeStates from '../constants/NodeStates';
-import {Mokka} from '../main';
-import {PacketModel} from '../models/PacketModel';
-import {VoteModel} from '../models/VoteModel';
+import { Mokka } from '../main';
+import { PacketModel } from '../models/PacketModel';
+import { VoteModel } from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
-import {MessageApi} from './MessageApi';
+import { MessageApi } from './MessageApi';
 
 class VoteApi {
 
@@ -20,7 +20,7 @@ class VoteApi {
   public async vote(packet: PacketModel): Promise<PacketModel> {
 
     if (!packet.data.nonce) {
-      this.mokka.logger.trace(`[vote] peer ${packet.publicKey} hasn't provided a nonce`);
+      this.mokka.logger.trace(`[vote] peer ${ packet.publicKey } hasn't provided a nonce`);
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
@@ -52,7 +52,7 @@ class VoteApi {
       packet.data.nonce,
       publicKeysRootForTerm
     );
-    this.mokka.logger.trace(`built vote in ${Date.now() - startBuildVote}`);
+    this.mokka.logger.trace(`built vote in ${ Date.now() - startBuildVote }`);
 
     return this.messageApi.packet(messageTypes.VOTED, {
       signature
@@ -73,10 +73,10 @@ class VoteApi {
       this.mokka.term,
       this.mokka.vote.publicKeysRootForTerm
     );
-    this.mokka.logger.trace(`verified partial signature in ${Date.now() - startPartialSigVerificationTime}`);
+    this.mokka.logger.trace(`verified partial signature in ${ Date.now() - startPartialSigVerificationTime }`);
 
     if (!isValidPartialSignature) {
-      this.mokka.logger.trace(`[voted] peer ${packet.publicKey} provided bad signature`);
+      this.mokka.logger.trace(`[voted] peer ${ packet.publicKey } provided bad signature`);
       return null;
     }
 
@@ -93,12 +93,12 @@ class VoteApi {
     const fullSignature = utils.buildSharedSignature(
       Array.from(this.mokka.vote.repliesPublicKeyToSignatureMap.values())
     );
-    this.mokka.logger.trace(`full signature has been built in ${Date.now() - fullSigBuildTime}`);
+    this.mokka.logger.trace(`full signature has been built in ${ Date.now() - fullSigBuildTime }`);
 
     const participantPublicKeys = Array.from(this.mokka.vote.repliesPublicKeyToSignatureMap.keys()).sort();
     const sharedPublicKeyXs = Array.from(this.mokka.vote.publicKeyToCombinationMap.keys());
 
-    const sharedPublicKeyX = sharedPublicKeyXs.find(sharedPublicKey =>
+    const sharedPublicKeyX = sharedPublicKeyXs.find((sharedPublicKey) =>
       this.mokka.vote.publicKeyToCombinationMap.get(sharedPublicKey).join('') === participantPublicKeys.join(''));
 
     const fullSigVerificationTime = Date.now();
@@ -106,7 +106,7 @@ class VoteApi {
       fullSignature,
       sharedPublicKeyX
     );
-    this.mokka.logger.trace(`full signature has been verified in ${Date.now() - fullSigVerificationTime}`);
+    this.mokka.logger.trace(`full signature has been verified in ${ Date.now() - fullSigVerificationTime }`);
 
     if (!isValid) {
       this.mokka.logger.trace('invalid full signature');
@@ -114,7 +114,7 @@ class VoteApi {
       return;
     }
 
-    const compacted = `${this.mokka.vote.nonce}:${sharedPublicKeyX}:${fullSignature}`;
+    const compacted = `${ this.mokka.vote.nonce }:${ sharedPublicKeyX }:${ fullSignature }`;
     this.mokka.setState(states.LEADER, this.mokka.term, this.mokka.publicKey, compacted, this.mokka.vote.nonce);
     return null;
   }
@@ -144,19 +144,16 @@ class VoteApi {
         packet.publicKey
       );
 
-      const publicKeyToCombinationMap = new Map<string, string[]>();
-
-      for (const combination of this.mokka.publicKeysCombinationsInQuorum) {
-        const sharedPublicKeyPartial = utils.buildSharedPublicKeyX(
+      const isProofSharedPublicKeyXKnown = !!this.mokka.publicKeysCombinationsInQuorum.find((combination) => {
+        return utils.buildSharedPublicKeyX(
           combination,
           packet.term,
           proofNonce,
           publicKeysRootForTerm
-        );
-        publicKeyToCombinationMap.set(sharedPublicKeyPartial, combination);
-      }
+        ) === proofSharedPublicKeyX;
+      });
 
-      if (!publicKeyToCombinationMap.has(proofSharedPublicKeyX)) {
+      if (!isProofSharedPublicKeyXKnown) {
         this.mokka.logger.trace(`proof contains unknown public key`);
         return null;
       }
@@ -174,7 +171,7 @@ class VoteApi {
         packet.publicKey,
         packet.proof,
         parseInt(proofNonce, 10));
-      this.mokka.logger.trace(`proof validated in ${Date.now() - startProofValidation}`)
+      this.mokka.logger.trace(`proof validated in ${ Date.now() - startProofValidation }`);
       return packet;
     }
 
@@ -183,4 +180,4 @@ class VoteApi {
 
 }
 
-export {VoteApi};
+export { VoteApi };

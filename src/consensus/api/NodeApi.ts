@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import eventTypes from '../constants/EventTypes';
 import EventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
@@ -101,7 +100,7 @@ class NodeApi {
       publicKeysRootForTerm
     );
 
-    vote.repliesPublicKeyToSignatureMap.set(this.mokka.publicKey, selfVoteSignature)
+    vote.repliesPublicKeyToSignatureMap.set(this.mokka.publicKey, selfVoteSignature);
 
     const packet = this.messageApi.packet(messageTypes.VOTE, {
       nonce

@@ -1,7 +1,7 @@
 // tslint:disable:variable-name
 import BN from 'bn.js';
 import * as crypto from 'crypto';
-import {ec as EC} from 'elliptic';
+import { ec as EC } from 'elliptic';
 
 const ec = new EC('secp256k1');
 
@@ -10,59 +10,61 @@ export const buildPublicKeysRoot = (
 ) => {
 
   let X = null;
-  for (let i = 0; i < publicKeys.length; i++) {
-    const XI = pubKeyToPoint(Buffer.from(publicKeys[i], 'hex'));
+  for (const publicKey of publicKeys) {
+    const XI = pubKeyToPoint(Buffer.from(publicKey, 'hex'));
     X = X === null ? XI : X.add(XI);
   }
 
   return pointToPublicKey(X).toString('hex');
 };
 
-
 export const buildPublicKeysRootForTerm = (
   publicKeysRoot: string,
   term: number,
-  nonce: number|string,
+  nonce: number | string,
   candidatePublicKey: string
 ) => {
 
   const mHash = crypto.createHash('sha256')
-    .update(`${nonce}:${term}:${candidatePublicKey}`)
+    .update(`${ nonce }:${ term }:${ candidatePublicKey }`)
     .digest('hex');
 
-  let X = pubKeyToPoint(Buffer.from(publicKeysRoot, 'hex')).mul(new BN(mHash, 16));
+  const X = pubKeyToPoint(Buffer.from(publicKeysRoot, 'hex')).mul(new BN(mHash, 16));
   return pointToPublicKey(X).toString('hex');
 };
-
 
 /* X = X1 * a1 + X2 * a2 + ..Xn * an */
 export const buildSharedPublicKeyX = (
   publicKeys: string[],
   term: number,
-  nonce: number|string,
+  nonce: number | string,
   publicKeysRootForTerm: string
 ) => {
 
   const mHash = crypto.createHash('sha256')
-    .update(`${nonce}:${term}:${publicKeysRootForTerm}`)
+    .update(`${ nonce }:${ term }:${ publicKeysRootForTerm }`)
     .digest('hex');
 
   let X = null;
-  for (let i = 0; i < publicKeys.length; i++) {
-    const XI = pubKeyToPoint(Buffer.from(publicKeys[i], 'hex')).mul(new BN(mHash, 16));
+  for (const publicKey of publicKeys) {
+    const XI = pubKeyToPoint(Buffer.from(publicKey, 'hex')).mul(new BN(mHash, 16));
     X = X === null ? XI : X.add(XI);
   }
 
   return pointToPublicKey(X).toString('hex');
 };
 
-
 /* let s1 = (R1 + k1 * a1 * e) mod n, where n - is a curve param
 * the "n" has been introduced to reduce the signature size
 * */
-export const buildPartialSignature = (privateKeyK: string, term: number, nonce: number, sharedPublicKeyFull: string): string => {
+export const buildPartialSignature = (
+  privateKeyK: string,
+  term: number,
+  nonce: number,
+  sharedPublicKeyFull: string
+): string => {
   const mHash = crypto.createHash('sha256')
-    .update(`${nonce}:${term}:${sharedPublicKeyFull}`)
+    .update(`${ nonce }:${ term }:${ sharedPublicKeyFull }`)
     .digest('hex');
 
   return new BN(privateKeyK, 16)
@@ -80,7 +82,7 @@ export const partialSignatureVerify = (
   sharedPublicKeyX: string): boolean => {
 
   const mHash = crypto.createHash('sha256')
-    .update(`${nonce}:${term}:${sharedPublicKeyX}`)
+    .update(`${ nonce }:${ term }:${ sharedPublicKeyX }`)
     .digest('hex');
 
   const spG = ec.g.mul(partialSignature);
