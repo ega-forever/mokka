@@ -135,12 +135,12 @@ class VoteApi {
 
     if (this.mokka.proof !== packet.proof) {
       const startProofValidation = Date.now();
-      const splitPoof = packet.proof.split(':');
+      const [proofNonce, proofSharedPublicKeyX, proofSignature] = packet.proof.split(':');
 
       const publicKeysRootForTerm = utils.buildPublicKeysRootForTerm(
         this.mokka.publicKeysRoot,
         this.mokka.term,
-        splitPoof[0],
+        proofNonce,
         packet.publicKey
       );
 
@@ -150,18 +150,18 @@ class VoteApi {
         const sharedPublicKeyPartial = utils.buildSharedPublicKeyX(
           combination,
           packet.term,
-          splitPoof[0],
+          proofNonce,
           publicKeysRootForTerm
         );
         publicKeyToCombinationMap.set(sharedPublicKeyPartial, combination);
       }
 
-      if (!publicKeyToCombinationMap.has(splitPoof[1])) {
+      if (!publicKeyToCombinationMap.has(proofSharedPublicKeyX)) {
         this.mokka.logger.trace(`proof contains unknown public key`);
         return null;
       }
 
-      const isValid = utils.verify(splitPoof[2], splitPoof[1]);
+      const isValid = utils.verify(proofSignature, proofSharedPublicKeyX);
 
       if (!isValid) {
         this.mokka.logger.trace(`wrong proof supplied`);
@@ -173,7 +173,7 @@ class VoteApi {
         packet.term,
         packet.publicKey,
         packet.proof,
-        parseInt(splitPoof[0], 10));
+        parseInt(proofNonce, 10));
       this.mokka.logger.trace(`proof validated in ${Date.now() - startProofValidation}`)
       return packet;
     }

@@ -40,11 +40,11 @@ export const buildSharedPublicKeyX = (
   publicKeys: string[],
   term: number,
   nonce: number|string,
-  publicKey: string
+  publicKeysRootForTerm: string
 ) => {
 
   const mHash = crypto.createHash('sha256')
-    .update(`${nonce}:${term}:${publicKey}`)
+    .update(`${nonce}:${term}:${publicKeysRootForTerm}`)
     .digest('hex');
 
   let X = null;
