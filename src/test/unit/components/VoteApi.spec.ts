@@ -22,7 +22,7 @@ describe('VoteApi tests', (ctx = {}) => {
       node.generateKeys();
       ctx.keys.push({
         privateKey: node.getPrivateKey().toString('hex'),
-        publicKey: node.getPublicKey().toString('hex')
+        publicKey: node.getPublicKey('hex', 'compressed')
       });
     }
 
@@ -61,7 +61,7 @@ describe('VoteApi tests', (ctx = {}) => {
 
     const start = Date.now();
     const result = await followerVoteApi.vote(packet);
-    expect(Date.now() - start).to.be.lt(10);
+    expect(Date.now() - start).to.be.lt(20);
     // tslint:disable-next-line:no-unused-expression
     expect(result.data.signature).to.not.be.undefined;
 
