@@ -1,5 +1,6 @@
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
+import * as utils from '../utils/cryptoUtils';
 
 class MessageApi {
 
@@ -16,13 +17,16 @@ class MessageApi {
   }
 
   public packet(type: number, data: any = null): PacketModel {
-    return new PacketModel(
+    const packet = new PacketModel(
       type,
       this.mokka.state,
       this.mokka.term,
       this.mokka.publicKey,
       this.mokka.proof,
       data);
+
+    packet.signature = utils.signData(this.mokka.privateKey, JSON.stringify(packet));
+    return packet;
   }
 
   public decodePacket(message: Buffer): PacketModel {

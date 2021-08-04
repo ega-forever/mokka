@@ -139,12 +139,12 @@ class VoteApi {
 
       const publicKeysRootForTerm = utils.buildPublicKeysRootForTerm(
         this.mokka.publicKeysRoot,
-        this.mokka.term,
+        packet.term,
         proofNonce,
         packet.publicKey
       );
 
-      const isProofSharedPublicKeyXKnown = !!this.mokka.publicKeysCombinationsInQuorum.find((combination) => {
+      const proofSharedPublicKeyCombination = this.mokka.publicKeysCombinationsInQuorum.find((combination) => {
         return utils.buildSharedPublicKeyX(
           combination,
           packet.term,
@@ -153,8 +153,13 @@ class VoteApi {
         ) === proofSharedPublicKeyX;
       });
 
-      if (!isProofSharedPublicKeyXKnown) {
+      if (!proofSharedPublicKeyCombination) {
         this.mokka.logger.trace(`proof contains unknown public key`);
+        return null;
+      }
+
+      if (!proofSharedPublicKeyCombination.includes(packet.publicKey)) {
+        this.mokka.logger.trace(`proof is used by wrong node`);
         return null;
       }
 

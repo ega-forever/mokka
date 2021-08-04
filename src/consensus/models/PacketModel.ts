@@ -6,6 +6,8 @@ class PacketModel {
   public type: number;
   public data: any;
   public proof: string;
+  public timestamp: number;
+  public signature: string;
 
   constructor(
     type: number,
@@ -13,15 +15,17 @@ class PacketModel {
     term: number,
     publicKey: string,
     proof: string,
-    data: any = null) {
+    data: any = null
+    ) {
     this.state = state;
     this.type = type;
     this.term = term;
     this.publicKey = publicKey;
     this.data = data;
     this.proof = proof;
+    this.timestamp = Date.now();
   }
 
 }
 
-export {PacketModel};
+export { PacketModel };

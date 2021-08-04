@@ -61,9 +61,9 @@ describe('VoteApi tests', (ctx = {}) => {
 
     const start = Date.now();
     const result = await followerVoteApi.vote(packet);
+    expect(Date.now() - start).to.be.lt(10);
     // tslint:disable-next-line:no-unused-expression
     expect(result.data.signature).to.not.be.undefined;
-    expect(Date.now() - start).to.be.lt(10);
 
   });
 
