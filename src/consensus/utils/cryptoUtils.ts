@@ -122,28 +122,3 @@ export const pointToPublicKey = (P): Buffer => {
   buffer.writeUInt8(P.getY().isEven() ? 0x02 : 0x03, 0);
   return Buffer.concat([buffer, P.getX().toArrayLike(Buffer)]);
 };
-
-export const signData = (privateKey: string, data: string): string => {
-  const mHash = crypto.createHash('sha256')
-    .update(data)
-    .digest('hex');
-
-  return new BN(privateKey, 16)
-    .mul(new BN(mHash, 16))
-    .mod(ec.n)
-    .toString(16);
-};
-
-export const verifySignedData = (
-  signature: string,
-  data: string,
-  publicKey: string): boolean => {
-
-  const mHash = crypto.createHash('sha256')
-    .update(data)
-    .digest('hex');
-
-  const sg = ec.g.mul(signature);
-  const check = pubKeyToPoint(Buffer.from(publicKey, 'hex')).mul(new BN(mHash, 16));
-  return pointToPublicKey(sg).toString('hex') === pointToPublicKey(check).toString('hex');
-};

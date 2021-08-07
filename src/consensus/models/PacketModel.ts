@@ -7,7 +7,6 @@ class PacketModel {
   public data: any;
   public proof: string;
   public timestamp: number;
-  public signature: string;
 
   constructor(
     type: number,
