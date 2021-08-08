@@ -12,7 +12,7 @@ consensus features
 * voting validation with musig
 
 implementation features
-* Custom transport layer support: Mokka separate interface implementation and consensus.
+* Custom transport layer support: Mokka separates interface implementation and consensus.
 * Fully customizable: you can create your own state machine around Mokka consensus (check out demos for more info).
 
 ## Installation
@@ -31,7 +31,7 @@ $ npm run build
 
 ### new Mokka (options)
 
-Returns a new mokka instance. As mokka is agnostic to protocol implementation, 
+Returns a new Mokka instance. As Mokka is agnostic to protocol implementation, 
 you have to create your own.
 Please check the ``Custom transport layer`` section.
 
@@ -79,7 +79,7 @@ A Mokka instance emits the following events (available at ``/components/shared/E
 
 # Custom RSM
 
-Mokka is log-less consensus algorithm and doesn't provide any RSM (i.e. replicated log). You have to implement your own. 
+Mokka is a log-less consensus algorithm and doesn't provide any RSM (i.e. replicated log). You have to implement your own. 
 However, there is a good example of RSM implementation, which is [similar to RAFT](examples/node/cluster/README.md).
 
 # Custom transport layer
@@ -87,11 +87,11 @@ However, there is a good example of RSM implementation, which is [similar to RAF
 In order to communicate between nodes, you have to implement the interface by yourself. As an example you can take a look at TCP implementation: ```src/implementation/TCP```.
  In order to write your own implementation you have to implement 2 methods:
  
-* The ```async initialize()``` function, which fires on mokka start. This method is useful, when you want to open the connection, for instance, tcp one, or connect to certain message broker like rabbitMQ.
+* The ```async initialize()``` function, which fires on Mokka start. This method is useful, when you want to open the connection, for instance, tcp one, or connect to certain message broker like rabbitMQ.
 
-* The ```async write(address: string, packet: Buffer)``` function, which fires each time mokka wants to broadcast message to other peer (address param).
+* The ```async write(address: string, packet: Buffer)``` function, which fires each time Mokka wants to broadcast message to other peer (address param).
 
-Also, keep in mind, that mokka doesn't handle the disconnected / dead peers, which means that mokka will try to make requests to all presented members in cluster, 
+Also, keep in mind, that Mokka doesn't handle the disconnected / dead peers, which means that Mokka will try to make requests to all presented members in cluster, 
 even if they are not available. So, you need to handle it on your own.
 
 # Examples
@@ -118,4 +118,4 @@ However, you still can implement your own protocol.
 
 # Copyright
 
-Copyright (c) 2018-2020 Egor Zuev
+Copyright (c) 2018-2021 Egor Zuev
