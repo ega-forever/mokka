@@ -1,6 +1,6 @@
 # Mokka
 
- [![Build Status](https://travis-ci.org/ega-forever/mokka.svg?branch=master)](https://travis-ci.org/ega-forever/mokka) 
+ [![Build Status](https://www.travis-ci.com/ega-forever/mokka.svg?branch=master)](https://travis-ci.org/ega-forever/mokka) 
 
 Mokka Consensus Algorithm implementation in Node.js.
 
