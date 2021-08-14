@@ -1,3 +1,4 @@
+import states from '../constants/NodeStates';
 import {Mokka} from '../main';
 import {PacketModel} from '../models/PacketModel';
 
@@ -21,7 +22,7 @@ class MessageApi {
       this.mokka.state,
       this.mokka.term,
       this.mokka.publicKey,
-      this.mokka.proof,
+      this.mokka.state === states.LEADER ? this.mokka.proof : null,
       data);
   }
 

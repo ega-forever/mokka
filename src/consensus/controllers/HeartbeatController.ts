@@ -1,10 +1,10 @@
-import {MessageApi} from '../api/MessageApi';
-import {NodeApi} from '../api/NodeApi';
+import { MessageApi } from '../api/MessageApi';
+import { NodeApi } from '../api/NodeApi';
 import eventTypes from '../constants/EventTypes';
 import messageTypes from '../constants/MessageTypes';
 import states from '../constants/NodeStates';
 import NodeStates from '../constants/NodeStates';
-import {Mokka} from '../main';
+import { Mokka } from '../main';
 
 class HeartbeatController {
 
@@ -65,14 +65,18 @@ class HeartbeatController {
   }
 
   public setNextBeat(duration: number) {
-    this.mokka.logger.trace(`set next beat in ${duration}`);
+    this.mokka.logger.trace(`set next beat in ${ duration }`);
     this.adjustmentDate = Date.now() + duration;
   }
 
   public timeout() {
-    return this.mokka.heartbeat * 1.5 + Math.round(this.mokka.heartbeat * Math.random());
+    return this.safeHeartbeat() + Math.round(this.mokka.heartbeat * Math.random());
+  }
+
+  public safeHeartbeat() {
+    return this.mokka.heartbeat * 1.5;
   }
 
 }
 
-export {HeartbeatController};
+export { HeartbeatController };

@@ -68,7 +68,7 @@ class NodeApi {
       this.mokka.term,
       nonce,
       this.mokka.publicKey);
-    const vote = new VoteModel(nonce, publicKeysRootForTerm);
+    const vote = new VoteModel(nonce, this.mokka.term, publicKeysRootForTerm);
 
     for (const combination of this.mokka.publicKeysCombinationsInQuorum) {
 
@@ -137,6 +137,7 @@ class NodeApi {
     if (packet && packet.state === states.LEADER) {
       this.mokka.logger.trace(`accepted ack`);
       this.mokka.heartbeatCtrl.setNextBeat(this.mokka.heartbeatCtrl.timeout());
+      this.mokka.emit(EventTypes.ACK);
     }
     return null;
   }

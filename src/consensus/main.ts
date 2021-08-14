@@ -10,11 +10,6 @@ import {RequestProcessorService} from './services/RequestProcessorService';
 
 class Mokka extends NodeModel {
 
-  public heartbeat: number;
-  public proofExpiration: number;
-  public electionTimeout: number;
-  public publicKeysRoot: string;
-  public publicKeysCombinationsInQuorum: string[][];
   public readonly nodeApi: NodeApi;
   public readonly messageApi: MessageApi;
   public readonly heartbeatCtrl: HeartbeatController;

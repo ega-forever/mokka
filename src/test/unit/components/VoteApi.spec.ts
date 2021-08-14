@@ -48,20 +48,18 @@ describe('VoteApi tests', (ctx = {}) => {
   it('should check vote', async () => {
 
     const candidateNode = ctx.nodes[0] as Mokka;
+    const followerNode = ctx.nodes[1] as Mokka;
 
     candidateNode.setState(NodeStates.CANDIDATE, 2, '');
 
-    const candidateMessageApi = new MessageApi(candidateNode);
-    const followerNode = ctx.nodes[1] as Mokka;
-    const followerVoteApi = new VoteApi(followerNode);
-
-    const packet = await candidateMessageApi.packet(MessageTypes.VOTE, {
+    const packet = await candidateNode.messageApi.packet(MessageTypes.VOTE, {
       nonce: Date.now()
     });
 
     const start = Date.now();
-    const result = await followerVoteApi.vote(packet);
-    expect(Date.now() - start).to.be.lt(20);
+    // @ts-ignore
+    const result = await followerNode.requestProcessorService.voteApi.vote(packet);
+    expect(Date.now() - start).to.be.lt(followerNode.heartbeatCtrl.safeHeartbeat() + 30);
     // tslint:disable-next-line:no-unused-expression
     expect(result.data.signature).to.not.be.undefined;
 

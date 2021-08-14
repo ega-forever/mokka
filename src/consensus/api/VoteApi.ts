@@ -6,6 +6,7 @@ import { PacketModel } from '../models/PacketModel';
 import { VoteModel } from '../models/VoteModel';
 import * as utils from '../utils/cryptoUtils';
 import { MessageApi } from './MessageApi';
+import EventTypes from '../constants/EventTypes';
 
 class VoteApi {
 
@@ -24,9 +25,23 @@ class VoteApi {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
-    if (this.mokka.term >= packet.term) {
+    if (
+      this.mokka.term >= packet.term ||
+      (this.mokka.vote && this.mokka.vote.term >= packet.term) ||
+      !this.mokka.checkTermNumber(packet.term) ||
+      !this.mokka.checkPublicKeyCanBeLeaderNextRound(packet.publicKey)
+    ) {
       return this.messageApi.packet(messageTypes.VOTED);
     }
+
+    const wasAckFromLeader = await this.waitForNextAck();
+
+    if (wasAckFromLeader) {
+      this.mokka.logger.trace(`[vote] peer ${ packet.publicKey } asked to vote with alive leader`);
+      return this.messageApi.packet(messageTypes.VOTED);
+    }
+
+    // todo add vote lock till next ack from leader or when timeout expires (timeout * 1.5)
 
     const isCustomRulePassed = await this.mokka.customVoteRule(packet);
 
@@ -40,10 +55,8 @@ class VoteApi {
       packet.publicKey
     );
 
-    const vote = new VoteModel(packet.data.nonce, publicKeysRootForTerm);
+    const vote = new VoteModel(packet.data.nonce, packet.term, publicKeysRootForTerm);
     this.mokka.setVote(vote);
-
-    this.mokka.setState(NodeStates.FOLLOWER, packet.term, null);
 
     const startBuildVote = Date.now();
     const signature = utils.buildPartialSignature(
@@ -181,6 +194,25 @@ class VoteApi {
     }
 
     return packet;
+  }
+
+  private async waitForNextAck(): Promise<boolean> {
+    return await new Promise((res) => {
+
+      const timeoutHandler = () => {
+        this.mokka.removeListener(EventTypes.ACK, emitHandler);
+        res(false);
+      };
+
+      const timeoutId = setTimeout(timeoutHandler, this.mokka.heartbeatCtrl.safeHeartbeat());
+
+      const emitHandler = () => {
+        clearTimeout(timeoutId);
+        res(true);
+      };
+
+      this.mokka.once(EventTypes.ACK, emitHandler);
+    });
   }
 
 }
