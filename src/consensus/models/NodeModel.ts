@@ -81,7 +81,7 @@ class NodeModel extends EventEmitter {
     this.emit(eventTypes.STATE);
 
     if (this.leaderPublicKey) {
-      if (this.lastLeadersPublicKeyInTermMap.size >= this.majority()) {
+      if (this.lastLeadersPublicKeyInTermMap.size >= this.majority() - 1) {
         const prevTermsToRemove = [...this.lastLeadersPublicKeyInTermMap.keys()].sort()
           .slice(this.lastLeadersPublicKeyInTermMap.size - this.majority());
 

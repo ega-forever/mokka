@@ -41,8 +41,6 @@ class VoteApi {
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
-    // todo add vote lock till next ack from leader or when timeout expires (timeout * 1.5)
-
     const isCustomRulePassed = await this.mokka.customVoteRule(packet);
 
     if (!isCustomRulePassed) {
