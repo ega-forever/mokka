@@ -108,7 +108,7 @@ class NodeModel extends EventEmitter {
       return true;
     }
 
-    const maxPossibleTerm = this._term + Math.ceil((Date.now() - this.lastTermUpdateTime) / this.heartbeat);
+    const maxPossibleTerm = this._term + Math.ceil((Date.now() - this.lastTermUpdateTime) / this.heartbeat * 1.5);
     return maxPossibleTerm >= term;
   }
 

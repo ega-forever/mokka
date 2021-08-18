@@ -20,8 +20,10 @@ class VoteApi {
 
   public async vote(packet: PacketModel): Promise<PacketModel> {
 
-    if (!packet.data.nonce) {
-      this.mokka.logger.trace(`[vote] peer ${ packet.publicKey } hasn't provided a nonce`);
+    if (!packet.data.nonce ||
+      packet.data.nonce > Date.now() ||
+      Date.now() - packet.data.nonce > this.mokka.electionTimeout) {
+      this.mokka.logger.trace(`[vote] peer ${ packet.publicKey } hasn't provided a correct nonce`);
       return this.messageApi.packet(messageTypes.VOTED);
     }
 
