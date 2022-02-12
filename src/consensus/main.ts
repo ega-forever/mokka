@@ -21,7 +21,7 @@ class Mokka extends NodeModel {
   private readonly requestProcessorService: RequestProcessorService;
 
   constructor(options: ISettingsInterface) {
-    super(options.privateKey, options.address);
+    super(options.privateKey, options.address, options.crashModel);
 
     this.heartbeat = options.heartbeat;
     this.electionTimeout = options.electionTimeout;

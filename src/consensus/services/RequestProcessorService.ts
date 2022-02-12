@@ -12,14 +12,14 @@ class RequestProcessorService {
   private messageApi: MessageApi;
   private nodeApi: NodeApi;
 
-  private readonly actionMap: Map<number, Array<(packet: PacketModel) => Promise<PacketModel>>>;
+  private readonly actionMap: Map<number, ((packet: PacketModel) => Promise<PacketModel>)[]>;
 
   constructor(mokka: Mokka) {
     this.voteApi = new VoteApi(mokka);
     this.messageApi = new MessageApi(mokka);
     this.nodeApi = new NodeApi(mokka);
     this.mokka = mokka;
-    this.actionMap = new Map<number, Array<(packet: PacketModel) => Promise<PacketModel>>>();
+    this.actionMap = new Map<number, ((packet: PacketModel) => Promise<PacketModel>)[]>();
 
     this.actionMap.set(messageTypes.VOTE, [
       this.voteApi.vote.bind(this.voteApi)

@@ -15,6 +15,7 @@ const init = (params: any) => {
 
   mokka = new TCPMokka({
     address: `tcp://127.0.0.1:${2000 + params.index}/${params.publicKey || params.keys[params.index].publicKey}`,
+    crashModel: params.settings.crashModel,
     electionTimeout: params.settings.electionTimeout,
     heartbeat: params.settings.heartbeat,
     logger,
@@ -44,7 +45,7 @@ const connect = () => {
   mokka.connect();
 };
 
-process.on('message', (m) => {
+process.on('message', (m: any) => {
   if (m.type === 'init')
     init(m.args[0]);
 

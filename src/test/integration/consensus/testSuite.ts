@@ -6,7 +6,8 @@ import * as _ from 'lodash';
 import * as path from 'path';
 import NodeStates from '../../../consensus/constants/NodeStates';
 
-export function testSuite(ctx: any = {}, nodesCount: number = 0, mokkaType: string = 'TCP') {
+// tslint:disable-next-line:max-line-length
+export function testSuite(ctx: any = {}, nodesCount: number = 0, mokkaType: string = 'TCP', crashModel: string = 'CFT') {
 
   beforeEach(async () => {
 
@@ -14,6 +15,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0, mokkaType: stri
 
     ctx.keys = [];
     ctx.settings = {
+      crashModel,
       electionTimeout: 1000,
       heartbeat: 300,
       proofExpiration: 5000
@@ -72,10 +74,10 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0, mokkaType: stri
     }
   });
 
-  it(`should find leader, once most nodes online (51%)`, async () => {
+  it(`should find leader, once most nodes online`, async () => {
 
     const promises = [];
-    const initialNodesAmount = Math.ceil(ctx.mokkas.length / 2) + 1;
+    const initialNodesAmount = ctx.mokkas.length - Math.ceil(ctx.mokkas.length - 1) / (crashModel === 'CFT' ? 2 : 3);
 
     let leaderPubKey = null;
 
@@ -102,7 +104,7 @@ export function testSuite(ctx: any = {}, nodesCount: number = 0, mokkaType: stri
     }
 
     // tslint:disable-next-line:max-line-length
-    const result: Array<{ state: number, publicKey: string, term: number, index: number }> = await Promise.all(promises);
+    const result: { state: number, publicKey: string, term: number, index: number }[] = await Promise.all(promises);
     const leaderEventMap = result.reduce((acc, val) => {
 
       if (val.state !== NodeStates.LEADER) {

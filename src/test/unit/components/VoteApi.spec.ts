@@ -9,7 +9,7 @@ import NodeStates from '../../../consensus/constants/NodeStates';
 import {Mokka} from '../../../consensus/main';
 import TCPMokka from '../../../implementation/TCP';
 
-describe('VoteApi tests', (ctx = {}) => {
+describe('VoteApi tests', (ctx: any = {}) => {
 
   beforeEach(async () => {
 

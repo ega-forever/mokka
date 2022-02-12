@@ -6,7 +6,7 @@ import NodeStates from '../../../consensus/constants/NodeStates';
 import {Mokka} from '../../../consensus/main';
 import TCPMokka from '../../../implementation/TCP';
 
-describe('NodeApi tests', (ctx = {}) => {
+describe('NodeApi tests', (ctx: any = {}) => {
 
   beforeEach(async () => {
 

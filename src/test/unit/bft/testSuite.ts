@@ -30,7 +30,8 @@ export function testSuite(ctx: any = {}, nodesCount: number) {
     for (let index = 0; index < nodesCount; index++) {
       const instance = new TCPMokka({
         address: `tcp://127.0.0.1:2000/${ ctx.keys[index].publicKey }`,
-        electionTimeout: 300,
+        electionTimeout: 100 * nodesCount,
+        crashModel: 'BFT',
         heartbeat: 50,
         logger: bunyan.createLogger({ name: 'mokka.logger', level: 60 }),
         privateKey: ctx.keys[index].privateKey,

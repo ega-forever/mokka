@@ -27,7 +27,7 @@ class NodeApi {
     if (this.mokka.publicKey === publicKey)
       return;
 
-    const node = new NodeModel(null, multiaddr, states.STOPPED);
+    const node = new NodeModel(null, multiaddr, 'CFT', states.STOPPED);
 
     node.write = this.mokka.write.bind(this.mokka);
     node.once('end', () => this.leave(node.publicKey));
@@ -111,7 +111,7 @@ class NodeApi {
         this.messageApi.message(packet, node.publicKey)
       ));
 
-    await new Promise((res) => {
+    await new Promise<void>((res) => {
 
       const timeoutHandler = () => {
         this.mokka.removeListener(EventTypes.STATE, emitHandler);

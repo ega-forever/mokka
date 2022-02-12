@@ -24,7 +24,7 @@ class HeartbeatController {
   public async stopBeat() {
     this.runBeat = false;
     if (this.adjustmentDate)
-      await new Promise((res) => setTimeout(res, Date.now() - this.adjustmentDate));
+      await new Promise((res) => setTimeout(res, Date.now() - this.adjustmentDate, null));
   }
 
   public async watchBeat() {
@@ -33,7 +33,7 @@ class HeartbeatController {
 
     while (this.runBeat) {
       if (this.adjustmentDate > Date.now()) {
-        await new Promise((res) => setTimeout(res, this.adjustmentDate - Date.now()));
+        await new Promise((res) => setTimeout(res, this.adjustmentDate - Date.now(), null));
         continue;
       }
 

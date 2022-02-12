@@ -41,10 +41,12 @@ class NodeModel extends EventEmitter {
   private _leaderPublicKey: string = '';
   private _proofMintedTime: number = 0;
   private readonly nodeAddress: string;
+  private readonly crashModel: 'CFT' | 'BFT';
 
   constructor(
     privateKey: string,
     multiaddr: string,
+    crashModel: 'CFT' | 'BFT' = 'CFT',
     state: number = NodeStates.FOLLOWER
   ) {
     super();
@@ -52,10 +54,12 @@ class NodeModel extends EventEmitter {
     this.publicKey = multiaddr.match(/\w+$/).toString();
     this._state = state;
     this.nodeAddress = multiaddr.split(/\w+$/)[0].replace(/\/$/, '');
+    this.crashModel = crashModel;
   }
 
   public majority() {
-    return Math.ceil(this.nodes.size / 2) + 1;
+    // q = n - (n-1) / f
+    return this.nodes.size - Math.ceil(this.nodes.size - 1) / (this.crashModel === 'CFT' ? 2 : 3);
   }
 
   public write(address: string, packet: Buffer): void {

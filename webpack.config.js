@@ -1,5 +1,6 @@
 const path = require('path');
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+const NodePolyfillPlugin = require("node-polyfill-webpack-plugin")
 
 module.exports = {
   entry: './src/consensus/main.ts',
@@ -13,6 +14,7 @@ module.exports = {
     ]
   },
   plugins: [
+    new NodePolyfillPlugin(),
     new BundleAnalyzerPlugin({
       analyzerMode: 'static',
       reportFilename: path.join(__dirname, 'webpack_report.html')
