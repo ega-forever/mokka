@@ -22,6 +22,7 @@ const init = (index, keys, settings) => {
 
   window.mokka = new BrowserMokka({
     address: `${index}/${keys[index].publicKey}`,
+    crashModel: settings.crashModel,
     heartbeat: settings.heartbeat,
     electionTimeout: settings.electionTimeout,
     proofExpiration: settings.sessionExpiration, // todo move to settings
