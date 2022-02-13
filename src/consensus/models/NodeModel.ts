@@ -58,8 +58,8 @@ class NodeModel extends EventEmitter {
   }
 
   public majority() {
-    // q = n - (n-1) / f
-    return this.nodes.size - Math.ceil(this.nodes.size - 1) / (this.crashModel === 'CFT' ? 2 : 3);
+    const clusterSize = this.nodes.size + 1; // peer nodes + self
+    return clusterSize - Math.ceil((clusterSize - 1) / (this.crashModel === 'CFT' ? 2 : 3));
   }
 
   public write(address: string, packet: Buffer): void {

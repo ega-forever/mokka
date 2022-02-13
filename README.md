@@ -6,14 +6,18 @@ Mokka Consensus Algorithm implementation in Node.js.
 
 [Concept description](https://arxiv.org/ftp/arxiv/papers/1901/1901.08435.pdf) (PDF)
 
+[Live Demo](https://ega-forever.github.io/mokka/) (in browser)
+
+
 consensus features
 * resistant to network splits
 * non-anonymous voting
 * voting validation with musig
 
 implementation features
-* Custom transport layer support: Mokka separates interface implementation and consensus.
-* Fully customizable: you can create your own state machine around Mokka consensus (check out demos for more info).
+* Custom transport layer support: Mokka separates interface implementation and consensus
+* Fully customizable: you can create your own state machine around Mokka consensus (check out demos for more info)
+* Can run in CFT and BFT modes
 
 ## Installation
 
@@ -39,6 +43,7 @@ Arguments:
 
 * `address` (string):  an address in custom format. The only rule is that address should include the public key in the end
  (example: `"tcp://127.0.0.1:2003/03fec1b3d32dbb0641877f65b4e77ba8466f37ab948c0b4780e4ed191be411d694"`)
+* `crashModel` (`"CFT" | "BFT"`): crash model, which should run the consensus. The difference is in quorum - CFT requires `f + 1` nodes for quorum, while BFT `2f + 1`
 * `heartbeat` (integer): leader heartbeat timeout
 * `electionTimeout` (integer): candidate election timeout (i.e. vote round)
 * `customVoteRule` (func): additional voting rule

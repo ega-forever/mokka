@@ -1,7 +1,11 @@
 {
   "name": "mokka",
   "version": "1.4.0",
-  "description": "",
+  "description": "Mokka Consensus Algorithm implementation in Javascript",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ega-forever/mokka.git"
+  },
   "scripts": {
     "tsc:watch": "tsc -w",
     "tsc:build": "tsc",
