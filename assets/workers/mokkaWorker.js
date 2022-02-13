@@ -1,6 +1,6 @@
 const window = self;
 const path = window.location.pathname.split(/(\/*.{0,}\/workers\/)/gm, 2).find(el => el.length);
-importScripts(`${path}web_bundle.js`);
+importScripts(`${path}bundle.js`);
 
 class BrowserMokka extends Mokka.Mokka {
 
